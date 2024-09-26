@@ -44,45 +44,62 @@ def make_request(model, prompt, variables):
     return response.json()  # .get("response")
 
 
+def process_task(task, collection):
+    print(f"Processing task with id: {task['_id']}")
+    prompt = task["prompt"]
+    model = task["model"]
+    variables = task["variables"]
+
+    try:
+        response = make_request(model, prompt, variables)
+        if response:
+            collection.update_one(
+                {"_id": task["_id"]},
+                {
+                    "$set": {
+                        "status": "completed",
+                        "response": response,
+                    }
+                },
+            )
+            print(f"Completed task with id: {task['_id']}")
+        else:
+            raise Exception("Failed to get a valid response from the API")
+    except Exception as e:
+        collection.update_one(
+            {"_id": task["_id"]},
+            {"$set": {"status": "failed", "error": str(e)}},
+        )
+        print(f"Failed task with id: {task['_id']} - Error: {e}")
+
+
 def run():
     while True:
-        for collection_name in db.list_collection_names():
-            if collection_name in ["delete_me", "test"]:
-                continue
-            collection = db[collection_name]
-            task = collection.find_one(
-                {"status": "pending"},  # {"$set": {"status": "processing"}}
-            )
-            if task:
-                print(f"Processing task with id: {task['_id']}")
-                prompt = task["prompt"]
-                model = task["model"]
-                variables = task["variables"]
-                try:
-                    response = make_request(model, prompt, variables)
-                    if response:
-                        collection.update_one(
-                            {"_id": task["_id"]},
-                            {
-                                "$set": {
-                                    "status": "completed",
-                                    "response": response,
-                                }
-                            },
-                        )
-                        print(f"Completed task with id: {task['_id']}")
-                    else:
-                        raise Exception("Failed to get a valid response from the API")
+        # Get all collections except for the ones to skip
+        collections_to_process = [
+            col
+            for col in db.list_collection_names()
+            if col not in ["delete_me", "test"]
+        ]
 
-                except Exception as e:
-                    collection.update_one(
-                        {"_id": task["_id"]},
-                        {"$set": {"status": "failed", "error": str(e)}},
+        for collection_name in collections_to_process:
+            collection = db[collection_name]
+
+            while True:
+                # Find one pending task
+                task = collection.find_one({"status": "pending"})
+
+                if task:
+                    process_task(task, collection)
+                else:
+                    print(
+                        f"No more pending tasks in collection {collection_name}. Moving to the next collection."
                     )
-                    print(f"Failed task with id: {task['_id']} - Error: {e}")
-            else:
-                print("No pending tasks. Waiting for new tasks...")
-                time.sleep(5)
+                    break  # Move to the next collection when there are no more pending tasks
+
+        # All collections have been processed, wait before checking again
+        print("All collections processed, waiting for new tasks...")
+        time.sleep(5)
 
 
 if __name__ == "__main__":
