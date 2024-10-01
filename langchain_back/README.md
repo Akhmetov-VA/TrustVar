@@ -6,6 +6,7 @@
 1) ```screen -S langchain_back```
 2) ```source .venv/bin/activate```
 3) ```python main.py```
+4) ```screen -r langchain_back```
 
 ## Проверка:
 Сервис можно запустить запустив main.py

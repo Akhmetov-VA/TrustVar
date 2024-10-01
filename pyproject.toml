@@ -19,6 +19,7 @@ yandexcloud = "^0.319.0"
 ipykernel = "^6.29.5"
 ollama = "^0.3.3"
 langchain-ollama = "^0.2.0"
+datasets = "^3.0.1"
 
 [build-system]
 requires = ["poetry-core"]
