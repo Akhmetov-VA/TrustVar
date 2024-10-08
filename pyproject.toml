@@ -14,12 +14,12 @@ langchain-community = "^0.3.0"
 pymongo = "^4.9.1"
 pandas = "^2.2.3"
 fastparquet = "^2024.5.0"
-trustllm = "^0.3.0"
 yandexcloud = "^0.319.0"
 ipykernel = "^6.29.5"
 ollama = "^0.3.3"
 langchain-ollama = "^0.2.0"
 datasets = "^3.0.1"
+trustllm = "^0.3.0"
 
 [build-system]
 requires = ["poetry-core"]
