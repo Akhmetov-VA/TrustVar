@@ -20,6 +20,8 @@ ollama = "^0.3.3"
 langchain-ollama = "^0.2.0"
 datasets = "^3.0.1"
 trustllm = "^0.3.0"
+matplotlib = "^3.9.2"
+streamlit = "^1.39.0"
 
 [build-system]
 requires = ["poetry-core"]
