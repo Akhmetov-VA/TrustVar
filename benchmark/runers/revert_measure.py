@@ -1,33 +1,40 @@
-import os
+import logging
 
-from dotenv import load_dotenv
-from pymongo import MongoClient
+from db_client import DBClient
+from processors.dataset_processor import ProcessorMeta
 
-# Загрузка переменных окружения из .env файла
-load_dotenv()
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()],
+)
 
-MONGO_USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME")
-MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-MONGO_HOST = os.getenv("MONGO_HOST")
-MONGO_PORT = os.getenv("MONGO_INITDB_ROOT_PORT")
+# Константы
+DATABASE_NAME = "TrustLLM_ru"
+COLLECTION_RESULTS = "results_test"
+COLLECTION_TOP_QUESTIONS = "top_questions_test"
 
-# Формирование URI для подключения к MongoDB
-mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
-client = MongoClient(mongo_uri)
-db = client["TrustLLM_ru"]
 
-# Определяем запрос для поиска всех документов со статусом "measured"
-query = {"status": "measured"}
+def revert_all_processors(delete_collections=False):
+    """
+    Отменяет статус 'measured' на 'completed' для всех процессоров, зарегистрированных в ProcessorMeta.
+    При необходимости удаляет коллекции с результатами и топ вопросами.
+    """
+    db_client = DBClient(db_name=DATABASE_NAME)
+    processors = [
+        processor(db_client, COLLECTION_RESULTS, COLLECTION_TOP_QUESTIONS)
+        for processor in ProcessorMeta.registry
+    ]
 
-for collection_name in db.list_collection_names():
-    # Пропускаем служебные или ненужные коллекции
-    if collection_name in ["delete_me", "test", "results", "top_questions"]:
-        continue
-    collection = db[collection_name]
-    # Обновляем статус "measured" на "completed"
-    result = collection.update_many(query, {"$set": {"status": "completed"}})
+    for processor in processors:
+        try:
+            processor.revert_status(delete_collections=delete_collections)
+        except Exception as e:
+            logging.error(
+                f"Ошибка при отмене статуса в процессоре {processor.__class__.__name__}: {e}"
+            )
 
-    # Выводим количество обновленных документов
-    print(
-        f"Обновлено {result.modified_count} документов в коллекции '{collection_name}'."
-    )
+
+if __name__ == "__main__":
+    revert_all_processors(delete_collections=True)

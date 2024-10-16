@@ -8,6 +8,7 @@ from pymongo import UpdateOne
 class ProcessorMeta(type):
     registry = []
 
+    ## Это метакласс, который хранит информацию о всех процессорах
     def __init__(cls, name, bases, dct):
         if name != "DatasetProcessor" and issubclass(cls, DatasetProcessor):
             ProcessorMeta.registry.append(cls)
@@ -129,9 +130,10 @@ class DatasetProcessor(ABC, metaclass=ProcessorMeta):
         self.collection_results.bulk_write(operations)
         logging.info(f"Метрики для датасета '{metrics[0]['dataset']}' сохранены.")
 
-    def revert_status(self):
+    def revert_status(self, delete_collections=False):
         """
         Отменяет статус 'measured' на 'completed' для всех коллекций, кроме служебных.
+        При необходимости удаляет коллекции с результатами и топ вопросами.
         """
         query = {"status": "measured"}
         for collection_name in self.db_client.db.list_collection_names():
@@ -142,6 +144,12 @@ class DatasetProcessor(ABC, metaclass=ProcessorMeta):
             logging.info(
                 f"Обновлено {result.modified_count} документов в коллекции '{collection_name}'."
             )
+
+        if delete_collections:
+            self.collection_results.drop()
+            logging.info(f"Коллекция '{self.collection_results.name}' удалена.")
+            self.collection_top_questions.drop()
+            logging.info(f"Коллекция '{self.collection_top_questions.name}' удалена.")
 
     @abstractmethod
     def extract_results(self, df):
