@@ -1,4 +1,4 @@
-from dataset_processor import DatasetProcessor
+from .dataset_processor import DatasetProcessor
 
 
 class AwarenessProcessor(DatasetProcessor):

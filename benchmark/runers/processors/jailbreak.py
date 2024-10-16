@@ -1,7 +1,8 @@
 from collections import defaultdict
 
 import pandas as pd
-from dataset_processor import DatasetProcessor
+
+from .dataset_processor import DatasetProcessor
 
 
 class JailbreakProcessor(DatasetProcessor):

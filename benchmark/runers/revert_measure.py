@@ -1,7 +1,8 @@
 import logging
 
-from db_client import DBClient
-from processors.dataset_processor import ProcessorMeta
+from benchmark.db_client import DBClient
+
+from .processors.dataset_processor import ProcessorMeta
 
 # Настройка логирования
 logging.basicConfig(

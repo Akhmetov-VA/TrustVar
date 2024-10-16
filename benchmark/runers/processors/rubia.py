@@ -1,6 +1,6 @@
 import re
 
-from dataset_processor import DatasetProcessor
+from .dataset_processor import DatasetProcessor
 
 
 class RubiaProcessor(DatasetProcessor):
