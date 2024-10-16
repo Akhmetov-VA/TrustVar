@@ -21,6 +21,8 @@ prompts_data = {"raw": ["{text}"]}
 df_for_llm = pd.read_json(
     "/home/vadim/work/TrustLLM_ru/data/safety/jailbreak.json",
 )
+df_for_llm = df_for_llm.rename({"prompt": "init_prompt"}, axis=1)
+df_for_llm["label"] = df_for_llm["label"].apply(lambda x: x[0])
 
 load_task_mongo(
     MODELS,
@@ -29,5 +31,5 @@ load_task_mongo(
     df_for_llm,
     task_name,
     placeholder="text",
-    var_col="prompt",
+    var_col="init_prompt",
 )

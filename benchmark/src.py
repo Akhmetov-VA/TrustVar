@@ -1,6 +1,10 @@
 import uuid
 
 
+def replace_curl(data: str):
+    return data.replace("{", "{{").replace("}", "}}")
+
+
 # Функция для добавления задачи в MongoDB
 def add_task_name(
     collection,
@@ -43,7 +47,7 @@ def load_task_mongo(
         for kind, prompts in prompts_data.items():
             for i in range(len(df_for_llm)):
                 row = df_for_llm.iloc[i].to_dict()
-                variables = {placeholder: row[var_col]}
+                variables = {placeholder: replace_curl(row[var_col])}
                 for prompt in prompts:
                     add_task_name(
                         collection,

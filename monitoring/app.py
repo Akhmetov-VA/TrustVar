@@ -14,6 +14,39 @@ MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
 MONGO_HOST = os.getenv("MONGO_HOST")
 MONGO_PORT = os.getenv("MONGO_INITDB_ROOT_PORT")
 
+
+# Функция для загрузки данных
+def load_data():
+    data = []
+    for collection_name in collections_to_process:
+        collection = db[collection_name]
+        total_tasks = collection.count_documents({})
+        pending_tasks = collection.count_documents({"status": "pending"})
+        completed_tasks = collection.count_documents({"status": "completed"})
+        failed_tasks = collection.count_documents({"status": "failed"})
+
+        # Определение статуса коллекции
+        if failed_tasks > 0:
+            status = "Ошибка"
+        elif pending_tasks > 0:
+            status = "В процессе"
+        else:
+            status = "Завершено"
+
+        # Добавление данных в список
+        data.append(
+            {
+                "Коллекция": collection_name,
+                "Всего задач": total_tasks,
+                "Выполнено": completed_tasks,
+                "В ожидании": pending_tasks,
+                "С ошибками": failed_tasks,
+                "Статус": status,
+            }
+        )
+    return pd.DataFrame(data)
+
+
 # Формирование URI для подключения к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 
@@ -66,11 +99,8 @@ if results_data:
     # Визуализация данных
     st.subheader("Визуализация метрик")
     st.bar_chart(pivot_table)
-
 else:
     st.info("Данные в коллекции 'results' отсутствуют.")
-
-### Продолжаем с вашим текущим кодом ###
 
 # Получение списка коллекций для обработки, исключая определенные
 collections_to_process = [
@@ -80,40 +110,8 @@ collections_to_process = [
 ]
 
 
-# Функция для загрузки данных
-def load_data():
-    data = []
-    for collection_name in collections_to_process:
-        collection = db[collection_name]
-        total_tasks = collection.count_documents({})
-        pending_tasks = collection.count_documents({"status": "pending"})
-        completed_tasks = collection.count_documents({"status": "completed"})
-        failed_tasks = collection.count_documents({"status": "failed"})
-
-        # Определение статуса коллекции
-        if failed_tasks > 0:
-            status = "Ошибка"
-        elif pending_tasks > 0:
-            status = "В процессе"
-        else:
-            status = "Завершено"
-
-        # Добавление данных в список
-        data.append(
-            {
-                "Коллекция": collection_name,
-                "Всего задач": total_tasks,
-                "Выполнено": completed_tasks,
-                "В ожидании": pending_tasks,
-                "С ошибками": failed_tasks,
-                "Статус": status,
-            }
-        )
-    return pd.DataFrame(data)
-
-
 # Добавляем кнопку для обновления данных
-if st.button("Обновить данные"):
+if st.button("Обновить таблицу"):
     df = load_data()
 else:
     df = load_data()
@@ -137,39 +135,52 @@ df_style = df.style.applymap(highlight_status, subset=["Статус"])
 # Отображение таблицы
 st.write(df_style)
 
-# Отображение уникальных сообщений об ошибках
+# Отображение уникальных сообщений об ошибках в раскрывающейся вкладке
 if df["С ошибками"].sum() > 0:
     st.header("Уникальные сообщения об ошибках")
-    for collection_name in collections_to_process:
-        collection = db[collection_name]
-        failed_tasks = list(collection.find({"status": "failed"}))
-        if len(failed_tasks) > 0:
-            error_messages = [
-                task.get("error", "Нет информации об ошибке") for task in failed_tasks
-            ]
-            error_counts = Counter(error_messages)
-            st.subheader(f"Коллекция: {collection_name}")
-            for error_message, count in error_counts.items():
-                st.write(f"**Ошибка:** {error_message} | **Количество:** {count}")
-            st.write("---")
-
-# Добавляем кнопку для повторного запуска задач с ошибками
-if df["С ошибками"].sum() > 0:
-    st.header("Перезапуск задач с ошибками")
-    if st.button("Перезапустить задачи с ошибками"):
+    with st.expander("Показать ошибки"):
         for collection_name in collections_to_process:
             collection = db[collection_name]
-            # Обновляем статус задач с ошибками на 'pending'
-            result = collection.update_many(
-                {"status": "failed"}, {"$set": {"status": "pending"}}
-            )
-            if result.modified_count > 0:
-                st.write(
-                    f"В коллекции '{collection_name}' перезапущено {result.modified_count} задач."
+            failed_tasks = list(collection.find({"status": "failed"}))
+            if len(failed_tasks) > 0:
+                error_messages = [
+                    task.get("error", "Нет информации об ошибке")
+                    for task in failed_tasks
+                ]
+                error_counts = Counter(error_messages)
+                st.subheader(f"Коллекция: {collection_name}")
+                for error_message, count in error_counts.items():
+                    st.write(f"**Ошибка:** {error_message} | **Количество:** {count}")
+                st.write("---")
+
+        if st.button("Перезапустить задачи с ошибками"):
+            for collection_name in collections_to_process:
+                collection = db[collection_name]
+                # Обновляем статус задач с ошибками на 'pending'
+                result = collection.update_many(
+                    {"status": "failed"}, {"$set": {"status": "pending"}}
                 )
-        # Обновляем данные после перезапуска
-        df = load_data()
-        df_style = df.style.applymap(highlight_status, subset=["Статус"])
-        st.write(df_style.to_html(), unsafe_allow_html=True)
-    else:
-        st.write("Нажмите кнопку выше, чтобы перезапустить все задачи с ошибками.")
+                if result.modified_count > 0:
+                    st.write(
+                        f"В коллекции '{collection_name}' перезапущено {result.modified_count} задач."
+                    )
+        else:
+            st.write("Нажмите кнопку выше, чтобы перезапустить все задачи с ошибками.")
+
+
+### Отображение CSV-файла с самыми сложными вопросами для jailbreak ###
+
+st.header("Самые сложные вопросы для моделей")
+
+# Указываем путь к CSV-файлу
+csv_file_path = "/home/vadim/work/TrustLLM_ru/data/new_data/top20_jailbreak.csv"
+
+try:
+    # Загружаем данные из CSV-файла
+    jailbreak_df = pd.read_csv(csv_file_path, index_col=0)
+
+    # Отображаем данные в раскрывающемся элементе
+    with st.expander("Показать вопросы для Jailbreak"):
+        st.dataframe(jailbreak_df)
+except Exception as e:
+    st.error(f"Ошибка при загрузке CSV-файла: {e}")
