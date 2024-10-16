@@ -2,9 +2,16 @@ import os
 import uuid
 
 import pandas as pd
-from constants import MODELS, MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
 from pymongo import MongoClient
-from src import add_task_name
+
+from benchmark.constants import (
+    MODELS,
+    MONGO_HOST,
+    MONGO_PASSWORD,
+    MONGO_PORT,
+    MONGO_USERNAME,
+)
+from benchmark.src import add_task_name
 
 # Get the name of the current file
 filename = os.path.basename(__file__)

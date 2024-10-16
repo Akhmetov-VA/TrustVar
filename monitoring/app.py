@@ -130,6 +130,7 @@ def highlight_status(s):
 
 
 # Применение стилей к DataFrame
+df = df.sort_values("Коллекция").reset_index(drop=True)
 df_style = df.style.applymap(highlight_status, subset=["Статус"])
 
 # Отображение таблицы

@@ -6,27 +6,18 @@ def replace_curl(data: str):
 
 
 # Функция для добавления задачи в MongoDB
-def add_task_name(
-    collection,
-    task_name_data,
-    job_id,
-    model,
-    task_name,
-    prompt,
-    variabels,
-):
-    task_name = {
+def add_task(collection, job_id, model, prompt, variabels, label=None):
+    task = {
         "job_id": job_id,
         "prompt": prompt,
         "variables": variabels,
-        "task_name": task_name,
         "status": "pending",
         "model": model,
         "response": None,
+        "label": label,
     }
-    task_name.update(task_name_data)
-    result = collection.insert_one(task_name)
-    print(f"Added task_name with id: {result.inserted_id} and job_id: {job_id}")
+    result = collection.insert_one(task)
+    print(f"Added task with id: {result.inserted_id} and job_id: {job_id}")
     return result.inserted_id
 
 
@@ -49,7 +40,7 @@ def load_task_mongo(
                 row = df_for_llm.iloc[i].to_dict()
                 variables = {placeholder: replace_curl(row[var_col])}
                 for prompt in prompts:
-                    add_task_name(
+                    add_task(
                         collection,
                         row,
                         job_id,

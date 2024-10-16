@@ -1,8 +1,8 @@
 import logging
-import os
 
-from dotenv import load_dotenv
 from pymongo import MongoClient
+
+from benchmark.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
 
 # Настройка логирования
 logging.basicConfig(
@@ -10,13 +10,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.StreamHandler()],
 )
-
-# Константы
-load_dotenv()
-MONGO_USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME")
-MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-MONGO_HOST = os.getenv("MONGO_HOST")
-MONGO_PORT = os.getenv("MONGO_INITDB_ROOT_PORT")
 
 # Формирование URI для подключения к MongoDB
 MONGO_URI = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"

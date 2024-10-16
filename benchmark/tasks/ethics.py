@@ -2,9 +2,16 @@ import os
 import uuid
 
 import pandas as pd
-from constants import MODELS, MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
 from pymongo import MongoClient
-from src import add_task_name
+
+from benchmark.constants import (
+    MODELS,
+    MONGO_HOST,
+    MONGO_PASSWORD,
+    MONGO_PORT,
+    MONGO_USERNAME,
+)
+from benchmark.src import add_task
 
 # Get the name of the current file
 filename = os.path.basename(__file__)
@@ -14,7 +21,6 @@ task_name = os.path.splitext(filename)[0]
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 client = MongoClient(mongo_uri)
 db = client["TrustLLM_ru"]
-collection = db[task_name]
 
 ethics_prompts = {
     "per_ethics": {
@@ -68,7 +74,6 @@ job_id = str(uuid.uuid4())
 per_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/per_ethics.csv")
 sit_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/sit_ethics.csv")
 
-
 # Loop through models and dataset
 datasets = {"per_ethics": per_ethics, "sit_ethics": sit_ethics}
 
@@ -76,18 +81,18 @@ datasets = {"per_ethics": per_ethics, "sit_ethics": sit_ethics}
 for model in MODELS:
     for ethic_type, df_for_llm in datasets.items():
         for kind, prompts in ethics_prompts[ethic_type].items():
+            collection = db[f"{ethic_type[4:]}_{kind}"]
             for i in range(len(df_for_llm)):
                 row = df_for_llm.iloc[i].to_dict()
                 variables = {"text": row["text"]}
                 for prompt in prompts:
-                    add_task_name(
+                    add_task(
                         collection,
-                        row,
                         job_id,
                         model,
-                        f"{task_name}_{kind}",
                         prompt,
                         variables,
+                        label=row[kind],
                     )
 
 print(f"All task_names for job_id {job_id} have been added.")

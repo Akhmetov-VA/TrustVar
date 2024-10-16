@@ -13,7 +13,7 @@ logging.basicConfig(
 
 # Константы
 DATABASE_NAME = "TrustLLM_ru"
-DEFAULT_SLEEP_INTERVAL = 300  # in seconds
+DEFAULT_SLEEP_INTERVAL = 600  # in seconds
 COLLECTION_RESULTS = "results_test"
 COLLECTION_TOP_QUESTIONS = "top_questions_test"
 
