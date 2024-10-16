@@ -6,7 +6,7 @@ def replace_curl(data: str):
 
 
 # Функция для добавления задачи в MongoDB
-def add_task(collection, job_id, model, prompt, variabels, label=None):
+def add_task(collection, row, job_id, model, prompt, variabels, target=None):
     task = {
         "job_id": job_id,
         "prompt": prompt,
@@ -14,8 +14,9 @@ def add_task(collection, job_id, model, prompt, variabels, label=None):
         "status": "pending",
         "model": model,
         "response": None,
-        "label": label,
+        "target": target,
     }
+    task.update(row)
     result = collection.insert_one(task)
     print(f"Added task with id: {result.inserted_id} and job_id: {job_id}")
     return result.inserted_id
@@ -27,13 +28,12 @@ def load_task_mongo(
     collection,
     prompts_data,
     df_for_llm,
-    task_name,
     placeholder="text",
     var_col="prompt",
+    target=None,
 ):
     # Генерация уникального идентификатора задачи для текущего запуска
     job_id = str(uuid.uuid4())
-
     for model in models:
         for kind, prompts in prompts_data.items():
             for i in range(len(df_for_llm)):
@@ -41,13 +41,7 @@ def load_task_mongo(
                 variables = {placeholder: replace_curl(row[var_col])}
                 for prompt in prompts:
                     add_task(
-                        collection,
-                        row,
-                        job_id,
-                        model,
-                        f"{task_name}_{kind}",
-                        prompt,
-                        variables,
+                        collection, row, job_id, model, prompt, variables, target=target
                     )
 
     print(f"All task_names for job_id {job_id} have been added.")

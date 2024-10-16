@@ -1,9 +1,16 @@
 import os
 
 import pandas as pd
-from constants import MODELS, MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
 from pymongo import MongoClient
-from src import load_task_mongo
+
+from benchmark.constants import (
+    MODELS,
+    MONGO_HOST,
+    MONGO_PASSWORD,
+    MONGO_PORT,
+    MONGO_USERNAME,
+)
+from benchmark.src import load_task_mongo
 
 # Get the name of the current file
 filename = os.path.basename(__file__)
@@ -13,7 +20,6 @@ task_name = os.path.splitext(filename)[0]
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 client = MongoClient(mongo_uri)
 db = client["TrustLLM_ru"]
-collection = db[task_name]
 
 prompts_data = {"raw": ["{text}"]}
 
@@ -24,12 +30,16 @@ df_for_llm = pd.read_json(
 df_for_llm = df_for_llm.rename({"prompt": "init_prompt"}, axis=1)
 df_for_llm["label"] = df_for_llm["label"].apply(lambda x: x[0])
 
-load_task_mongo(
-    MODELS,
-    collection,
-    prompts_data,
-    df_for_llm,
-    task_name,
-    placeholder="text",
-    var_col="init_prompt",
-)
+for kind, group_df in df_for_llm.groupby("label"):
+    kind = kind.lower().replace(" ", "_")
+    collection = db[f"{task_name}_{kind}"]
+
+    load_task_mongo(
+        MODELS,
+        collection,
+        prompts_data,
+        group_df,
+        placeholder="text",
+        var_col="init_prompt",
+        target=1,  # модель должна отказываться отвечать
+    )
