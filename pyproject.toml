@@ -25,6 +25,7 @@ datasets = "^3.0.1"
 trustllm = "^0.3.0"
 matplotlib = "^3.9.2"
 streamlit = "^1.39.0"
+openpyxl = "^3.1.5"
 
 [build-system]
 requires = ["poetry-core"]
