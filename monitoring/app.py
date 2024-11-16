@@ -21,11 +21,11 @@ MODELS = [
     "llama3:8b-instruct_q4_0",
     "mistral:7b-instruct-v0.3-q4_0",
     "mixtral:8x7b-instruct-v0.1-q4_0",
-    "phi3:14b-medium-4k-instruct-q4_0",
+    "phi3:14b-medium-4k-instruct_q4_0",
     "qwen:7b",
-    "qwen2:72b-instruct-q4_0",
-    "qwen2.5:72b-instruct-q4_0",
-    "qwen2:7b-instruct-q4_0",
+    "qwen2:72b-instruct_q4_0",
+    "qwen2.5:72b-instruct_q4_0",
+    "qwen2:7b-instruct_q4_0",
     "solar:10.7b-instruct-v1-q4_0",
     "wavecut/vikhr:7b-instruct_0.4-Q4_1",
     "yi:6b",
@@ -137,8 +137,8 @@ class ExperimentManager:
         current_date = datetime.datetime.utcnow()
         # Установка начального статуса 'pending' и добавление модели
         records_to_insert = []
-        for record in data_records:
-            for model in models:
+        for model in models:
+            for record in data_records:
                 new_record = record.copy()
                 new_record["status"] = "pending"
                 new_record["model"] = model
@@ -159,8 +159,8 @@ class ExperimentManager:
         job_id = str(uuid.uuid4())
         current_date = datetime.datetime.utcnow()
         records_to_insert = []
-        for query in queries:
-            for model in models:
+        for model in models:
+            for query in queries:
                 record = {
                     "prompt": query,
                     "variables": {},
@@ -226,6 +226,50 @@ class Dashboard:
             # Отображение уникальных сообщений об ошибках
             if df["С ошибками"].sum() > 0:
                 self.show_errors(collections_to_process)
+
+            # Добавляем возможность отобразить данные выбранной коллекции
+            st.header("Просмотр данных коллекции")
+            if collections_to_process:
+                selected_collection = st.selectbox(
+                    "Выберите коллекцию", collections_to_process
+                )
+
+                if selected_collection:
+                    collection = self.db_client.get_collection(selected_collection)
+                    data = list(collection.find())
+                    df_collection = pd.DataFrame(data)
+
+                    # Удаление поля '_id'
+                    if "_id" in df_collection.columns:
+                        df_collection = df_collection.drop(columns=["_id"])
+
+                    # Фильтрация по моделям
+                    if "model" in df_collection.columns:
+                        models_in_data = df_collection["model"].unique()
+                        filter_models = st.multiselect(
+                            "Фильтровать по моделям",
+                            options=models_in_data,
+                            default=models_in_data,
+                            key=f"dashboard_filter_models_{selected_collection}",
+                        )
+                        df_filtered = df_collection[
+                            df_collection["model"].isin(filter_models)
+                        ]
+                    else:
+                        df_filtered = df_collection
+
+                    st.dataframe(df_filtered)
+
+                    # Скачивание результатов
+                    csv = df_filtered.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        label="Скачать результаты в CSV",
+                        data=csv,
+                        file_name=f"{selected_collection}_results.csv",
+                        mime="text/csv",
+                    )
+            else:
+                st.info("Нет доступных коллекций для просмотра.")
 
     def load_data(self, collections):
         data = []

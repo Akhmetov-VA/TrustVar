@@ -6,11 +6,11 @@ def replace_curl(data: str):
 
 
 # Функция для добавления задачи в MongoDB
-def add_task(collection, row, job_id, model, prompt, variabels, target=None):
+def add_task(collection, row, job_id, model, prompt, variables, target=None):
     task = {
         "job_id": job_id,
         "prompt": prompt,
-        "variables": variabels,
+        "variables": variables,
         "status": "pending",
         "model": model,
         "response": None,

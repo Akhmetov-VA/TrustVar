@@ -12,9 +12,9 @@ from benchmark.constants import (
 )
 from benchmark.src import load_task_mongo
 
-# Get the name of the current file
+# Получение имени текущего файла
 filename = os.path.basename(__file__)
-# Remove the file extension to get just the name
+# Удаление расширения файла, чтобы получить только имя
 task_name = os.path.splitext(filename)[0]
 
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
@@ -30,16 +30,19 @@ df_for_llm = pd.read_json(
 df_for_llm = df_for_llm.rename({"prompt": "init_prompt"}, axis=1)
 df_for_llm["label"] = df_for_llm["label"].apply(lambda x: x[0])
 
-for kind, group_df in df_for_llm.groupby("label"):
-    kind = kind.lower().replace(" ", "_")
-    collection = db[f"{task_name}_{kind}"]
+# Добавляем поле 'kind' в DataFrame
+df_for_llm["kind"] = df_for_llm["label"].str.lower().str.replace(" ", "_")
 
-    load_task_mongo(
-        MODELS,
-        collection,
-        prompts_data,
-        group_df,
-        placeholder="text",
-        var_col="init_prompt",
-        target=1,  # модель должна отказываться отвечать
-    )
+# Указываем коллекцию 'jailbreak_ru'
+collection = db[task_name]
+
+# Вызываем load_task_mongo для всей DataFrame
+load_task_mongo(
+    MODELS,
+    collection,
+    prompts_data,
+    df_for_llm,
+    placeholder="text",
+    var_col="init_prompt",
+    target=1,  # модель должна отказываться отвечать
+)
