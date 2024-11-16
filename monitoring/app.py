@@ -145,6 +145,13 @@ class ExperimentManager:
                 new_record["job_id"] = job_id
                 new_record["task_name"] = collection_name
                 new_record["date"] = current_date
+                # Обеспечиваем наличие поля 'variables'
+                if "variables" not in new_record:
+                    new_record["variables"] = {}
+                # Обеспечиваем наличие поля 'prompt'
+                if "prompt" not in new_record:
+                    st.error("В записи отсутствует поле 'prompt'.")
+                    return
                 records_to_insert.append(new_record)
         self.db_client.insert_data(collection_name, records_to_insert)
 
@@ -156,6 +163,7 @@ class ExperimentManager:
             for model in models:
                 record = {
                     "prompt": query,
+                    "variables": {},
                     "status": "pending",
                     "model": model,
                     "job_id": job_id,
@@ -357,7 +365,7 @@ class Dashboard:
                 if run_name:
                     collection_name = self.experiment_manager.prefix + run_name
 
-                    if st.button("Загрузить данные в Очередь LLM"):
+                    if st.button("Загрузить данные в MongoDB"):
                         self.experiment_manager.insert_experiment_data(
                             collection_name, data_df, selected_models
                         )
