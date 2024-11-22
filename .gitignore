@@ -4,6 +4,7 @@
 *.json
 *.tsv
 *.log
+*.jsonl
 
 __pycache__
 .env

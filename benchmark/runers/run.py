@@ -6,15 +6,14 @@ import requests
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-# Загрузка переменных окружения из .env файла
-load_dotenv()
-
-# Получение данных для подключения из переменных окружения
-MONGO_USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME")
-MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-MONGO_HOST = os.getenv("MONGO_HOST")
-MONGO_PORT = os.getenv("MONGO_INITDB_ROOT_PORT")
-API_URL = os.getenv("API_URL")
+from benchmark.constants import (
+    API_URL,
+    MODELS,
+    MONGO_HOST,
+    MONGO_PASSWORD,
+    MONGO_PORT,
+    MONGO_USERNAME,
+)
 
 # Формирование URI для подключения к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
@@ -25,28 +24,6 @@ db = client.TrustLLM_ru
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
-
-# Список моделей для обработки
-MODELS = [
-    # "gemma2:27b-instruct-q4_0",
-    "gemma2:9b-instruct-q4_0",
-    "ilyagusev/saiga_llama3",
-    "llama2:13b",
-    "llama3.1:8b-instruct_q4_0",
-    # "llama3:70b-instruct-q4_0",
-    "llama3:8b-instruct_q4_0",
-    "mistral:7b-instruct-v0.3-q4_0",
-    "mixtral:8x7b-instruct-v0.1-q4_0",
-    "phi3:14b-medium-4k-instruct_q4_0",
-    "qwen:7b",
-    "qwen2:72b-instruct_q4_0",
-    "qwen2.5:72b-instruct_q4_0",
-    "qwen2:7b-instruct_q4_0",
-    "solar:10.7b-instruct-v1-q4_0",
-    "wavecut/vikhr:7b-instruct_0.4-Q4_1",
-    "yi:6b",
-    "yi:9b",
-]
 
 
 def make_request(model, prompt, variables, session):

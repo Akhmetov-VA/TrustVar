@@ -10,6 +10,9 @@ MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
 MONGO_HOST = os.getenv("MONGO_HOST")
 MONGO_PORT = os.getenv("MONGO_INITDB_ROOT_PORT")
 
+API_URL = os.getenv("API_URL")
+
+
 MODELS = [
     # "gemma2:27b-instruct-q4_0",
     "gemma2:9b-instruct-q4_0",
@@ -29,4 +32,5 @@ MODELS = [
     "wavecut/vikhr:7b-instruct_0.4-Q4_1",
     "yi:6b",
     "yi:9b",
+    "rscr/ruadapt_qwen2.5_32b:Q4_K_M",
 ]

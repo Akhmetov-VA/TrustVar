@@ -179,7 +179,7 @@ class ExperimentManager:
     def delete_unique_queries(self):
         self.db_client.delete_collection(self.unique_queries_collection)
 
-    # Добавляем метод для удаления экспериментов
+    # Метод для удаления экспериментов
     def delete_experiment(self, collection_name):
         self.db_client.delete_collection(collection_name)
 
@@ -235,39 +235,50 @@ class Dashboard:
                 )
 
                 if selected_collection:
-                    collection = self.db_client.get_collection(selected_collection)
-                    data = list(collection.find())
-                    df_collection = pd.DataFrame(data)
+                    # Используем кнопку для загрузки данных
+                    if st.button(
+                        "Показать данные коллекции",
+                        key=f"show_data_{selected_collection}",
+                    ):
+                        # Сохраняем состояние загрузки данных
+                        st.session_state[f"data_loaded_{selected_collection}"] = True
 
-                    # Удаление поля '_id'
-                    if "_id" in df_collection.columns:
-                        df_collection = df_collection.drop(columns=["_id"])
+                    if st.session_state.get(
+                        f"data_loaded_{selected_collection}", False
+                    ):
+                        collection = self.db_client.get_collection(selected_collection)
+                        data = list(collection.find())
+                        df_collection = pd.DataFrame(data)
 
-                    # Фильтрация по моделям
-                    if "model" in df_collection.columns:
-                        models_in_data = df_collection["model"].unique()
-                        filter_models = st.multiselect(
-                            "Фильтровать по моделям",
-                            options=models_in_data,
-                            default=models_in_data,
-                            key=f"dashboard_filter_models_{selected_collection}",
+                        # Удаление поля '_id'
+                        if "_id" in df_collection.columns:
+                            df_collection = df_collection.drop(columns=["_id"])
+
+                        # Фильтрация по моделям
+                        if "model" in df_collection.columns:
+                            models_in_data = df_collection["model"].unique()
+                            filter_models = st.multiselect(
+                                "Фильтровать по моделям",
+                                options=models_in_data,
+                                default=models_in_data,
+                                key=f"dashboard_filter_models_{selected_collection}",
+                            )
+                            df_filtered = df_collection[
+                                df_collection["model"].isin(filter_models)
+                            ]
+                        else:
+                            df_filtered = df_collection
+
+                        st.dataframe(df_filtered)
+
+                        # Скачивание результатов
+                        csv = df_filtered.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            label="Скачать результаты в CSV",
+                            data=csv,
+                            file_name=f"{selected_collection}_results.csv",
+                            mime="text/csv",
                         )
-                        df_filtered = df_collection[
-                            df_collection["model"].isin(filter_models)
-                        ]
-                    else:
-                        df_filtered = df_collection
-
-                    st.dataframe(df_filtered)
-
-                    # Скачивание результатов
-                    csv = df_filtered.to_csv(index=False).encode("utf-8")
-                    st.download_button(
-                        label="Скачать результаты в CSV",
-                        data=csv,
-                        file_name=f"{selected_collection}_results.csv",
-                        mime="text/csv",
-                    )
             else:
                 st.info("Нет доступных коллекций для просмотра.")
 
@@ -436,7 +447,14 @@ class Dashboard:
         st.write(f"**С ошибками:** {status_info['failed_tasks']}")
         st.write(f"**Статус:** {status_info['status']}")
 
-        with st.expander("Показать данные"):
+        # Добавляем кнопку для загрузки данных
+        if st.button(
+            "Загрузить данные эксперимента",
+            key=f"load_experiment_{selected_experiment}",
+        ):
+            st.session_state[f"data_loaded_{selected_experiment}"] = True
+
+        if st.session_state.get(f"data_loaded_{selected_experiment}", False):
             collection = self.db_client.get_collection(selected_experiment)
             data = list(collection.find())
             df = pd.DataFrame(data)
@@ -467,7 +485,9 @@ class Dashboard:
             )
 
             # Добавляем кнопку для удаления эксперимента
-            if st.button("Удалить эксперимент"):
+            if st.button(
+                "Удалить эксперимент", key=f"delete_experiment_{selected_experiment}"
+            ):
                 self.experiment_manager.delete_experiment(selected_experiment)
                 st.success(f"Эксперимент '{selected_experiment}' удален.")
                 # Обновляем страницу без использования st.experimental_rerun()
@@ -530,7 +550,14 @@ class Dashboard:
                 st.write(f"**С ошибками:** {status_info['failed_tasks']}")
                 st.write(f"**Статус:** {status_info['status']}")
 
-                with st.expander("Показать данные"):
+                # Добавляем кнопку для загрузки результатов
+                if st.button(
+                    "Загрузить результаты",
+                    key="load_unique_queries_results",
+                ):
+                    st.session_state["data_loaded_unique_queries"] = True
+
+                if st.session_state.get("data_loaded_unique_queries", False):
                     collection = self.db_client.get_collection(
                         self.experiment_manager.unique_queries_collection
                     )
