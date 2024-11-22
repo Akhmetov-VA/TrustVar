@@ -60,6 +60,11 @@ class MongoDBClient:
     def list_collections(self):
         return self.db.list_collection_names()
 
+    def list_collections_starting_with(self, prefix):
+        return [
+            col for col in self.db.list_collection_names() if col.startswith(prefix)
+        ]
+
     def insert_data(self, collection_name, data):
         collection = self.get_collection(collection_name)
         if data:
@@ -110,12 +115,27 @@ class ExperimentManager:
         completed_tasks = self.db_client.count_tasks_by_status(
             collection_name, "completed"
         )
+        measured_tasks = self.db_client.count_tasks_by_status(
+            collection_name, "measured"
+        )
         failed_tasks = self.db_client.count_tasks_by_status(collection_name, "failed")
+        failed_measure_tasks = self.db_client.count_tasks_by_status(
+            collection_name, "failed_measure"
+        )
+        transferred_tasks = self.db_client.count_tasks_by_status(
+            collection_name, "transferred"
+        )
+        processing_tasks = self.db_client.count_tasks_by_status(
+            collection_name, "processing"
+        )
+        processing_metrics_tasks = self.db_client.count_tasks_by_status(
+            collection_name, "processing_metrics"
+        )
 
         # Определение статуса
-        if failed_tasks > 0:
+        if failed_tasks > 0 or failed_measure_tasks > 0:
             status = "Ошибка"
-        elif pending_tasks > 0:
+        elif pending_tasks > 0 or processing_tasks > 0 or processing_metrics_tasks > 0:
             status = "В процессе"
         else:
             status = "Завершено"
@@ -124,12 +144,20 @@ class ExperimentManager:
             "total_tasks": total_tasks,
             "pending_tasks": pending_tasks,
             "completed_tasks": completed_tasks,
-            "failed_tasks": failed_tasks,
+            "measured_tasks": measured_tasks,
+            "transferred_tasks": transferred_tasks,
+            "failed_tasks": failed_tasks + failed_measure_tasks,
             "status": status,
         }
 
     def restart_failed_tasks(self, collection_name):
-        return self.db_client.update_tasks_status(collection_name, "failed", "pending")
+        count1 = self.db_client.update_tasks_status(
+            collection_name, "failed", "pending"
+        )
+        count2 = self.db_client.update_tasks_status(
+            collection_name, "failed_measure", "pending"
+        )
+        return count1 + count2
 
     def insert_experiment_data(self, collection_name, data_df, models):
         data_records = data_df.to_dict("records")
@@ -207,13 +235,13 @@ class Dashboard:
             collections_to_process = [
                 col
                 for col in self.db_client.list_collections()
-                if col not in ["delete_me", "test", "results"]
+                if col not in ["delete_me", "test", "results", "results1"]
             ]
 
             df = self.load_data(collections_to_process)
 
             # Добавляем кнопку для обновления данных
-            if st.button("Обновить таблицу"):
+            if st.button("Обновить таблицу", key="refresh_dashboard"):
                 df = self.load_data(collections_to_process)
 
             # Применение стилей к DataFrame
@@ -231,7 +259,9 @@ class Dashboard:
             st.header("Просмотр данных коллекции")
             if collections_to_process:
                 selected_collection = st.selectbox(
-                    "Выберите коллекцию", collections_to_process
+                    "Выберите коллекцию",
+                    collections_to_process,
+                    key="dashboard_select_collection",
                 )
 
                 if selected_collection:
@@ -278,6 +308,7 @@ class Dashboard:
                             data=csv,
                             file_name=f"{selected_collection}_results.csv",
                             mime="text/csv",
+                            key=f"download_csv_{selected_collection}",
                         )
             else:
                 st.info("Нет доступных коллекций для просмотра.")
@@ -286,35 +317,40 @@ class Dashboard:
         data = []
         for collection_name in collections:
             total_tasks = self.db_client.count_total_tasks(collection_name)
-            pending_tasks = self.db_client.count_tasks_by_status(
-                collection_name, "pending"
-            )
-            completed_tasks = self.db_client.count_tasks_by_status(
-                collection_name, "completed"
-            )
-            failed_tasks = self.db_client.count_tasks_by_status(
-                collection_name, "failed"
-            )
+            statuses = [
+                "pending",
+                "completed",
+                "failed",
+                "measured",
+                "processing",
+                "processing_metrics",
+                "transferred",
+                "failed_measure",
+            ]
+            status_counts = {
+                status: self.db_client.count_tasks_by_status(collection_name, status)
+                for status in statuses
+            }
 
             # Определение статуса коллекции
-            if failed_tasks > 0:
+            if status_counts["failed"] > 0 or status_counts["failed_measure"] > 0:
                 status = "Ошибка"
-            elif pending_tasks > 0:
+            elif status_counts["pending"] > 0:
                 status = "В процессе"
             else:
                 status = "Завершено"
 
             # Добавление данных в список
-            data.append(
-                {
-                    "Коллекция": collection_name,
-                    "Всего задач": total_tasks,
-                    "Выполнено": completed_tasks,
-                    "В ожидании": pending_tasks,
-                    "С ошибками": failed_tasks,
-                    "Статус": status,
-                }
-            )
+            data_row = {
+                "Коллекция": collection_name,
+                "Всего задач": total_tasks,
+                "В ожидании": status_counts["pending"],
+                "Выполнено": status_counts["completed"],
+                "Измерено": status_counts["measured"],
+                "С ошибками": status_counts["failed"] + status_counts["failed_measure"],
+                "Статус": status,
+            }
+            data.append(data_row)
         return pd.DataFrame(data)
 
     @staticmethod
@@ -330,14 +366,19 @@ class Dashboard:
 
     def show_errors(self, collections):
         st.header("Уникальные сообщения об ошибках")
-        with st.expander("Показать ошибки"):
+        with st.expander("Показать ошибки", expanded=False):
             for collection_name in collections:
                 failed_tasks = self.db_client.get_tasks_by_status(
                     collection_name, "failed"
+                ) + self.db_client.get_tasks_by_status(
+                    collection_name, "failed_measure"
                 )
                 if len(failed_tasks) > 0:
                     error_messages = [
                         task.get("error", "Нет информации об ошибке")
+                        for task in failed_tasks
+                    ] + [
+                        task.get("metric_error", "Нет информации об ошибке")
                         for task in failed_tasks
                     ]
                     error_counts = Counter(error_messages)
@@ -348,10 +389,10 @@ class Dashboard:
                         )
                     st.write("---")
 
-            if st.button("Перезапустить задачи с ошибками"):
+            if st.button("Перезапустить задачи с ошибками", key="restart_failed_tasks"):
                 for collection_name in collections:
-                    modified_count = self.db_client.update_tasks_status(
-                        collection_name, "failed", "pending"
+                    modified_count = self.experiment_manager.restart_failed_tasks(
+                        collection_name
                     )
                     if modified_count > 0:
                         st.write(
@@ -379,7 +420,9 @@ class Dashboard:
             else:
                 # Загрузка файла
                 uploaded_file = st.file_uploader(
-                    "Загрузите CSV или Excel файл", type=["csv", "xlsx"]
+                    "Загрузите CSV или Excel файл",
+                    type=["csv", "xlsx"],
+                    key="file_uploader_experiments",
                 )
 
                 if uploaded_file is not None:
@@ -415,12 +458,16 @@ class Dashboard:
                 st.dataframe(data_df.head())
 
                 # Ввод названия для запуска
-                run_name = st.text_input("Введите название для этого запуска")
+                run_name = st.text_input(
+                    "Введите название для этого запуска", key="experiment_run_name"
+                )
 
                 if run_name:
                     collection_name = self.experiment_manager.prefix + run_name
 
-                    if st.button("Загрузить данные в MongoDB"):
+                    if st.button(
+                        "Загрузить данные в MongoDB", key="upload_experiment_data"
+                    ):
                         self.experiment_manager.insert_experiment_data(
                             collection_name, data_df, selected_models
                         )
@@ -435,7 +482,9 @@ class Dashboard:
     def show_experiment_results(self, experiment_collections):
         # Выбор эксперимента
         selected_experiment = st.selectbox(
-            "Выберите эксперимент", experiment_collections
+            "Выберите эксперимент",
+            experiment_collections,
+            key="experiment_select",
         )
 
         # Получение статуса эксперимента
@@ -443,6 +492,7 @@ class Dashboard:
 
         st.write(f"**Всего задач:** {status_info['total_tasks']}")
         st.write(f"**Выполнено:** {status_info['completed_tasks']}")
+        st.write(f"**Измерено:** {status_info['measured_tasks']}")
         st.write(f"**В ожидании:** {status_info['pending_tasks']}")
         st.write(f"**С ошибками:** {status_info['failed_tasks']}")
         st.write(f"**Статус:** {status_info['status']}")
@@ -482,6 +532,7 @@ class Dashboard:
                 data=csv,
                 file_name=f"{selected_experiment}_results.csv",
                 mime="text/csv",
+                key=f"download_csv_{selected_experiment}",
             )
 
             # Добавляем кнопку для удаления эксперимента
@@ -490,7 +541,6 @@ class Dashboard:
             ):
                 self.experiment_manager.delete_experiment(selected_experiment)
                 st.success(f"Эксперимент '{selected_experiment}' удален.")
-                # Обновляем страницу без использования st.experimental_rerun()
                 st.experimental_set_query_params()
                 st.stop()
 
@@ -522,7 +572,8 @@ class Dashboard:
             else:
                 # Поле для ввода текстовых запросов
                 queries_input = st.text_area(
-                    "Введите текстовые запросы (по одному на строку)"
+                    "Введите текстовые запросы (по одному на строку)",
+                    key="unique_queries_input",
                 )
 
                 if queries_input:
@@ -530,7 +581,9 @@ class Dashboard:
                         q.strip() for q in queries_input.split("\n") if q.strip()
                     ]
 
-                    if st.button("Отправить запросы на обработку"):
+                    if st.button(
+                        "Отправить запросы на обработку", key="submit_unique_queries"
+                    ):
                         self.experiment_manager.insert_unique_queries(
                             queries, selected_models
                         )
@@ -546,6 +599,7 @@ class Dashboard:
             if status_info["total_tasks"] > 0:
                 st.write(f"**Всего задач:** {status_info['total_tasks']}")
                 st.write(f"**Выполнено:** {status_info['completed_tasks']}")
+                st.write(f"**Измерено:** {status_info['measured_tasks']}")
                 st.write(f"**В ожидании:** {status_info['pending_tasks']}")
                 st.write(f"**С ошибками:** {status_info['failed_tasks']}")
                 st.write(f"**Статус:** {status_info['status']}")
@@ -587,13 +641,15 @@ class Dashboard:
                         data=csv,
                         file_name="unique_queries_results.csv",
                         mime="text/csv",
+                        key="download_csv_unique_queries",
                     )
 
                     # Добавляем кнопку для удаления единичных экспериментов
-                    if st.button("Удалить единичные эксперименты"):
+                    if st.button(
+                        "Удалить единичные эксперименты", key="delete_unique_queries"
+                    ):
                         self.experiment_manager.delete_unique_queries()
                         st.success("Единичные эксперименты удалены.")
-                        # Обновляем страницу без использования st.experimental_rerun()
                         st.experimental_set_query_params()
                         st.stop()
 
@@ -614,19 +670,34 @@ class Dashboard:
         with self.tabs[3]:
             st.header("Метрики моделей")
 
-            # Визуализация метрик по таблице 'results'
-            results_collection = self.db_client.get_collection("results")
-            results_data = list(results_collection.find())
+            # Получаем все коллекции, начинающиеся с 'results'
+            results_collections = self.db_client.list_collections_starting_with(
+                "results"
+            )
 
-            if results_data:
-                self.visualize_metrics(results_data)
+            if results_collections:
+                # Позволяем пользователю выбрать коллекцию
+                selected_results_collection = st.selectbox(
+                    "Выберите коллекцию с метриками",
+                    options=results_collections,
+                    key="metrics_collection_selection",
+                )
+
+                results_collection = self.db_client.get_collection(
+                    selected_results_collection
+                )
+                results_data = list(results_collection.find())
+
+                if results_data:
+                    self.visualize_metrics(results_data, selected_results_collection)
+                else:
+                    st.info(
+                        f"Данные в коллекции '{selected_results_collection}' отсутствуют."
+                    )
             else:
-                st.info("Данные в коллекции 'results' отсутствуют.")
+                st.info("Нет доступных коллекций с метриками.")
 
-            # Отображение CSV-файла с самыми сложными вопросами для jailbreak
-            self.show_jailbreak_questions()
-
-    def visualize_metrics(self, results_data):
+    def visualize_metrics(self, results_data, collection_name):
         # Преобразуем данные в DataFrame
         results_df = pd.DataFrame(results_data)
 
@@ -640,10 +711,16 @@ class Dashboard:
 
         # Добавляем виджеты для фильтрации
         selected_datasets = st.multiselect(
-            "Выберите датасеты", options=datasets, default=datasets
+            "Выберите датасеты",
+            options=datasets,
+            default=datasets,
+            key=f"metrics_datasets_{collection_name}",
         )
         selected_models = st.multiselect(
-            "Выберите модели", options=models, default=models
+            "Выберите модели",
+            options=models,
+            default=models,
+            key=f"metrics_models_{collection_name}",
         )
 
         # Применяем фильтры к данным
@@ -663,21 +740,6 @@ class Dashboard:
         # Визуализация данных
         st.subheader("Визуализация метрик")
         st.bar_chart(pivot_table)
-
-    def show_jailbreak_questions(self):
-        st.subheader("Самые сложные вопросы для моделей")
-
-        # Указываем путь к CSV-файлу
-        csv_file_path = "/home/vadim/work/TrustLLM_ru/data/new_data/top20_jailbreak.csv"
-
-        try:
-            # Загружаем данные из CSV-файла
-            jailbreak_df = pd.read_csv(csv_file_path, index_col=0)
-
-            # Отображаем данные
-            st.dataframe(jailbreak_df)
-        except Exception as e:
-            st.error(f"Ошибка при загрузке CSV-файла: {e}")
 
 
 if __name__ == "__main__":
