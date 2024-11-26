@@ -35,12 +35,9 @@
 │   ├── constants.py              # Константы и настройки проекта
 │   ├── db_client.py              # Клиент для взаимодействия с MongoDB
 │   ├── notebooks
-│   │   ├── huggingface_evaluator.log
 │   │   ├── metrics.ipynb
 │   │   ├── run.ipynb
-│   │   ├── saved_evaluations
 │   │   └── trustllm.ipynb
-│   ├── README.md
 │   ├── runers
 │   │   ├── download_dataset.py    # Скрипт для загрузки датасетов
 │   │   ├── drop_collection_pattern.py  # Скрипт для удаления коллекций по шаблону
@@ -58,42 +55,16 @@
 │       ├── rubia.py                # Модуль задач Rubia
 │       └── slava.py                # Модуль задач Slava
 ├── data
-│   ├── dataset
+│   ├── dataset                     # Датасеты из Trust_LLM
 │   │   ├── ethics
-│   │   │   ├── awareness.json
-│   │   │   ├── explicit_moralchoice.json
-│   │   │   ├── implicit_ETHICS.json
-│   │   │   └── implicit_SocialChemistry101.json
 │   │   ├── fairness
-│   │   │   ├── disparagement.json
-│   │   │   ├── preference.json
-│   │   │   ├── stereotype_agreement.json
-│   │   │   ├── stereotype_query_test.json
-│   │   │   └── stereotype_recognition.json
 │   │   ├── privacy
-│   │   │   ├── privacy_awareness_confAIde.json
-│   │   │   ├── privacy_awareness_query.json
-│   │   │   └── privacy_leakage.json
 │   │   ├── robustness
-│   │   │   ├── AdvGLUE.json
-│   │   │   ├── AdvInstruction.json
-│   │   │   ├── ood_detection.json
-│   │   │   └── ood_generalization.json
 │   │   ├── safety
-│   │   │   ├── exaggerated_safety.json
-│   │   │   ├── jailbreak.json
-│   │   │   └── misuse.json
 │   │   └── truthfulness
-│   │       ├── external.json
-│   │       ├── golden_advfactuality.json
-│   │       ├── hallucination.json
-│   │       ├── internal.json
-│   │       └── sycophancy.json
 │   ├── ethics
 │   │   ├── per_ethics.csv
 │   │   └── sit_ethics.csv
-│   ├── new_data
-│   │   └── top20_jailbreak.csv
 │   ├── ood
 │   │   └── ood_detection_ru.json
 │   ├── privacy
@@ -279,31 +250,6 @@
 1. **Используйте скрипты из `benchmark/src.py`, например, `load_task_mongo`.**
 2. **Укажите модели и промпты**, которые необходимо обработать.
 3. **Задачи автоматически будут обрабатываться обработчиком задач** и результаты будут сохраняться в MongoDB.
-
-## Трассировка ошибок
-
-Если вы столкнулись с ошибками при запуске или работе системы, обратитесь к логам:
-
-- **Логи бекенда**: `langchain_back/huggingface_evaluator.log`
-- **Логи обработчика задач**: `benchmark/runers/run.py` выводит логи в консоль.
-- **Логи обработчика метрик**: `benchmark/runers/run_metric.py` выводит логи в консоль.
-- **Логи мониторинга**: `monitoring/app.py` выводит логи в консоль.
-- **Общие логи**: `output.log`
-
-### Пример ошибки и её решения
-
-**Ошибка:**
-
-```bash
-fatal: unable to access 'https://83.143.66.64:27368/lia_icii/inferenceui.git/': gnutls_handshake() failed: An unexpected TLS packet was received.
-```
-
-**Решение:**
-
-1. **Проверьте протокол и порт**: Убедитесь, что вы используете правильный протокол (HTTPS) и порт для подключения к репозиторию.
-2. **Используйте SSH вместо HTTPS**: Настройте SSH-подключение для безопасного и надёжного соединения.
-3. **Проверьте SSL-сертификаты**: Убедитесь, что сертификаты корректны и соответствуют домену или IP-адресу.
-4. **Проверьте сетевые настройки и прокси**: Убедитесь, что фаерволы или прокси-серверы не блокируют соединение.
 
 ## Вклад в проект
 
