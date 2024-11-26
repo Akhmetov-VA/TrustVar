@@ -1,0 +1,12 @@
+.venv
+*.csv
+*.zip
+*.json
+*.tsv
+*.log
+*.jsonl
+
+__pycache__
+.env
+TrustLLM
+poetry.lock
