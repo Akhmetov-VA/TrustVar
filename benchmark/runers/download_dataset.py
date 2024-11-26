@@ -3,30 +3,53 @@ from pathlib import Path
 from datasets import load_dataset
 
 
-def load_and_save_dataset_hf(path, name, split, filename):
-    """Load a Hugging Face dataset and save it as a CSV file."""
+def load_and_save_dataset_hf(path: str, name: str, split: str, filename: Path) -> None:
+    """
+    Загружает датасет из библиотеки Hugging Face и сохраняет его в формате CSV.
+
+    Args:
+        path (str): Путь к датасету в библиотеке Hugging Face.
+        name (str): Название датасета.
+        split (str): Часть датасета для загрузки (например, "train", "test").
+        filename (Path): Путь для сохранения файла в формате CSV.
+
+    Returns:
+        None
+    """
     try:
-        # Load the dataset and convert it to a Pandas DataFrame
+        # Загружаем датасет и преобразуем его в Pandas DataFrame
         df = load_dataset(path, name=name, split=split).to_pandas()
 
-        # Ensure the directory exists before saving
+        # Убедимся, что директория для сохранения файла существует
         filename.parent.mkdir(parents=True, exist_ok=True)
 
-        # Save DataFrame to CSV
+        # Сохраняем DataFrame в формате CSV
         df.to_csv(filename, index=False)
-        print(f"Successfully saved dataset to {filename}")
+        print(f"Датасет успешно сохранен в файл: {filename}")
 
     except Exception as e:
-        print(f"Error loading or saving dataset: {e}")
+        print(f"Ошибка при загрузке или сохранении датасета: {e}")
 
 
-# download dataset по Этичности https://huggingface.co/datasets/RussianNLP/tape
-ethics_path = Path("data/ethics")
+def main() -> None:
+    """
+    Основная функция для загрузки и сохранения датасета по этичности.
+    """
+    # Путь для сохранения данных
+    ethics_path = Path("data/ethics")
 
-for name in ["per_ethics", "sit_ethics"]:
-    load_and_save_dataset_hf(
-        "RussianNLP/tape",
-        name=f"{name}.raw",
-        split="train",
-        filename=ethics_path / f"{name}.csv",
-    )
+    # Перечень названий датасетов для загрузки
+    dataset_names = ["per_ethics", "sit_ethics"]
+
+    # Цикл для загрузки и сохранения каждого датасета
+    for name in dataset_names:
+        load_and_save_dataset_hf(
+            path="RussianNLP/tape",
+            name=f"{name}.raw",
+            split="train",
+            filename=ethics_path / f"{name}.csv",
+        )
+
+
+if __name__ == "__main__":
+    main()

@@ -1,44 +1,76 @@
 import logging
 import os
 import time
+from typing import Any, Dict
 
 import requests
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from pymongo.collection import Collection
+from pymongo.database import Database
 
-from benchmark.constants import (
+from utils.constants import (
     API_URL,
-    # MODELS,  # Удален импорт MODELS, так как будем использовать модели из коллекции
     MONGO_HOST,
     MONGO_PASSWORD,
     MONGO_PORT,
     MONGO_USERNAME,
 )
 
-# Загрузка переменных окружения из .env файла, если необходимо
-load_dotenv()
 
-# Формирование URI для подключения к MongoDB
-mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
-
-# Подключение к MongoDB
-client = MongoClient(mongo_uri)
-db = client.TrustLLM_ru
-
-# Настройка логирования
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
-
-
-def make_request(model, prompt, variables, session):
+def configure_logging() -> None:
     """
-    Отправляет POST-запрос к API с заданной моделью, промптом и переменными.
-
-    :param model: Имя модели
-    :param prompt: Текст запроса
-    :param variables: Дополнительные переменные для запроса
-    :param session: Сессия requests для повторного использования соединений
-    :return: JSON-ответ от API
+    Настраивает логирование для отображения сообщений в консоли.
     """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s: %(message)s",
+        handlers=[logging.StreamHandler()],
+    )
+    logging.info("Логирование успешно настроено.")
+
+
+def get_mongo_client() -> MongoClient:
+    """
+    Создает подключение к MongoDB на основе переменных окружения.
+
+    Returns:
+        MongoClient: Экземпляр MongoDB клиента.
+    """
+    logging.info("Попытка подключения к MongoDB...")
+    mongo_uri = (
+        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+    )
+    try:
+        client = MongoClient(mongo_uri)
+        logging.info("Успешно подключились к MongoDB.")
+        return client
+    except Exception as e:
+        logging.exception("Ошибка подключения к MongoDB.")
+        raise e
+
+
+def make_request(
+    model: str, prompt: str, variables: Dict[str, Any], session: requests.Session
+) -> Dict:
+    """
+    Отправляет POST-запрос к API с указанной моделью, промптом и переменными.
+
+    Args:
+        model (str): Имя модели.
+        prompt (str): Текст запроса.
+        variables (Dict[str, Any]): Переменные для запроса.
+        session (requests.Session): Сессия requests для повторного использования соединений.
+
+    Returns:
+        Dict: JSON-ответ от API.
+
+    Raises:
+        Exception: Если запрос не удался или ответ некорректный.
+    """
+    logging.info(
+        f"Отправка запроса к API для модели '{model}' с промптом: {prompt[:100]}..."
+    )
     try:
         response = session.post(
             API_URL,
@@ -50,124 +82,131 @@ def make_request(model, prompt, variables, session):
             },
         )
         response.raise_for_status()
+        logging.info(f"Успешный ответ от API для модели '{model}'.")
         return response.json()
-
-    except requests.exceptions.HTTPError as http_err:
-        # Обработка HTTP-ошибок
-        response = http_err.response
-        try:
-            error_json = response.json()
-        except ValueError:
-            error_json = "Нет доступного JSON-ответа"
-
-        error_details = (
-            f"Произошла HTTP-ошибка: {http_err} - "
-            f"Код состояния: {response.status_code} - "
-            f"Ответ: {response.text} - "
-            f"Ошибка JSON: {error_json}"
-        )
-        logging.error(error_details)
-        raise Exception(error_details)
-
-    except requests.exceptions.RequestException as req_err:
-        # Обработка других ошибок запроса
-        logging.error(f"Произошла ошибка запроса: {req_err}")
-        raise Exception(f"Ошибка запроса: {req_err}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
+        raise e
 
 
-def process_task(task, collection, session):
+def process_task(task: Dict, collection: Collection, session: requests.Session) -> None:
     """
-    Обрабатывает отдельную задачу из коллекции.
-    Отправляет запрос к модели и обновляет статус задачи в базе данных.
+    Обрабатывает отдельную задачу, отправляя запрос к модели и обновляя статус задачи в базе данных.
 
-    :param task: Документ задачи из MongoDB
-    :param collection: Коллекция MongoDB, содержащая задачи
-    :param session: Сессия requests для повторного использования соединений
+    Args:
+        task (Dict): Документ задачи из MongoDB.
+        collection (Collection): Коллекция MongoDB, содержащая задачи.
+        session (requests.Session): Сессия requests для повторного использования соединений.
     """
-    logging.info(f"Обработка задачи с id: {task['_id']}")
+    task_id = task["_id"]
+    logging.info(f"Начало обработки задачи с id: {task_id}")
     prompt = task["prompt"]
     model = task["model"]
     variables = task.get("variables", {})
 
     try:
         response = make_request(model, prompt, variables, session)
-        if response:
-            collection.update_one(
-                {"_id": task["_id"]},
-                {
-                    "$set": {
-                        "status": "completed",
-                        "response": response,
-                    }
-                },
-            )
-            logging.info(f"Задача с id: {task['_id']} завершена")
-        else:
-            raise Exception("Не удалось получить допустимый ответ от API")
+        collection.update_one(
+            {"_id": task_id},
+            {"$set": {"status": "completed", "response": response}},
+        )
+        logging.info(
+            f"Задача с id: {task_id} успешно завершена и обновлена в базе данных."
+        )
     except Exception as e:
         collection.update_one(
-            {"_id": task["_id"]},
+            {"_id": task_id},
             {"$set": {"status": "failed", "error": str(e)}},
         )
-        logging.error(f"Не удалось обработать задачу с id: {task['_id']} - Ошибка: {e}")
+        logging.error(f"Ошибка обработки задачи с id: {task_id}: {e}")
 
 
-def run():
+def process_collection(
+    db: Database, collection_name: str, session: requests.Session
+) -> None:
     """
-    Основная функция, запускающая бесконечный цикл обработки задач во всех коллекциях.
-    Вместо использования списка MODELS, получает все уникальные модели из каждой коллекции.
+    Обрабатывает задачи в указанной коллекции.
+
+    Args:
+        db (Database): Экземпляр базы данных MongoDB.
+        collection_name (str): Название коллекции.
+        session (requests.Session): Сессия requests для повторного использования соединений.
     """
+    logging.info(f"Начало обработки коллекции '{collection_name}'.")
+    collection = db[collection_name]
+    unique_models = collection.distinct("model")
+
+    if not unique_models:
+        logging.warning(
+            f"В коллекции '{collection_name}' отсутствуют модели для обработки."
+        )
+        return
+
+    logging.info(
+        f"Найдено {len(unique_models)} уникальных моделей в коллекции '{collection_name}'."
+    )
+    for model in unique_models:
+        logging.info(
+            f"Обработка задач для модели '{model}' в коллекции '{collection_name}'."
+        )
+        while True:
+            task = collection.find_one_and_update(
+                {"status": "pending", "model": model},
+                {"$set": {"status": "processing"}},
+                return_document=False,
+            )
+            if task:
+                logging.info(f"Найдена задача с id: {task['_id']} для обработки.")
+                process_task(task, collection, session)
+            else:
+                logging.info(
+                    f"Нет ожидающих задач для модели '{model}' в коллекции '{collection_name}'."
+                )
+                break
+
+
+def run_processing_loop(db: Database) -> None:
+    """
+    Запускает бесконечный цикл обработки задач во всех коллекциях.
+
+    Args:
+        db (Database): Экземпляр базы данных MongoDB.
+    """
+    logging.info("Запуск основного цикла обработки задач.")
     session = requests.Session()
+
     while True:
         try:
-            # Получаем все коллекции, кроме тех, которые нужно пропустить
             collections_to_process = [
                 col
                 for col in db.list_collection_names()
                 if col not in ["delete_me", "test"]
             ]
 
+            logging.info(
+                f"Найдено {len(collections_to_process)} коллекций для обработки."
+            )
             for collection_name in collections_to_process:
-                collection = db[collection_name]
+                process_collection(db, collection_name, session)
 
-                # Получаем список уникальных моделей из текущей коллекции
-                unique_models = collection.distinct("model")
-                if not unique_models:
-                    logging.info(
-                        f"В коллекции '{collection_name}' нет моделей для обработки."
-                    )
-                    continue
-
-                for model in unique_models:
-                    logging.info(
-                        f"Обработка модели '{model}' в коллекции '{collection_name}'"
-                    )
-                    while True:
-                        # Атомарно находим одну задачу с указанной моделью и статусом 'pending'
-                        task = collection.find_one_and_update(
-                            {"status": "pending", "model": model},
-                            {"$set": {"status": "processing"}},
-                            return_document=False,
-                        )
-
-                        if task:
-                            process_task(task, collection, session)
-                        else:
-                            logging.info(
-                                f"Нет ожидающих задач для модели '{model}' в коллекции '{collection_name}'."
-                            )
-                            break  # Переходим к следующей модели, если задач нет
-
-            # Все коллекции обработаны, ждем перед повторной проверкой
-            logging.info("Все коллекции обработаны, ожидание новых задач...")
+            logging.info("Все коллекции обработаны. Ожидание новых задач...")
             time.sleep(5)
-
         except Exception as e:
-            logging.exception(f"Произошла ошибка во время обработки: {e}")
-            # В случае ошибки, можно решить, продолжать цикл или прервать
-            # Здесь продолжаем цикл после ожидания
-            time.sleep(60)
+            logging.exception(f"Ошибка в процессе обработки: {e}")
+            logging.info("Повторная попытка после 60 секунд.")
+            time.sleep(120)
+
+
+def main() -> None:
+    """
+    Основная функция для запуска обработки задач в MongoDB.
+    """
+    configure_logging()
+    logging.info("Загрузка переменных окружения и инициализация подключения...")
+    client = get_mongo_client()
+    db = client["TrustLLM_ru"]
+    run_processing_loop(db)
 
 
 if __name__ == "__main__":
-    run()
+    main()

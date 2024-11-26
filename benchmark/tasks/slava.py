@@ -5,7 +5,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-from benchmark.constants import (
+from utils.constants import (
     MODELS,
     MONGO_HOST,
     MONGO_PASSWORD,
