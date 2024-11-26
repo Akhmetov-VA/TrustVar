@@ -12,7 +12,7 @@ from benchmark.constants import (
     MONGO_PORT,
     MONGO_USERNAME,
 )
-from benchmark.src import add_task, replace_curl
+from utils.src import add_task, replace_curl
 
 # Настройка логирования
 logging.basicConfig(

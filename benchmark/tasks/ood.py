@@ -13,7 +13,7 @@ from benchmark.constants import (
     MONGO_PORT,
     MONGO_USERNAME,
 )
-from benchmark.src import load_task_mongo
+from utils.src import load_task_mongo
 
 # Настройка логирования
 logging.basicConfig(

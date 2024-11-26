@@ -11,7 +11,7 @@ from benchmark.constants import (
     MONGO_PORT,
     MONGO_USERNAME,
 )
-from benchmark.src import add_task
+from utils.src import add_task
 
 # Получение имени текущего файла
 filename = os.path.basename(__file__)
