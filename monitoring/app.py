@@ -8,29 +8,9 @@ import streamlit as st
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-load_dotenv()
+from benchmark.constants import MODELS
 
-# Список моделей для выбора
-MODELS = [
-    # "gemma2:27b-instruct-q4_0",
-    "gemma2:9b-instruct-q4_0",
-    "ilyagusev/saiga_llama3",
-    "llama2:13b",
-    "llama3.1:8b-instruct_q4_0",
-    # "llama3:70b-instruct-q4_0",
-    "llama3:8b-instruct_q4_0",
-    "mistral:7b-instruct-v0.3-q4_0",
-    "mixtral:8x7b-instruct-v0.1-q4_0",
-    "phi3:14b-medium-4k-instruct_q4_0",
-    "qwen:7b",
-    "qwen2:72b-instruct_q4_0",
-    "qwen2.5:72b-instruct_q4_0",
-    "qwen2:7b-instruct_q4_0",
-    "solar:10.7b-instruct-v1-q4_0",
-    "wavecut/vikhr:7b-instruct_0.4-Q4_1",
-    "yi:6b",
-    "yi:9b",
-]
+load_dotenv()
 
 
 class MongoDBClient:
@@ -232,11 +212,13 @@ class Dashboard:
 
     def show_dashboard_tab(self):
         with self.tabs[0]:
-            collections_to_process = [
-                col
-                for col in self.db_client.list_collections()
-                if col not in ["delete_me", "test", "results", "results1"]
-            ]
+            collections_to_process = sorted(
+                [
+                    col
+                    for col in self.db_client.list_collections()
+                    if col not in ["delete_me", "test", "results", "results1"]
+                ]
+            )
 
             df = self.load_data(collections_to_process)
 

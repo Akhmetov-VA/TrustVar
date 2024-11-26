@@ -8,12 +8,15 @@ from pymongo import MongoClient
 
 from benchmark.constants import (
     API_URL,
-    MODELS,
+    # MODELS,  # Удален импорт MODELS, так как будем использовать модели из коллекции
     MONGO_HOST,
     MONGO_PASSWORD,
     MONGO_PORT,
     MONGO_USERNAME,
 )
+
+# Загрузка переменных окружения из .env файла, если необходимо
+load_dotenv()
 
 # Формирование URI для подключения к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
@@ -27,6 +30,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(mes
 
 
 def make_request(model, prompt, variables, session):
+    """
+    Отправляет POST-запрос к API с заданной моделью, промптом и переменными.
+
+    :param model: Имя модели
+    :param prompt: Текст запроса
+    :param variables: Дополнительные переменные для запроса
+    :param session: Сессия requests для повторного использования соединений
+    :return: JSON-ответ от API
+    """
     try:
         response = session.post(
             API_URL,
@@ -41,29 +53,38 @@ def make_request(model, prompt, variables, session):
         return response.json()
 
     except requests.exceptions.HTTPError as http_err:
-        # Используем http_err.response для доступа к ответу
+        # Обработка HTTP-ошибок
         response = http_err.response
         try:
             error_json = response.json()
         except ValueError:
-            error_json = "No JSON response available"
+            error_json = "Нет доступного JSON-ответа"
 
         error_details = (
-            f"HTTP error occurred: {http_err} - "
-            f"Status Code: {response.status_code} - "
-            f"Response: {response.text} - "
-            f"Error JSON: {error_json}"
+            f"Произошла HTTP-ошибка: {http_err} - "
+            f"Код состояния: {response.status_code} - "
+            f"Ответ: {response.text} - "
+            f"Ошибка JSON: {error_json}"
         )
         logging.error(error_details)
         raise Exception(error_details)
 
     except requests.exceptions.RequestException as req_err:
-        logging.error(f"Request error occurred: {req_err}")
-        raise Exception(f"Request error: {req_err}")
+        # Обработка других ошибок запроса
+        logging.error(f"Произошла ошибка запроса: {req_err}")
+        raise Exception(f"Ошибка запроса: {req_err}")
 
 
 def process_task(task, collection, session):
-    logging.info(f"Processing task with id: {task['_id']}")
+    """
+    Обрабатывает отдельную задачу из коллекции.
+    Отправляет запрос к модели и обновляет статус задачи в базе данных.
+
+    :param task: Документ задачи из MongoDB
+    :param collection: Коллекция MongoDB, содержащая задачи
+    :param session: Сессия requests для повторного использования соединений
+    """
+    logging.info(f"Обработка задачи с id: {task['_id']}")
     prompt = task["prompt"]
     model = task["model"]
     variables = task.get("variables", {})
@@ -80,18 +101,22 @@ def process_task(task, collection, session):
                     }
                 },
             )
-            logging.info(f"Completed task with id: {task['_id']}")
+            logging.info(f"Задача с id: {task['_id']} завершена")
         else:
-            raise Exception("Failed to get a valid response from the API")
+            raise Exception("Не удалось получить допустимый ответ от API")
     except Exception as e:
         collection.update_one(
             {"_id": task["_id"]},
             {"$set": {"status": "failed", "error": str(e)}},
         )
-        logging.error(f"Failed task with id: {task['_id']} - Error: {e}")
+        logging.error(f"Не удалось обработать задачу с id: {task['_id']} - Ошибка: {e}")
 
 
 def run():
+    """
+    Основная функция, запускающая бесконечный цикл обработки задач во всех коллекциях.
+    Вместо использования списка MODELS, получает все уникальные модели из каждой коллекции.
+    """
     session = requests.Session()
     while True:
         try:
@@ -105,10 +130,17 @@ def run():
             for collection_name in collections_to_process:
                 collection = db[collection_name]
 
-                # Обрабатываем задачи по моделям
-                for model in MODELS:
+                # Получаем список уникальных моделей из текущей коллекции
+                unique_models = collection.distinct("model")
+                if not unique_models:
                     logging.info(
-                        f"Processing model '{model}' in collection '{collection_name}'"
+                        f"В коллекции '{collection_name}' нет моделей для обработки."
+                    )
+                    continue
+
+                for model in unique_models:
+                    logging.info(
+                        f"Обработка модели '{model}' в коллекции '{collection_name}'"
                     )
                     while True:
                         # Атомарно находим одну задачу с указанной моделью и статусом 'pending'
@@ -122,18 +154,19 @@ def run():
                             process_task(task, collection, session)
                         else:
                             logging.info(
-                                f"No more pending tasks for model '{model}' in collection '{collection_name}'."
+                                f"Нет ожидающих задач для модели '{model}' в коллекции '{collection_name}'."
                             )
                             break  # Переходим к следующей модели, если задач нет
 
             # Все коллекции обработаны, ждем перед повторной проверкой
-            logging.info("All collections processed, waiting for new tasks...")
+            logging.info("Все коллекции обработаны, ожидание новых задач...")
             time.sleep(5)
 
         except Exception as e:
-            logging.exception(f"An error occurred during processing: {e}")
-            # Здесь можно решить, нужно ли прерывать цикл или продолжать
-            # break
+            logging.exception(f"Произошла ошибка во время обработки: {e}")
+            # В случае ошибки, можно решить, продолжать цикл или прервать
+            # Здесь продолжаем цикл после ожидания
+            time.sleep(60)
 
 
 if __name__ == "__main__":
