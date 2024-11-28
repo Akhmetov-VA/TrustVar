@@ -5,6 +5,7 @@
 *.tsv
 *.log
 *.jsonl
+*.xlsx
 
 __pycache__
 .env

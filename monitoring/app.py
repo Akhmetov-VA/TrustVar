@@ -266,7 +266,7 @@ class Dashboard:
                 "Всего задач": total_tasks,
                 "В ожидании": status_counts["pending"],
                 "Выполнено": status_counts["completed"],
-                "Измерено": status_counts["measured"],
+                "Измерено": status_counts["measured"] + status_counts["transferred"],
                 "С ошибками": status_counts["failed"] + status_counts["failed_measure"],
                 "Статус": status,
             }

@@ -16,6 +16,7 @@ def configure_logging() -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()],
     )
+    logging.info("Логирование успешно настроено.")
 
 
 def get_mongo_client() -> MongoClient:
@@ -39,12 +40,20 @@ def get_mongo_client() -> MongoClient:
         f"mongodb://{mongo_username}:{mongo_password}@{mongo_host}:{mongo_port}/"
     )
 
-    return MongoClient(mongo_uri)
+    try:
+        client = MongoClient(mongo_uri)
+        # Проверка подключения
+        client.admin.command("ping")
+        logging.info("Успешное подключение к MongoDB.")
+        return client
+    except Exception as e:
+        logging.exception("Ошибка подключения к MongoDB.")
+        raise e
 
 
 def revert_task_status(collection: collection.Collection) -> None:
     """
-    Отменяет статус задач в коллекции с 'transferred' на 'completed'
+    Отменяет статус задач в коллекции с 'transferred' и 'measured' на 'completed'
     и удаляет поля 'pred' и 'metric'.
 
     Args:
@@ -54,12 +63,15 @@ def revert_task_status(collection: collection.Collection) -> None:
         None
     """
     try:
+        # Определяем статусы для отката
+        statuses_to_revert = ["transferred", "measured"]
+
         result = collection.update_many(
-            {"status": "transferred"},
+            {"status": {"$in": statuses_to_revert}},
             {"$set": {"status": "completed"}, "$unset": {"pred": "", "metric": ""}},
         )
         logging.info(
-            f"Отменено {result.modified_count} задач из 'transferred' в 'completed' в коллекции '{collection.name}'."
+            f"Отменено {result.modified_count} задач из {statuses_to_revert} в 'completed' в коллекции '{collection.name}'."
         )
     except Exception as e:
         logging.error(f"Ошибка при обработке коллекции '{collection.name}': {e}")
