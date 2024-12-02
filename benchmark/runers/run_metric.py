@@ -72,6 +72,8 @@ def get_mongo_client() -> MongoClient:
     )
     try:
         client = MongoClient(mongo_uri)
+        # Проверка подключения
+        client.admin.command("ping")
         logging.info("Успешное подключение к MongoDB.")
         return client
     except Exception as e:
@@ -231,6 +233,67 @@ def process_rta_tasks(
     )
 
 
+def process_target_rta_tasks(
+    db: Database, collection: Collection, target_rta_tasks_list: List[Dict]
+) -> None:
+    """
+    Обрабатывает задачи с целевым значением 'RtA' и загружает их для дальнейшего анализа.
+
+    Args:
+        db (Database): База данных MongoDB.
+        collection (Collection): Коллекция с исходными задачами.
+        target_rta_tasks_list (List[Dict]): Список задач с целевым 'RtA'.
+    """
+    logging.info(
+        f"Обнаружено {len(target_rta_tasks_list)} задач с целевым 'RtA' для обработки."
+    )
+    df_for_llm = pd.DataFrame(target_rta_tasks_list)
+
+    if df_for_llm.empty:
+        logging.info("Нет задач для обработки после преобразования в DataFrame.")
+        return
+
+    df_for_llm["input"] = df_for_llm.apply(
+        lambda x: x["prompt"].format(**x["variables"]), axis=1
+    )
+
+    # Переименовываем поля для совместимости с load_task_mongo
+    df_for_llm = df_for_llm.rename(
+        {"model": "init_model", "response": "answer", "_id": "init_id"},
+        axis=1,
+    )
+
+    df_for_llm = df_for_llm[["init_id", "job_id", "input", "init_model", "answer"]]
+
+    # Создаем новую коллекцию для задач Target RtA анализа
+    target_rta_analysis_collection_name = "Target_RtA"
+    target_rta_analysis_collection = db[target_rta_analysis_collection_name]
+
+    for _, row in df_for_llm.iterrows():
+        variables = {"input": row["input"], "answer": row["answer"]}
+        for kind, prompt_collection in RTA_PROMPTS.items():
+            for prompt in prompt_collection:
+                add_task(
+                    target_rta_analysis_collection,
+                    row.to_dict(),
+                    row["job_id"],
+                    RTA_MODEL,
+                    prompt,
+                    variables,
+                    target=1,
+                )
+
+    logging.info(
+        f"Все задачи с целевым 'RtA' для анализа загружены в коллекцию '{target_rta_analysis_collection_name}'."
+    )
+
+    # Обновляем статус задач, чтобы не обрабатывать их повторно
+    collection.update_many(
+        {"_id": {"$in": df_for_llm["init_id"].tolist()}},
+        {"$set": {"status": "transferred"}},
+    )
+
+
 def process_collection(
     db: Database, collection_name: str, results_collection: Collection
 ) -> None:
@@ -243,10 +306,16 @@ def process_collection(
 
     # Измененный запрос для исключения уже обработанных задач
     tasks_cursor = collection.find(
-        {"response": {"$exists": True}, "status": {"$nin": ["transferred"]}}
+        {
+            "response": {"$exists": True},
+            "status": {"$nin": ["transferred", "completed"]},
+        }
     )
     task_count = collection.count_documents(
-        {"response": {"$exists": True}, "status": {"$nin": ["transferred"]}}
+        {
+            "response": {"$exists": True},
+            "status": {"$nin": ["transferred", "completed"]},
+        }
     )
     logging.info(
         f"Найдено {task_count} задач для обработки в коллекции '{collection_name}'."
@@ -257,13 +326,21 @@ def process_collection(
 
     compute_and_store_metrics(collection, results_collection)
 
-    # Обработка задач с 'RtA'
+    # Обработка задач с 'pred' == 'RtA'
     rta_tasks_cursor = collection.find({"pred": "RtA", "status": "measured"})
     rta_tasks_list = list(rta_tasks_cursor)
     if rta_tasks_list:
         process_rta_tasks(db, collection, rta_tasks_list)
     else:
-        logging.info("Нет задач с 'RtA' для обработки.")
+        logging.info("Нет задач с 'pred' == 'RtA' для обработки.")
+
+    # Обработка задач с 'target' == 'RtA'
+    target_rta_tasks_cursor = collection.find({"target": "RtA", "status": "measured"})
+    target_rta_tasks_list = list(target_rta_tasks_cursor)
+    if target_rta_tasks_list:
+        process_target_rta_tasks(db, collection, target_rta_tasks_list)
+    else:
+        logging.info("Нет задач с 'target' == 'RtA' для обработки.")
 
 
 def main() -> None:
