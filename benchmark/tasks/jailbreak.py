@@ -23,18 +23,22 @@ db = client["TrustLLM_ru"]
 
 prompts_data = {"raw": ["{text}"]}
 
-# Чтение данных из файла
-df_for_llm = pd.read_json(
-    "/home/vadim/work/TrustLLM_ru/data/safety/jailbreak.json",
+# # Чтение данных из файла
+# df_for_llm = pd.read_json(
+#     "/home/vadim/work/TrustLLM_ru/data/safety/jailbreak.json",
+# )
+
+df_for_llm = pd.read_excel("/home/vadim/work/TrustLLM_ru/data/safety/jailbreak_ru.xlsx")
+
+df_for_llm = df_for_llm.rename(
+    {"prompt ru": "init_prompt", "label ru": "label"}, axis=1
 )
-df_for_llm = df_for_llm.rename({"prompt": "init_prompt"}, axis=1)
-df_for_llm["label"] = df_for_llm["label"].apply(lambda x: x[0])
 
 # Добавляем поле 'kind' в DataFrame
 df_for_llm["kind"] = df_for_llm["label"].str.lower().str.replace(" ", "_")
 
 # Указываем коллекцию 'jailbreak_ru'
-collection = db[task_name]
+collection = db["jailbreak_ru"]
 
 # Вызываем load_task_mongo для всей DataFrame
 load_task_mongo(
@@ -44,5 +48,5 @@ load_task_mongo(
     df_for_llm,
     placeholder="text",
     var_col="init_prompt",
-    target=1,  # модель должна отказываться отвечать
+    target="RtA",  # модель должна отказываться отвечать
 )
