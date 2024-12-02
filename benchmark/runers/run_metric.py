@@ -110,6 +110,25 @@ def get_pattern(collection_name: str) -> Optional[Pattern]:
     return pattern
 
 
+def extract_prediction(model_answer: str, pattern: Pattern) -> str:
+    """
+    Извлекает предсказание из ответа модели с использованием заданного паттерна.
+
+    Args:
+        model_answer (str): Ответ модели.
+        pattern (Pattern): Регулярное выражение для извлечения предсказания.
+
+    Returns:
+        str: Извлеченное предсказание или 'RtA', если не найдено.
+    """
+    match = pattern.findall(model_answer)
+    if match:
+        for group in match[0]:
+            if group:
+                return group
+    return "RtA"
+
+
 def process_task(task: Dict, collection: Collection, pattern: Pattern) -> None:
     """
     Обрабатывает задачу, извлекая предсказание и обновляя метрики.
@@ -131,13 +150,17 @@ def process_task(task: Dict, collection: Collection, pattern: Pattern) -> None:
     model_answer = (
         response.get("result", "") if isinstance(response, dict) else response
     ).strip()
-    match = pattern.findall(model_answer)
-    pred = match[0][0] if match and match[0][0] else "RtA"
+    pred = extract_prediction(model_answer, pattern)
     target = task.get("target")
-    if pred != "RtA" and target != "RtA":
-        metric = int(int(pred) == int(target))
-    else:
-        metric = None
+    metric = None
+
+    try:
+        if pred != "RtA" and target != "RtA":
+            metric = int(int(pred) == int(target))
+    except ValueError as e:
+        logging.error(f"Ошибка при вычислении метрики для задачи {task['_id']}: {e}")
+        collection.update_one({"_id": task["_id"]}, {"$set": {"metric_error": str(e)}})
+        return
 
     update_fields = {"pred": pred, "status": "measured", "metric": metric}
 
@@ -167,7 +190,12 @@ def compute_and_store_metrics(
         {"$group": {"_id": "$model", "average_metric": {"$avg": "$metric"}}},
     ]
     try:
-        for doc in collection.aggregate(pipeline):
+        metrics = list(collection.aggregate(pipeline))
+        for doc in metrics:
+            # Удаляем старые метрики
+            results_collection.delete_many(
+                {"dataset": collection.name, "model": doc["_id"]}
+            )
             record = {
                 "dataset": collection.name,
                 "model": doc["_id"],
@@ -207,7 +235,12 @@ def compute_and_store_TFNR(collection: Collection, tfnr_collection: Collection) 
         },
     ]
     try:
-        for doc in collection.aggregate(pipeline):
+        metrics = list(collection.aggregate(pipeline))
+        for doc in metrics:
+            # Удаляем старые метрики
+            tfnr_collection.delete_many(
+                {"dataset": collection.name, "model": doc["_id"]}
+            )
             record = {
                 "dataset": collection.name,
                 "model": doc["_id"],
@@ -227,7 +260,7 @@ def process_rta_tasks(
     db: Database, collection: Collection, rta_tasks_list: List[Dict]
 ) -> None:
     """
-    Обрабатывает задачи с предсказанием 'RtA' и загружает их для дальнейшего анализа.
+    Обрабатывает задачи с 'RtA' в 'pred' или 'target' и загружает их для дальнейшего анализа.
 
     Args:
         db (Database): База данных MongoDB.
@@ -242,108 +275,44 @@ def process_rta_tasks(
         return
 
     df_for_llm["input"] = df_for_llm.apply(
-        lambda x: x["prompt"].format(**x["variables"]), axis=1
+        lambda x: x["prompt"].format(**x.get("variables", {})), axis=1
     )
 
-    # Переименовываем поля для совместимости с load_task_mongo
+    # Переименовываем поля для совместимости с add_task
     df_for_llm = df_for_llm.rename(
-        {"model": "init_model", "response": "answer", "_id": "init_id"},
+        {
+            "model": "init_model",
+            "response": "answer",
+            "_id": "init_id",
+        },
         axis=1,
     )
+
+    df_for_llm["dataset"] = collection.name
 
     df_for_llm = df_for_llm[
         ["init_id", "job_id", "input", "init_model", "answer", "dataset"]
     ]
 
-    # Создаем новую коллекцию для задач RtA анализа
+    # Коллекция для задач RtA анализа
     rta_analysis_collection_name = "RtA"
     rta_analysis_collection = db[rta_analysis_collection_name]
 
     for _, row in df_for_llm.iterrows():
         variables = {"input": row["input"], "answer": row["answer"]}
-        for kind, prompt_collection in RTA_PROMPTS.items():
-            for prompt in prompt_collection:
-                add_task(
-                    rta_analysis_collection,
-                    {
-                        **row.to_dict(),
-                        "dataset": collection.name,
-                    },
-                    row["job_id"],
-                    RTA_MODEL,
-                    prompt,
-                    variables,
-                    target=1,
-                )
+        for prompt in RTA_PROMPTS["check"]:
+            add_task(
+                rta_analysis_collection,
+                row.to_dict(),
+                row["job_id"],
+                RTA_MODEL,
+                prompt,
+                variables,
+                target=1,
+            )
 
     logging.info(
-        f"Все задачи для анализа RtA загружены в коллекцию '{rta_analysis_collection_name}'."
-    )
-
-    # Обновляем статус задач, чтобы не обрабатывать их повторно
-    collection.update_many(
-        {"_id": {"$in": df_for_llm["init_id"].tolist()}},
-        {"$set": {"status": "transferred"}},
-    )
-
-
-def process_target_rta_tasks(
-    db: Database, collection: Collection, target_rta_tasks_list: List[Dict]
-) -> None:
-    """
-    Обрабатывает задачи с целевым значением 'RtA' и загружает их для дальнейшего анализа.
-
-    Args:
-        db (Database): База данных MongoDB.
-        collection (Collection): Коллекция с исходными задачами.
-        target_rta_tasks_list (List[Dict]): Список задач с целевым 'RtA'.
-    """
-    logging.info(
-        f"Обнаружено {len(target_rta_tasks_list)} задач с целевым 'RtA' для обработки."
-    )
-    df_for_llm = pd.DataFrame(target_rta_tasks_list)
-
-    if df_for_llm.empty:
-        logging.info("Нет задач для обработки после преобразования в DataFrame.")
-        return
-
-    df_for_llm["input"] = df_for_llm.apply(
-        lambda x: x["prompt"].format(**x["variables"]), axis=1
-    )
-
-    # Переименовываем поля для совместимости с load_task_mongo
-    df_for_llm = df_for_llm.rename(
-        {"model": "init_model", "response": "answer", "_id": "init_id"},
-        axis=1,
-    )
-
-    df_for_llm = df_for_llm[
-        ["init_id", "job_id", "input", "init_model", "answer", "dataset"]
-    ]
-
-    # Используем ту же коллекцию RtA
-    rta_analysis_collection_name = "RtA"
-    rta_analysis_collection = db[rta_analysis_collection_name]
-
-    for _, row in df_for_llm.iterrows():
-        variables = {"input": row["input"], "answer": row["answer"]}
-        for kind, prompt_collection in RTA_PROMPTS.items():
-            for prompt in prompt_collection:
-                add_task(
-                    rta_analysis_collection,
-                    {
-                        **row.to_dict(),
-                        "dataset": collection.name,
-                    },
-                    row["job_id"],
-                    RTA_MODEL,
-                    prompt,
-                    variables,
-                    target=1,
-                )
-
-    logging.info(
-        f"Все задачи с целевым 'RtA' для анализа загружены в коллекцию '{rta_analysis_collection_name}'."
+        f"Все задачи с 'RtA' для анализа загружены в коллекцию '{rta_analysis_collection_name}'."
     )
 
     # Обновляем статус задач, чтобы не обрабатывать их повторно
@@ -366,7 +335,7 @@ def process_collection(
         logging.error(f"Паттерн для коллекции '{collection_name}' не найден.")
         return
 
-    # Измененный запрос для исключения уже обработанных задач
+    # Получаем задачи со статусом 'completed' для обработки
     tasks_cursor = collection.find(
         {
             "response": {"$exists": True},
@@ -392,18 +361,12 @@ def process_collection(
     # Обработка задач с 'pred' == 'RtA' или 'target' == 'RtA'
     rta_tasks_cursor = collection.find(
         {
+            "status": {"$in": ["measured", "completed"]},
             "$or": [
-                {
-                    "pred": "RtA",
-                    "status": "measured",
-                    "response": {"$exists": True},
-                },
-                {
-                    "target": "RtA",
-                    "status": "completed",
-                    "response": {"$exists": True},
-                },
-            ]
+                {"pred": "RtA"},
+                {"target": "RtA"},
+            ],
+            "response": {"$exists": True},
         }
     )
     rta_tasks_list = list(rta_tasks_cursor)
