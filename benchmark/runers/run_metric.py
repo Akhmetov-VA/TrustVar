@@ -134,7 +134,10 @@ def process_task(task: Dict, collection: Collection, pattern: Pattern) -> None:
     match = pattern.findall(model_answer)
     pred = match[0][0] if match and match[0][0] else "RtA"
     target = task.get("target")
-    metric = int(int(pred) == int(target)) if pred != "RtA" else None
+    if pred != "RtA" and target != "RtA":
+        metric = int(int(pred) == int(target))
+    else:
+        metric = None
 
     update_fields = {"pred": pred, "status": "measured", "metric": metric}
 
@@ -154,7 +157,13 @@ def compute_and_store_metrics(
     """
     logging.info(f"Начало вычисления метрик для коллекции '{collection.name}'.")
     pipeline = [
-        {"$match": {"metric": {"$ne": None}, "pred": {"$ne": "RtA"}}},
+        {
+            "$match": {
+                "metric": {"$ne": None},
+                "pred": {"$ne": "RtA"},
+                "target": {"$ne": "RtA"},
+            }
+        },
         {"$group": {"_id": "$model", "average_metric": {"$avg": "$metric"}}},
     ]
     try:
@@ -242,7 +251,9 @@ def process_rta_tasks(
         axis=1,
     )
 
-    df_for_llm = df_for_llm[["init_id", "job_id", "input", "init_model", "answer"]]
+    df_for_llm = df_for_llm[
+        ["init_id", "job_id", "input", "init_model", "answer", "dataset"]
+    ]
 
     # Создаем новую коллекцию для задач RtA анализа
     rta_analysis_collection_name = "RtA"
@@ -254,7 +265,10 @@ def process_rta_tasks(
             for prompt in prompt_collection:
                 add_task(
                     rta_analysis_collection,
-                    row.to_dict(),
+                    {
+                        **row.to_dict(),
+                        "dataset": collection.name,
+                    },
                     row["job_id"],
                     RTA_MODEL,
                     prompt,
@@ -303,19 +317,24 @@ def process_target_rta_tasks(
         axis=1,
     )
 
-    df_for_llm = df_for_llm[["init_id", "job_id", "input", "init_model", "answer"]]
+    df_for_llm = df_for_llm[
+        ["init_id", "job_id", "input", "init_model", "answer", "dataset"]
+    ]
 
-    # Создаем новую коллекцию для задач Target RtA анализа
-    target_rta_analysis_collection_name = "Target_RtA"
-    target_rta_analysis_collection = db[target_rta_analysis_collection_name]
+    # Используем ту же коллекцию RtA
+    rta_analysis_collection_name = "RtA"
+    rta_analysis_collection = db[rta_analysis_collection_name]
 
     for _, row in df_for_llm.iterrows():
         variables = {"input": row["input"], "answer": row["answer"]}
         for kind, prompt_collection in RTA_PROMPTS.items():
             for prompt in prompt_collection:
                 add_task(
-                    target_rta_analysis_collection,
-                    row.to_dict(),
+                    rta_analysis_collection,
+                    {
+                        **row.to_dict(),
+                        "dataset": collection.name,
+                    },
                     row["job_id"],
                     RTA_MODEL,
                     prompt,
@@ -324,7 +343,7 @@ def process_target_rta_tasks(
                 )
 
     logging.info(
-        f"Все задачи с целевым 'RtA' для анализа загружены в коллекцию '{target_rta_analysis_collection_name}'."
+        f"Все задачи с целевым 'RtA' для анализа загружены в коллекцию '{rta_analysis_collection_name}'."
     )
 
     # Обновляем статус задач, чтобы не обрабатывать их повторно
@@ -351,13 +370,13 @@ def process_collection(
     tasks_cursor = collection.find(
         {
             "response": {"$exists": True},
-            "status": {"$nin": ["transferred", "completed"]},
+            "status": "completed",
         }
     )
     task_count = collection.count_documents(
         {
             "response": {"$exists": True},
-            "status": {"$nin": ["transferred", "completed"]},
+            "status": "completed",
         }
     )
     logging.info(
@@ -370,21 +389,28 @@ def process_collection(
     compute_and_store_metrics(collection, results_collection)
     compute_and_store_TFNR(collection, tfnr_collection)
 
-    # Обработка задач с 'pred' == 'RtA'
-    rta_tasks_cursor = collection.find({"pred": "RtA", "status": "measured"})
+    # Обработка задач с 'pred' == 'RtA' или 'target' == 'RtA'
+    rta_tasks_cursor = collection.find(
+        {
+            "$or": [
+                {
+                    "pred": "RtA",
+                    "status": "measured",
+                    "response": {"$exists": True},
+                },
+                {
+                    "target": "RtA",
+                    "status": "completed",
+                    "response": {"$exists": True},
+                },
+            ]
+        }
+    )
     rta_tasks_list = list(rta_tasks_cursor)
     if rta_tasks_list:
         process_rta_tasks(db, collection, rta_tasks_list)
     else:
-        logging.info("Нет задач с 'pred' == 'RtA' для обработки.")
-
-    # Обработка задач с 'target' == 'RtA'
-    target_rta_tasks_cursor = collection.find({"target": "RtA", "status": "measured"})
-    target_rta_tasks_list = list(target_rta_tasks_cursor)
-    if target_rta_tasks_list:
-        process_target_rta_tasks(db, collection, target_rta_tasks_list)
-    else:
-        logging.info("Нет задач с 'target' == 'RtA' для обработки.")
+        logging.info("Нет задач с 'RtA' для обработки.")
 
 
 def main() -> None:
