@@ -55,7 +55,7 @@ class RtAQueueAdder:
         # Find tasks that are completed, have a response, and are not transferred yet
         tasks_cursor = collection.find(
             {
-                "response": {"$exists": True},
+                "response": {"$ne": None},
                 "transferred_to_rta": {"$ne": True},
             }
         )
