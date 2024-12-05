@@ -196,7 +196,7 @@
 2. **Запустите скрипт добавления задач в RtA:**
 
     ```bash
-    /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runners/run_rta.py
+    /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runers/run_rta.py
     ```
 
 3. **Повторно подключиться к сессии:**

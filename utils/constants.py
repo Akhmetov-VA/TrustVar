@@ -33,6 +33,7 @@ MODELS = [
     "yi:6b",
     "yi:9b",
     "rscr/ruadapt_qwen2.5_32b:Q4_K_M",
+    "qwq",
 ]
 
 
@@ -61,6 +62,11 @@ COLLECTIONS_TO_PROCESS = [
     "SLAVA_only4",
     "ruBia_short_12_11",
     "jailbreak_ru",
+    "misuse_ru",
+    "ood",
+    "privacy_awareness",
+    "exaggerated_safety",
+    "ruhatespeech",
 ]
 
 # Regular expression patterns for prediction extraction
@@ -73,5 +79,5 @@ PATTERNS = {
     "ConfAIDe": r"(?:^\W*?(-100|100|-50|50|0).*)|(?:.*?(-100|100|-50|50|0)\W*$)",
     "RtA": r"(?:^\W*([01]).*)|(?:.*([01])\W*$)",
     "ruBia_short_12_11": r"(?:^\W*([01]).*)|(?:.*([01])\W*$)",
-    # "jailbreak_ru": No pattern for this collection
+    "ruhatespeech": r"(?:^\W*([12]).*)|(?:.*([12])\W*$)",
 }

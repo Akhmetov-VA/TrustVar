@@ -55,7 +55,6 @@ class RtAQueueAdder:
         # Find tasks that are completed, have a response, and are not transferred yet
         tasks_cursor = collection.find(
             {
-                "status": {"$in": ["completed"]},
                 "response": {"$exists": True},
                 "transferred_to_rta": {"$ne": True},
             }
@@ -134,8 +133,8 @@ def main() -> None:
         try:
             for collection_name in COLLECTIONS_TO_PROCESS:
                 rta_queue_adder.add_tasks_to_rta_queue(collection_name)
-            logging.info("Sleeping for 60 seconds before next iteration.")
-            time.sleep(60)
+            logging.info("Sleeping for 60 mins before next iteration.")
+            time.sleep(60 * 60)
         except Exception as e:
             logging.exception(f"An error occurred: {e}")
             time.sleep(60)

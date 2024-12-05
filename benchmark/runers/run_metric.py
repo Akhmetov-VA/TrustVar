@@ -282,8 +282,8 @@ def main() -> None:
                     logging.info(
                         f"Skipping collection '{collection_name}' (last updated at {last_computed})."
                     )
-            logging.info("Sleeping for 60 seconds before next iteration.")
-            time.sleep(60)
+            logging.info("Sleeping for 60 mins before next iteration.")
+            time.sleep(60 * 60)
 
         except Exception as e:
             logging.exception(f"Error in main processing loop: {e}")
