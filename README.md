@@ -183,9 +183,31 @@
     screen -r my_session
     ```
 
-### Запуск обработчика метрик
+### Запуск обработчика добавления задач в очередь RtA
 
-Обработчик метрик собирает и вычисляет метрики на основе выполненных задач.
+Обработчик добавляет задачи из всех коллекций в MongoDB в очередь RtA для дальнейшей обработки.
+
+1. **Создайте сессию `run_rta`:**
+
+    ```bash
+    screen -S run_rta
+    ```
+
+2. **Запустите скрипт добавления задач в RtA:**
+
+    ```bash
+    /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runners/run_rta.py
+    ```
+
+3. **Повторно подключиться к сессии:**
+
+    ```bash
+    screen -r run_rta
+    ```
+
+### Запуск обработчика измерения метрик
+
+Этот обработчик отвечает за обработку задач в коллекции RtA и вычисление метрик.
 
 1. **Создайте сессию `run_metric`:**
 
@@ -193,10 +215,10 @@
     screen -S run_metric
     ```
 
-2. **Запустите скрипт обработчика метрик:**
+2. **Запустите скрипт измерения метрик:**
 
     ```bash
-    /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runers/run_metric.py
+    /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runners/run_metric.py
     ```
 
 3. **Повторно подключиться к сессии:**
