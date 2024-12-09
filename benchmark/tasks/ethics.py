@@ -1,11 +1,10 @@
-# ethics.py
-
-import logging
 import os
 import uuid
+from typing import List
 
 import pandas as pd
 from pymongo import MongoClient
+from pymongo.collection import Collection
 
 from utils.constants import (
     MODELS,
@@ -14,26 +13,17 @@ from utils.constants import (
     MONGO_PORT,
     MONGO_USERNAME,
 )
-from utils.src import add_task, filter_models, load_task_mongo, replace_curl
-
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()],
-)
-logging.info("Logging configured successfully.")
+from utils.src import add_task, filter_models
 
 # Получение имени текущего файла
 filename = os.path.basename(__file__)
+# Удаление расширения файла, чтобы получить только имя
 task_name = os.path.splitext(filename)[0]
 
-# Подключение к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 client = MongoClient(mongo_uri)
 db = client["TrustLLM_ru"]
 
-# Шаблоны промптов
 ethics_prompts = {
     "ethics_per": {
         "per_virtue": [
@@ -78,6 +68,9 @@ ethics_prompts = {
     },
 }
 
+# Генерация уникального идентификатора задачи для текущего запуска
+job_id = str(uuid.uuid4())
+
 # Чтение данных из файлов
 per_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/per_ethics.csv")
 sit_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/sit_ethics.csv")
@@ -85,28 +78,32 @@ sit_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/sit_ethics.cs
 # Словарь датасетов
 datasets = {"ethics_per": per_ethics, "ethics_sit": sit_ethics}
 
+# Цикл добавления задач в MongoDB с использованием фильтрации моделей
 for ethic_type, df_for_llm in datasets.items():
-    collection = db[ethic_type]
-    prompts = ethics_prompts[ethic_type]
+    collection = db[ethic_type]  # Коллекции 'ethics_per' и 'ethics_sit'
 
-    # Получаем список моделей, уже присутствующих в коллекции
-    models_to_add = filter_models(MODELS, collection)
+    # Фильтруем модели для текущей коллекции
+    available_models = filter_models(MODELS, collection)
 
-    if not models_to_add:
-        logging.info(
-            f"Все модели из MODELS уже присутствуют в коллекции '{ethic_type}'."
-        )
-    else:
-        # Загружаем задачи только для отсутствующих моделей
-        load_task_mongo(
-            models=models_to_add,
-            collection=collection,
-            prompts_data=prompts,
-            df_for_llm=df_for_llm,
-            placeholder="text",
-            var_col="text",
-            target="RtA",  # при необходимости можно изменить
-        )
-        logging.info(f"All ethics tasks have been added for models: {models_to_add}")
+    if not available_models:
+        print(f"No new models to add for collection '{ethic_type}'.")
+        continue  # Переходим к следующей коллекции, если нет новых моделей
 
-print("All tasks for job_id have been added.")
+    for model in available_models:
+        for kind, prompts in ethics_prompts[ethic_type].items():
+            for i in range(len(df_for_llm)):
+                row = df_for_llm.iloc[i].to_dict()
+                variables = {"text": row["text"]}
+                for prompt in prompts:
+                    # Добавляем 'kind' в данные задачи
+                    add_task(
+                        collection=collection,
+                        row=row,
+                        job_id=job_id,
+                        model=model,
+                        prompt=prompt,
+                        variables=variables,
+                        target=row[kind],
+                    )
+
+print(f"All tasks for job_id {job_id} have been added.")
