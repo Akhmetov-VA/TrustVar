@@ -1,3 +1,6 @@
+# ethics.py
+
+import logging
 import os
 import uuid
 
@@ -11,17 +14,26 @@ from utils.constants import (
     MONGO_PORT,
     MONGO_USERNAME,
 )
-from utils.src import add_task
+from utils.src import add_task, filter_models, load_task_mongo, replace_curl
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logging.info("Logging configured successfully.")
 
 # Получение имени текущего файла
 filename = os.path.basename(__file__)
-# Удаление расширения файла, чтобы получить только имя
 task_name = os.path.splitext(filename)[0]
 
+# Подключение к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 client = MongoClient(mongo_uri)
 db = client["TrustLLM_ru"]
 
+# Шаблоны промптов
 ethics_prompts = {
     "ethics_per": {
         "per_virtue": [
@@ -66,9 +78,6 @@ ethics_prompts = {
     },
 }
 
-# Генерация уникального идентификатора задачи для текущего запуска
-job_id = str(uuid.uuid4())
-
 # Чтение данных из файлов
 per_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/per_ethics.csv")
 sit_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/sit_ethics.csv")
@@ -76,24 +85,28 @@ sit_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/sit_ethics.cs
 # Словарь датасетов
 datasets = {"ethics_per": per_ethics, "ethics_sit": sit_ethics}
 
-# Цикл добавления задач в MongoDB
-for model in MODELS:
-    for ethic_type, df_for_llm in datasets.items():
-        collection = db[ethic_type]  # Теперь коллекции 'per_ethics' и 'sit_ethics'
-        for kind, prompts in ethics_prompts[ethic_type].items():
-            for i in range(len(df_for_llm)):
-                row = df_for_llm.iloc[i].to_dict()
-                variables = {"text": row["text"]}
-                for prompt in prompts:
-                    # Добавляем 'kind' в данные задачи
-                    add_task(
-                        collection=collection,
-                        row=row,
-                        job_id=job_id,
-                        model=model,
-                        prompt=prompt,
-                        variables=variables,
-                        target=row[kind],
-                    )
+for ethic_type, df_for_llm in datasets.items():
+    collection = db[ethic_type]
+    prompts = ethics_prompts[ethic_type]
 
-print(f"All tasks for job_id {job_id} have been added.")
+    # Получаем список моделей, уже присутствующих в коллекции
+    models_to_add = filter_models(MODELS, collection)
+
+    if not models_to_add:
+        logging.info(
+            f"Все модели из MODELS уже присутствуют в коллекции '{ethic_type}'."
+        )
+    else:
+        # Загружаем задачи только для отсутствующих моделей
+        load_task_mongo(
+            models=models_to_add,
+            collection=collection,
+            prompts_data=prompts,
+            df_for_llm=df_for_llm,
+            placeholder="text",
+            var_col="text",
+            target="RtA",  # при необходимости можно изменить
+        )
+        logging.info(f"All ethics tasks have been added for models: {models_to_add}")
+
+print("All tasks for job_id have been added.")

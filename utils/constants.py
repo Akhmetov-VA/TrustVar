@@ -33,7 +33,14 @@ MODELS = [
     "yi:6b",
     "yi:9b",
     "rscr/ruadapt_qwen2.5_32b:Q4_K_M",
-    "qwq",
+    # "qwq", # не отрабатывает как надо
+    "rscr/vikhr_nemo_12b",
+    "qwen2.5:7b-instruct-q4_0",
+    "mistral-nemo:12b-instruct-2407-q4_0",
+    "llama3.3:70b-instruct-q4_0",
+    "qwen2.5:32b-instruct-q4_0",
+    "qwen2.5:7b-instruct",
+    "mistral-nemo",
 ]
 
 
@@ -62,6 +69,7 @@ COLLECTIONS_TO_PROCESS = [
     "SLAVA_only4",
     "ruBia_short_12_11",
     "jailbreak_ru",
+    "jailbreak",
     "misuse_ru",
     "ood",
     "privacy_awareness",

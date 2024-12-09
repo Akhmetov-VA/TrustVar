@@ -1,4 +1,4 @@
-# safety.py
+# awarness.py
 
 import logging
 import os
@@ -14,7 +14,7 @@ from utils.constants import (
     MONGO_PORT,
     MONGO_USERNAME,
 )
-from utils.src import filter_models, load_task_mongo, replace_curl
+from utils.src import filter_models, load_task_mongo
 
 # Настройка логирования
 logging.basicConfig(
@@ -26,7 +26,7 @@ logging.info("Logging configured successfully.")
 
 # Получение имени текущего файла
 filename = os.path.basename(__file__)
-task_name = os.path.splitext(filename)[0]
+task_name = "privacy_awareness"  # Указываем постоянное название коллекции
 
 # Подключение к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
@@ -37,34 +37,39 @@ collection = db[task_name]
 # Генерация уникального идентификатора задачи для текущего запуска
 job_id = str(uuid.uuid4())
 
-# Загрузка данных
-file_path = (
-    "/home/vadim/work/TrustLLM_ru/data/exaggerated_safety/xstest_v2_prompts_rus.xlsx"
-)
-df_for_llm = pd.read_excel(file_path, index_col=0)
+# Чтение данных из файла
+file_path = "/home/vadim/work/TrustLLM_ru/data/privacy/privacy_awareness_query.json"
+try:
+    df_for_llm = pd.read_json(
+        file_path,
+        encoding="cp1251",
+    )
+except ValueError as e:
+    logging.error(f"Ошибка при чтении файла JSON: {e}")
+    raise
 
-# Переименование столбцов для удобства обработки
-df_for_llm = df_for_llm.rename({"prompt": "base_prompt"}, axis=1)
+# Обработка данных
+df_for_llm["type"].fillna("normal", inplace=True)
+df_for_llm["type"].replace({"обычный": "normal", "нормальный": "normal"}, inplace=True)
+df_for_llm.rename({"prompt": "init_prompt"}, axis=1, inplace=True)
 
-# Шаблоны промптов
-prompts_collection_safety = {"raw": ["{text}"]}
-
-# Получаем список моделей, уже присутствующих в коллекции
+# Фильтрация моделей, которые уже присутствуют в коллекции
 models_to_add = filter_models(MODELS, collection)
 
 if not models_to_add:
-    logging.info("Все модели из MODELS уже присутствуют в базе данных.")
+    logging.info(f"Все модели из MODELS уже присутствуют в коллекции '{task_name}'.")
 else:
     # Загружаем задачи только для отсутствующих моделей
     load_task_mongo(
         models=models_to_add,
         collection=collection,
-        prompts_data=prompts_collection_safety,
+        prompts_data={"raw": ["{text}"]},
         df_for_llm=df_for_llm,
         placeholder="text",
-        var_col="base_prompt",
-        target="RtA",  # при необходимости можно изменить
+        var_col="init_prompt",
+        target="RtA",  # модель должна отказываться отвечать
     )
-    logging.info(f"All safety tasks have been added for models: {models_to_add}")
+    logging.info(f"All Awareness tasks have been added for models: {models_to_add}")
 
+logging.info(f"All tasks for job_id {job_id} have been added.")
 print(f"Данные из файла '{file_path}' успешно загружены в коллекцию '{task_name}'.")

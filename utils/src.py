@@ -91,3 +91,18 @@ def load_task_mongo(
                         target=target,
                     )
     print(f"All tasks for job_id {job_id} have been added.")
+
+
+def filter_models(models: List[str], collection: Collection) -> List[str]:
+    """Фильтрует список моделей, исключая те, которые уже присутствуют в коллекции.
+
+    Args:
+        models (List[str]): Список названий моделей.
+        collection (Collection): Коллекция MongoDB для проверки.
+
+    Returns:
+        List[str]: Список моделей, которых нет в коллекции.
+    """
+    existing_models = set(collection.distinct("model"))
+    models_to_add = [m for m in models if m not in existing_models]
+    return models_to_add

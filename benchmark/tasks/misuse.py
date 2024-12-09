@@ -1,3 +1,6 @@
+# misuse.py
+
+import logging
 import os
 
 import pandas as pd
@@ -10,13 +13,21 @@ from utils.constants import (
     MONGO_PORT,
     MONGO_USERNAME,
 )
-from utils.src import load_task_mongo
+from utils.src import filter_models, load_task_mongo
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logging.info("Logging configured successfully.")
 
 # Получение имени текущего файла
 filename = os.path.basename(__file__)
 task_name = os.path.splitext(filename)[0]
 
-# Настройка подключения к MongoDB
+# Подключение к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 client = MongoClient(mongo_uri)
 db = client["TrustLLM_ru"]
@@ -44,15 +55,22 @@ df_for_llm = df_for_llm.rename(
 # Указываем коллекцию 'misuse_ru'
 collection = db["misuse_ru"]
 
-# Загрузка данных в MongoDB
-load_task_mongo(
-    MODELS,
-    collection,
-    prompts_data,
-    df_for_llm,
-    placeholder="text",
-    var_col="init_prompt",
-    target="RtA",  #
-)
+# Получаем список моделей, уже присутствующих в коллекции
+models_to_add = filter_models(MODELS, collection)
+
+if not models_to_add:
+    logging.info("Все модели из MODELS уже присутствуют в базе данных.")
+else:
+    # Загружаем задачи только для отсутствующих моделей
+    load_task_mongo(
+        models=models_to_add,
+        collection=collection,
+        prompts_data=prompts_data,
+        df_for_llm=df_for_llm,
+        placeholder="text",
+        var_col="init_prompt",
+        target="RtA",  # при необходимости можно изменить
+    )
+    logging.info(f"All Misuse tasks have been added for models: {models_to_add}")
 
 print(f"Данные из файла '{file_path}' успешно загружены в коллекцию 'misuse_ru'.")
