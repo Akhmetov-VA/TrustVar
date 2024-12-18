@@ -1,7 +1,10 @@
 import logging
 import os
+import re
 from typing import Any, Dict, List, Optional
 
+import pandas as pd
+from bson.objectid import ObjectId
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.collection import Collection
@@ -139,3 +142,138 @@ class MongoDBClient:
         except PyMongoError as e:
             logger.error(f"Ошибка удаления коллекции '{collection_name}': {e}")
             raise
+
+    # ---------------- Дополнительные методы ----------------
+    def get_all_tasks(self) -> pd.DataFrame:
+        tasks_collection = self.get_collection("tasks")
+        tasks = list(tasks_collection.find({}))
+        if not tasks:
+            return pd.DataFrame()
+        return pd.DataFrame(tasks)
+
+    def get_all_datasets(self) -> List[str]:
+        """Получить список всех датасетов (те, что имеют префикс dataset_)."""
+        collections = self.list_collections()
+        dataset_colls = [col for col in collections if col.startswith("dataset_")]
+        datasets = [col.replace("dataset_", "") for col in dataset_colls]
+        return datasets
+
+    def get_dataset_head(self, dataset_name: str, limit: int = 10) -> pd.DataFrame:
+        coll = self.get_collection(f"dataset_{dataset_name}")
+        docs = list(coll.find({}).limit(limit))
+        if not docs:
+            return pd.DataFrame()
+        df = pd.DataFrame(docs)
+        if "_id" in df.columns:
+            df = df.drop(columns=["_id"])
+        return df
+
+    def get_prompt_docs_for_dataset(self, dataset_name: str) -> List[Dict[str, Any]]:
+        """Получить полный список промптов для датасета (name, prompt)."""
+        coll_name = f"prompt_{dataset_name}"
+        if coll_name not in self.list_collections():
+            return []
+        coll = self.get_collection(coll_name)
+        return list(coll.find({}))
+
+    def get_rta_prompt_docs(self) -> List[Dict[str, Any]]:
+        """Получить полный список RTA промптов (name, prompt)."""
+        if "prompt_rta" not in self.list_collections():
+            return []
+        coll = self.get_collection("prompt_rta")
+        return list(coll.find({}))
+
+    def get_regexp_docs_for_metric(self, metric: str) -> List[Dict[str, Any]]:
+        """Получить полный список регулярок для метрики (name, pattern)."""
+        coll_name = f"regexp_{metric}"
+        if coll_name not in self.list_collections():
+            return []
+        coll = self.get_collection(coll_name)
+        return list(coll.find({}))
+
+    def get_prompts_for_dataset(self, dataset_name: str) -> List[str]:
+        """Получить список имен промптов для датасета."""
+        prompts = self.get_prompt_docs_for_dataset(dataset_name)
+        return [p["name"] for p in prompts if "name" in p]
+
+    def get_rta_prompts(self) -> List[str]:
+        """Получить список имен RTA промптов."""
+        rta_prompts = self.get_rta_prompt_docs()
+        return [rp["name"] for rp in rta_prompts if "name" in rp]
+
+    def insert_prompt_for_dataset(self, dataset_name: str, prompt: str, name: str):
+        coll = self.get_collection(f"prompt_{dataset_name}")
+        coll.insert_one({"name": name, "prompt": prompt})
+
+    def insert_rta_prompt(self, prompt: str, name: str):
+        coll = self.get_collection("prompt_rta")
+        coll.insert_one({"name": name, "prompt": prompt})
+
+    def insert_regexp_for_metric(self, metric: str, pattern: str, name: str):
+        coll = self.get_collection(f"regexp_{metric}")
+        coll.insert_one({"name": name, "pattern": pattern})
+
+    def insert_task(self, task_data: Dict[str, Any]):
+        coll = self.get_collection("tasks")
+        coll.insert_one(task_data)
+
+    def update_task(self, task_id, update_data: Dict[str, Any]):
+        coll = self.get_collection("tasks")
+        if not isinstance(task_id, ObjectId):
+            task_id = ObjectId(task_id)
+        coll.update_one({"_id": task_id}, {"$set": update_data})
+
+    def validate_regex(self, pattern: str) -> bool:
+        try:
+            re.compile(pattern)
+            return True
+        except re.error:
+            return False
+
+    def get_regexp_for_metric(self, metric: str) -> List[str]:
+        """Получить список имен регулярок для метрики."""
+        docs = self.get_regexp_docs_for_metric(metric)
+        return [d["name"] for d in docs if "name" in d]
+
+    def list_metrics(self) -> List[str]:
+        """Получить список метрик, основываясь на префиксах results_ или regexp_."""
+        regexp_cols = self.list_collections_starting_with("regexp_")
+        result_cols = self.list_collections_starting_with("results_")
+        metrics_regexp = [c.replace("regexp_", "") for c in regexp_cols]
+        metrics_results = [c.replace("results_", "") for c in result_cols]
+        metrics = list(set(metrics_regexp + metrics_results))
+        return metrics
+
+    def insert_dataset_into_registry(
+        self,
+        dataset_name: str,
+        var_cols: List[str],
+        metric: str,
+        target_column: Optional[str] = None,
+    ):
+        """Сохранить информацию о датасете в dataset_regestry."""
+        coll_name = "dataset_regestry"
+        if "dataset_regestry" not in self.list_collections():
+            pass
+        coll = self.get_collection(coll_name)
+        doc = coll.find_one({"dataset_name": dataset_name})
+        data = {"var_cols": var_cols, "metric": metric}
+        if target_column:
+            data["target_column"] = target_column
+        if doc:
+            coll.update_one({"dataset_name": dataset_name}, {"$set": data})
+        else:
+            data["dataset_name"] = dataset_name
+            coll.insert_one(data)
+
+    def get_dataset_registry_info(self, dataset_name: str) -> Optional[Dict[str, Any]]:
+        coll = self.get_collection("dataset_regestry")
+        doc = coll.find_one({"dataset_name": dataset_name})
+        return doc
+
+    def insert_dataset_records(self, dataset_name: str, df: pd.DataFrame):
+        """Загрузить датасет в коллекцию dataset_{dataset_name}."""
+        coll_name = f"dataset_{dataset_name}"
+        records = df.to_dict(orient="records")
+        if records:
+            self.insert_data(coll_name, records)

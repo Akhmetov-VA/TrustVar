@@ -122,6 +122,19 @@ class RtAQueueAdder:
         )
 
 
+EXCLUDED_COLLECTIONS = {
+    # "rubia_pro",
+    # "rubia_anti",
+    # "ethics_per",
+    # "ethics_sit",
+    # "SLAVA_only4",
+    # "ruBia_short_12_11",
+    # "ruhatespeech",
+    # "LIBRA_4k",
+    # "rublimp",
+}
+
+
 def main() -> None:
     configure_logging()
     client = get_mongo_client()
@@ -132,7 +145,12 @@ def main() -> None:
     while True:
         try:
             for collection_name in COLLECTIONS_TO_PROCESS:
+                if collection_name in EXCLUDED_COLLECTIONS:
+                    logging.info(f"Skipping collection: {collection_name}")
+                    continue
+
                 rta_queue_adder.add_tasks_to_rta_queue(collection_name)
+
             logging.info("Sleeping for 60 mins before next iteration.")
             time.sleep(60 * 60)
         except Exception as e:

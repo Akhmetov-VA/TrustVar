@@ -377,6 +377,10 @@ class Dashboard:
                 st.success("Файл успешно загружен.")
                 st.dataframe(data_df.head())
 
+                data_df["prompt"] = (
+                    data_df["prompt"].str.replace("{", "{{").str.replace("}", "}}")
+                )
+
                 # Ввод названия для запуска
                 run_name = st.text_input(
                     "Введите название для этого запуска", key="experiment_run_name"
