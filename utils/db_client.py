@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from bson.objectid import ObjectId
@@ -202,28 +202,38 @@ class MongoDBClient:
         return [rp["name"] for rp in rta_prompts if "name" in rp]
 
     def insert_prompt_for_dataset(self, dataset_name: str, prompt: str, name: str):
+        """Вставить новый промпт для датасета."""
         coll = self.get_collection(f"prompt_{dataset_name}")
         coll.insert_one({"name": name, "prompt": prompt})
 
     def insert_rta_prompt(self, prompt: str, name: str):
+        """Вставить новый RTA промпт."""
         coll = self.get_collection("prompt_rta")
         coll.insert_one({"name": name, "prompt": prompt})
 
     def insert_regexp_for_metric(self, metric: str, pattern: str, name: str):
+        """Вставить новую регулярку для метрики."""
         coll = self.get_collection(f"regexp_{metric}")
         coll.insert_one({"name": name, "pattern": pattern})
 
     def insert_task(self, task_data: Dict[str, Any]):
+        """Вставить новую задачу."""
         coll = self.get_collection("tasks")
         coll.insert_one(task_data)
 
     def update_task(self, task_id, update_data: Dict[str, Any]):
+        """Обновить существующую задачу."""
         coll = self.get_collection("tasks")
         if not isinstance(task_id, ObjectId):
-            task_id = ObjectId(task_id)
+            try:
+                task_id = ObjectId(task_id)
+            except Exception as e:
+                logger.error(f"Некорректный ID задачи: {e}")
+                raise
         coll.update_one({"_id": task_id}, {"$set": update_data})
 
     def validate_regex(self, pattern: str) -> bool:
+        """Проверка корректности регулярного выражения."""
         try:
             re.compile(pattern)
             return True
@@ -254,7 +264,7 @@ class MongoDBClient:
         """Сохранить информацию о датасете в dataset_regestry."""
         coll_name = "dataset_regestry"
         if "dataset_regestry" not in self.list_collections():
-            pass
+            pass  # Коллекция создастся автоматически при вставке
         coll = self.get_collection(coll_name)
         doc = coll.find_one({"dataset_name": dataset_name})
         data = {"var_cols": var_cols, "metric": metric}
@@ -267,6 +277,7 @@ class MongoDBClient:
             coll.insert_one(data)
 
     def get_dataset_registry_info(self, dataset_name: str) -> Optional[Dict[str, Any]]:
+        """Получить информацию о датасете из registry."""
         coll = self.get_collection("dataset_regestry")
         doc = coll.find_one({"dataset_name": dataset_name})
         return doc
