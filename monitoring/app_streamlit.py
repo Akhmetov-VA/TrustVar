@@ -374,12 +374,14 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str]]:
                 var_cols=[]
             )  # RTA промпт может быть без var_cols
 
+        rta_target = st.text_input("Целевая значение для RtA:", value=1)
+        
         rta_model = st.selectbox(
             "Модель для RTA:",
             MODELS,
             index=MODELS.index(RTA_MODEL) if RTA_MODEL in MODELS else 0,
         )
-        return rta_prompt_selected, rta_model
+        return rta_prompt_selected, rta_model, rta_target
 
 
 def render_models_section() -> List[str]:
@@ -394,7 +396,7 @@ def render_preview_and_save_task(
     var_cols: List[str],
     selected_prompt: str,
     selected_regexp: str,
-    target_column: str,
+    target_value: [str, int],
     selected_models: List[str],
     metric: str,
     rta_prompt_selected: Optional[str],
@@ -406,7 +408,7 @@ def render_preview_and_save_task(
             selected_prompt
             and selected_regexp
             and selected_models
-            and (target_column or metric == "RtA")
+            and (target_value or metric == "RtA")
         ):
             group_name = st.text_input("Группа задачи (group):", value="default")
             task_name = st.text_input("Имя задачи:", value=f"{dataset_name}_{metric}")
@@ -438,9 +440,9 @@ def render_preview_and_save_task(
             if metric == "RtA":
                 task_data["rta_prompt"] = rta_prompt_selected
                 task_data["rta_model"] = rta_model
-                task_data["target"] = "RtA"
+                task_data["target"] = target_value
             else:
-                task_data["target"] = target_column
+                task_data["target"] = target_value
 
             st.json(task_data, expanded=False)
 
@@ -453,13 +455,12 @@ def render_create_task_tab():
     """Отрисовка вкладки 'Создать задачу'."""
     st.header("Создать новую задачу")
 
-    with st.expander("Выбор датасета", expanded=False):
-        all_datasets = db_client.get_all_datasets()
-        selected_dataset = st.selectbox("Выберите датасет:", all_datasets)
-        if selected_dataset:
-            var_cols, metric, target_column = render_dataset_varcols_section(
-                selected_dataset
-            )
+    all_datasets = db_client.get_all_datasets()
+    selected_dataset = st.selectbox("Выберите датасет:", all_datasets)
+    if selected_dataset:
+        var_cols, metric, target_value = render_dataset_varcols_section(
+            selected_dataset
+        )
 
     if var_cols and metric is not None:
         selected_regexp = render_regexp_section(metric)
@@ -469,17 +470,15 @@ def render_create_task_tab():
                 rta_prompt_selected = None
                 rta_model = None
                 if metric == "RtA":
-                    rta_prompt_selected, rta_model = render_rta_prompt_section()
+                    rta_prompt_selected, rta_model, target_value = render_rta_prompt_section()
                 selected_models = render_models_section()
-
-                final_target = "RtA" if metric == "RtA" else target_column
 
                 render_preview_and_save_task(
                     selected_dataset,
                     var_cols,
                     selected_prompt,
                     selected_regexp,
-                    final_target,
+                    target_value,
                     selected_models,
                     metric,
                     rta_prompt_selected,

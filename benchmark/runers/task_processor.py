@@ -73,6 +73,7 @@ def create_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     models = task["models"]
     metric = task["metric"]
     target = task["target"]
+    regexp = task["regexp"]
 
     df = get_dataset_head(db, dataset_name)
     if df.empty:
@@ -95,13 +96,15 @@ def create_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
 
             doc = {
                 "line_index": i,
+                "dataset_name": dataset_name,
                 "prompt": prompt_text,
                 "variables": variables,
                 "model": model,
                 "metric": metric,
-                "target": row[target] if target != "RtA" else "RtA",
+                "regexp": regexp,
                 "status": "pending",
                 "response": None,
+                "target": row[target] if metric != "RtA" else target,
             }
 
             if metric == "RtA":
@@ -148,6 +151,8 @@ def delete_unused_queues(db: Database) -> None:
     for q_col in queue_collections:
         # q_col в формате queue_{task_name}, надо извлечь task_name
         task_name = q_col.replace("queue_", "")
+        if task_name.startswith("rta_"):
+            task_name = task_name.replace("rta_", "")
         if (
             f"task_{task_name}" not in existing_tasks
             and task_name not in existing_tasks
@@ -167,6 +172,7 @@ def delete_unused_queues(db: Database) -> None:
                 # Очередь не соответствует ни одной задаче
                 db.drop_collection(q_col)
                 logger.info(f"Удалена коллекция: {q_col}")
+                
 
 
 def main():

@@ -249,6 +249,29 @@
     screen -r monitoring
     ```
 
+
+### Запуск task_runner
+
+Смотрит какие задачи есть в таблице tasks и на их основе проверяет существование актуальных записей и создает соответствующие очереди
+
+1. **Создайте сессию `task_runner`:**
+
+    ```bash
+    screen -S task_runner
+    ```
+
+2. **Запустите приложение мониторинга:**
+
+    ```bash
+    /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runers/task_processor.py
+    ```
+
+3. **Повторно подключиться к сессии:**
+
+    ```bash
+    screen -r task_runner
+    ```
+
 ## Использование
 
 ### Запуск всех компонентов
