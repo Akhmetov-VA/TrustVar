@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import streamlit as st
 
-from monitoring.src import load_file
+from monitoring.src import load_file_any_format
 from utils.constants import METRICS, MODELS, RTA_MODEL, STATUSES
 from utils.db_client import MongoDBClient, MongoDBConfig
 
@@ -21,14 +21,11 @@ st.set_page_config(page_title="Trust LLM Dashboard", layout="wide")
 DEFAULT_REGEX = r"(?:^\W*([01]).*)|(?:.*([01])\W*$)"
 
 
-def generate_prompt_hint(var_cols: List[str]) -> str:
+def generate_prompt_hint(var_cols: List[str]) -> Tuple[str, str]:
     """Сгенерировать подсказку для промпта, основанную на var_cols."""
     placeholders = ", ".join("{" + c + "}" for c in var_cols)
-    hint = (
-        f"Подсказка: Пример промпта: 'изучи текст {placeholders}'\n"
-        f"Вы можете использовать любые выбранные колонки в фигурных скобках: {placeholders}."
-    )
-    return hint
+    hint = f"Вы можете использовать любые выбранные колонки в фигурных скобках: {placeholders}."
+    return hint, placeholders
 
 
 def display_task_summary(df_tasks: pd.DataFrame):
@@ -105,47 +102,6 @@ def render_dataset_registry_section():
         st.write("dataset_regestry пуст.")
 
 
-def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
-    """Загрузка файла в любом формате: CSV, XLSX или JSON."""
-    if uploaded_file is None:
-        return None
-    try:
-        if uploaded_file.name.lower().endswith(".json"):
-            # Загрузка JSON
-            try:
-                df = pd.read_json(uploaded_file)
-                return df
-            except ValueError as e:
-                st.error(f"Ошибка при чтении JSON файла: {e}")
-                return None
-        elif uploaded_file.name.lower().endswith(".xlsx"):
-            # Загрузка Excel
-            try:
-                df = pd.read_excel(uploaded_file)
-                return df
-            except Exception as e:
-                st.error(f"Ошибка при чтении Excel файла: {e}")
-                return None
-        else:
-            # Пытаемся как CSV
-            try:
-                df = pd.read_csv(uploaded_file, encoding="utf-8")
-                return df
-            except UnicodeDecodeError:
-                try:
-                    df = pd.read_csv(uploaded_file, encoding="latin-1")
-                    return df
-                except Exception as e:
-                    st.error(f"Не удалось прочитать CSV файл: {e}")
-                    return None
-            except Exception as e:
-                st.error(f"Ошибка при чтении CSV файла: {e}")
-                return None
-    except Exception as e:
-        st.error(f"Не удалось загрузить файл: {e}")
-        return None
-
-
 def render_dataset_upload_section() -> Optional[str]:
     """Раздел для загрузки нового датасета."""
     with st.expander("Добавить новый датасет", expanded=False):
@@ -163,7 +119,6 @@ def render_dataset_upload_section() -> Optional[str]:
                 st.write("Некоторые строки загруженного датасета (случайные 10 строк):")
                 st.dataframe(df_uploaded.sample(min(10, len(df_uploaded))))
 
-                # Более лаконичное название для var_cols:
                 st.write(
                     "Выберите колонки, которые будут использоваться как переменные для промпта:"
                 )
@@ -228,30 +183,61 @@ def render_dataset_varcols_section(
         return var_cols, chosen_metric, target_column
 
 
+# -------------------- Изменения для единого хранилища промптов и регулярок --------------------
+
+# Предполагаем что у нас есть единая коллекция для промптов: "prompt_storage"
+# Структура: {"name": str, "prompt": str}
+# Аналогично для регулярок: "regexp_storage"
+# Структура: {"name": str, "pattern": str, "metric": str}
+
+
+def get_all_prompts() -> List[Dict[str, Any]]:
+    coll = db_client.get_collection("prompt_storage")
+    return list(coll.find({}))
+
+
+def prompt_exists(name: str) -> bool:
+    coll = db_client.get_collection("prompt_storage")
+    return coll.find_one({"name": name}) is not None
+
+
+def insert_prompt_global(name: str, prompt: str):
+    coll = db_client.get_collection("prompt_storage")
+    coll.insert_one({"name": name, "prompt": prompt})
+
+
+def get_all_regexps_for_metric(metric: str) -> List[Dict[str, Any]]:
+    coll = db_client.get_collection("regexp_storage")
+    return list(coll.find({"metric": metric}))
+
+
+def insert_regexp_global(name: str, pattern: str, metric: str):
+    coll = db_client.get_collection("regexp_storage")
+    coll.insert_one({"name": name, "pattern": pattern, "metric": metric})
+
+
 def show_existing_regexp(metric: str):
-    """Показать таблицу с уже существующими регулярками для метрики."""
-    coll_name = f"regexp_{metric}"
-    if coll_name in db_client.list_collections():
-        docs = list(db_client.get_collection(coll_name).find({}))
-        if docs:
-            df = pd.DataFrame(docs)
-            if "_id" in df.columns:
-                df.drop(columns=["_id"], inplace=True)
-            st.write("Существующие регулярки (name, pattern):")
-            st.dataframe(df)
+    """Показать таблицу с уже существующими регулярками для метрики из единого хранилища."""
+    docs = get_all_regexps_for_metric(metric)
+    if docs:
+        df = pd.DataFrame(docs)
+        if "_id" in df.columns:
+            df.drop(columns=["_id"], inplace=True)
+        st.write("Существующие регулярки (name, pattern, metric):")
+        st.dataframe(df)
     else:
         st.write("Нет регулярок для данной метрики.")
 
 
 def render_regexp_section(metric: str) -> Optional[str]:
-    """Выбор регулярки."""
+    """Выбор регулярки из единого хранилища."""
     with st.expander("Выбор или создание регулярки для метрики", expanded=False):
         show_existing_regexp(metric)
 
         use_existing_regexp = st.radio("Регулярка:", ("Существующая", "Своя"))
         selected_regexp = None
         if use_existing_regexp == "Существующая":
-            regexps = db_client.get_regexp_docs_for_metric(metric)
+            regexps = get_all_regexps_for_metric(metric)
             if regexps:
                 names = [r["name"] for r in regexps]
                 selected_name = st.selectbox("Выберите регулярку по имени:", names)
@@ -270,9 +256,7 @@ def render_regexp_section(metric: str) -> Optional[str]:
                 if db_client.validate_regex(custom_regexp):
                     regexp_name = st.text_input("Введите имя для этой регулярки:")
                     if regexp_name and st.button("Добавить регулярку в базу"):
-                        db_client.insert_regexp_for_metric(
-                            metric, custom_regexp, regexp_name
-                        )
+                        insert_regexp_global(regexp_name, custom_regexp, metric)
                         st.success("Регулярка добавлена!")
                         selected_regexp = custom_regexp
                 else:
@@ -280,60 +264,63 @@ def render_regexp_section(metric: str) -> Optional[str]:
         return selected_regexp
 
 
-def show_existing_prompts(dataset_name: str):
-    """Показать таблицу с уже существующими промптами (name, prompt) для датасета."""
-    coll_name = f"prompt_{dataset_name}"
-    if coll_name in db_client.list_collections():
-        docs = list(db_client.get_prompt_docs_for_dataset(dataset_name))
-        if docs:
-            df = pd.DataFrame(docs)
-            if "_id" in df.columns:
-                df.drop(columns=["_id"], inplace=True)
-            st.write("Существующие промпты для датасета (name, prompt):")
-            st.dataframe(df)
+def show_all_prompts():
+    """Показать все промпты из единого хранилища."""
+    prompts = get_all_prompts()
+    if prompts:
+        df = pd.DataFrame(prompts)
+        if "_id" in df.columns:
+            df.drop(columns=["_id"], inplace=True)
+        st.write("Существующие промпты (name, prompt):")
+        st.dataframe(df)
     else:
-        st.write("Нет промптов для данного датасета.")
+        st.write("Нет промптов в хранилище.")
 
 
-def render_prompt_creation_section(
-    dataset_name: str, var_cols: List[str]
-) -> Optional[str]:
-    """Отображает создание нового промпта."""
-    hint = generate_prompt_hint(var_cols)
+def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
+    """Отображает создание нового промпта в едином хранилище."""
+    hint, placeholders = generate_prompt_hint(var_cols)
     st.write(hint)
     prompt_name = st.text_input("Введите имя нового промпта:")
-    user_prompt = st.text_area("Введите свой промпт:")
-    if user_prompt:
+    user_prompt = st.text_area("Введите свой промпт:", value=placeholders)
+    if user_prompt and prompt_name:
         missing_cols = [c for c in var_cols if f"{{{c}}}" not in user_prompt]
         if missing_cols:
             st.error("Отсутствуют плейсхолдеры: " + ", ".join(missing_cols))
         else:
-            if prompt_name and st.button("Добавить промпт в базу"):
-                db_client.insert_prompt_for_dataset(
-                    dataset_name, user_prompt, prompt_name
+            # Проверяем существует ли промпт с таким именем
+            if prompt_exists(prompt_name):
+                st.warning(
+                    f"Промпт с именем '{prompt_name}' уже существует. Вы можете использовать его."
                 )
-                st.success("Промпт добавлен!")
-                return user_prompt
+                # Здесь можно дать кнопку "Использовать существующий"
+                if st.button("Использовать существующий промпт"):
+                    # Возвращаем существующий промпт
+                    existing_prompts = get_all_prompts()
+                    for p in existing_prompts:
+                        if p["name"] == prompt_name:
+                            return p["prompt"]
+            else:
+                if st.button("Добавить промпт в базу"):
+                    insert_prompt_global(prompt_name, user_prompt)
+                    st.success("Промпт добавлен!")
+                    return user_prompt
     return None
 
 
-def render_prompt_selection_section(
-    dataset_name: str, var_cols: List[str]
-) -> Optional[str]:
-    """Отображает выбор промпта по имени."""
-    with st.expander("Выбор или создание промпта для датасета", expanded=False):
-        show_existing_prompts(dataset_name)
+def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
+    """Отображает выбор промпта по имени из единого хранилища."""
+    with st.expander("Выбор или создание промпта", expanded=False):
+        show_all_prompts()
 
-        use_existing_prompt = st.radio(
-            "Промпт для датасета:", ("Выбрать из базы", "Ввести свой")
-        )
+        use_existing_prompt = st.radio("Промпт:", ("Выбрать из базы", "Ввести свой"))
         selected_prompt = None
+        all_prompts = get_all_prompts()
         if use_existing_prompt == "Выбрать из базы":
-            prompts = db_client.get_prompt_docs_for_dataset(dataset_name)
-            if prompts:
-                names = [p["name"] for p in prompts]
+            if all_prompts:
+                names = [p["name"] for p in all_prompts]
                 selected_name = st.selectbox("Выберите промпт по имени:", names)
-                for p in prompts:
+                for p in all_prompts:
                     if p["name"] == selected_name:
                         selected_prompt = p["prompt"]
                         break
@@ -346,64 +333,46 @@ def render_prompt_selection_section(
             else:
                 st.write("Нет доступных промптов. Введите свой.")
         else:
-            selected_prompt = render_prompt_creation_section(dataset_name, var_cols)
+            selected_prompt = render_prompt_creation_section(var_cols)
         return selected_prompt
 
 
-def show_existing_rta_prompts():
-    """Показать таблицу с уже существующими RTA промптами (name, prompt)."""
-    coll_name = "prompt_rta"
-    if coll_name in db_client.list_collections():
-        docs = list(db_client.get_rta_prompt_docs())
-        if docs:
-            df = pd.DataFrame(docs)
-            if "_id" in df.columns:
-                df.drop(columns=["_id"], inplace=True)
-            st.write("Существующие RTA промпты (name, prompt):")
-            st.dataframe(df)
-    else:
-        st.write("Нет RTA промптов.")
-
-
-def render_rta_prompt_creation_section() -> Optional[str]:
-    """Отображает создание нового RTA промпта."""
-    st.write(
-        "Для RTA промпта также можно использовать формат с var_cols при необходимости."
-    )
-    rta_prompt_name = st.text_input("Введите имя нового RTA промпта:")
-    rta_user_prompt = st.text_area("Введите RTA промпт:")
-    if rta_user_prompt:
-        if rta_prompt_name and st.button("Добавить RTA промпт"):
-            db_client.insert_rta_prompt(rta_user_prompt, rta_prompt_name)
-            st.success("RTA промпт добавлен!")
-            return rta_user_prompt
-        elif not rta_prompt_name:
-            st.error("Пожалуйста, введите имя для RTA промпта.")
-    return None
+def show_all_rta_prompts():
+    """Показать все промпты, так как RTA тоже хранятся в едином хранилище."""
+    # Предполагаем, что RTA промпты тоже в prompt_storage, просто пользователь выбирает любой промпт.
+    # Если нужно фильтровать RTA промпты - нужно бы поле. Но в условии не было.
+    # Будем считать, что rta_prompt - это просто любой промпт.
+    show_all_prompts()
 
 
 def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str]]:
     """Отображает выбор RTA промпта по имени."""
     with st.expander("Выбор или создание RTA промпта", expanded=False):
-        show_existing_rta_prompts()
+        show_all_rta_prompts()
 
         st.write("Метрика RtA выбрана. Необходим RTA промпт.")
         use_rta_existing = st.radio("RTA промпт:", ("Выбрать из базы", "Ввести свой"))
         rta_prompt_selected = None
+        all_prompts = get_all_prompts()
         if use_rta_existing == "Выбрать из базы":
-            rta_prompts = db_client.get_rta_prompts()
-            if rta_prompts:
-                selected_name = st.selectbox(
-                    "Выберите RTA промпт по имени:", rta_prompts
-                )
-                for rp in db_client.get_rta_prompt_docs():
+            if all_prompts:
+                names = [p["name"] for p in all_prompts]
+                selected_name = st.selectbox("Выберите RTA промпт по имени:", names)
+                for rp in all_prompts:
                     if rp["name"] == selected_name:
                         rta_prompt_selected = rp["prompt"]
                         break
             else:
-                st.write("Нет доступных RTA промптов.")
+                st.write("Нет доступных RTA промптов. Введите свой.")
         else:
-            rta_prompt_selected = render_rta_prompt_creation_section()
+            # Используем ту же функцию для создания промпта, нет разницы для RTA
+            # Просто вар_cols можем попросить снаружи, но у нас их нет.
+            # Допустим, что RTA промпт тоже основан на тех же var_cols:
+            # Если var_cols нам не доступны, пусть будет пустой список или пользователь сам решит.
+            # Для RTA промпта var_cols не критичны, можно передать пустой список.
+            rta_prompt_selected = render_prompt_creation_section(
+                var_cols=[]
+            )  # RTA промпт может быть без var_cols
 
         rta_model = st.selectbox(
             "Модель для RTA:",
@@ -440,6 +409,7 @@ def render_preview_and_save_task(
             and (target_column or metric == "RtA")
         ):
             group_name = st.text_input("Группа задачи (group):", value="default")
+            task_name = st.text_input("Имя задачи:", value=f"{dataset_name}_{metric}")
 
             st.subheader("Предпросмотр 5 случайных примеров:")
             df_head = db_client.get_dataset_head(dataset_name, limit=100)
@@ -456,10 +426,10 @@ def render_preview_and_save_task(
 
             st.write("**Структура записи задачи в БД:**")
             task_data = {
-                "task_name": f"task_{dataset_name}_{metric}",
+                "task_name": task_name,
                 "dataset_name": dataset_name,
                 "prompt": selected_prompt,
-                "variables_cols": var_cols,  # те колонки по которым в будущем будет собираться variables внутри очереди
+                "variables_cols": var_cols,
                 "models": selected_models,
                 "metric": metric,
                 "regexp": selected_regexp,
@@ -483,21 +453,18 @@ def render_create_task_tab():
     """Отрисовка вкладки 'Создать задачу'."""
     st.header("Создать новую задачу")
 
-    # Выбор датасета в экспандере
     with st.expander("Выбор датасета", expanded=False):
         all_datasets = db_client.get_all_datasets()
         selected_dataset = st.selectbox("Выберите датасет:", all_datasets)
         if selected_dataset:
-            # Отфильтровать dataset_regestry
             var_cols, metric, target_column = render_dataset_varcols_section(
                 selected_dataset
             )
+
     if var_cols and metric is not None:
         selected_regexp = render_regexp_section(metric)
         if selected_regexp:
-            selected_prompt = render_prompt_selection_section(
-                selected_dataset, var_cols
-            )
+            selected_prompt = render_prompt_selection_section(var_cols)
             if selected_prompt:
                 rta_prompt_selected = None
                 rta_model = None

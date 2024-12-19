@@ -167,7 +167,7 @@ def process_collection(
 
 def run_processing_loop(db: Database) -> None:
     """
-    Запускает бесконечный цикл обработки задач во всех коллекциях.
+    Запускает цикл обработки задач во всех коллекциях.
 
     Args:
         db (Database): Экземпляр базы данных MongoDB.
@@ -175,26 +175,21 @@ def run_processing_loop(db: Database) -> None:
     logging.info("Запуск основного цикла обработки задач.")
     session = requests.Session()
 
-    while True:
-        try:
-            collections_to_process = [
-                col
-                for col in db.list_collection_names()
-                if col not in ["delete_me", "test"]
-            ]
+    try:
+        collections_to_process = [
+            col
+            for col in db.list_collection_names()
+            if col not in ["delete_me", "test"]
+        ]
 
-            logging.info(
-                f"Найдено {len(collections_to_process)} коллекций для обработки."
-            )
-            for collection_name in collections_to_process:
-                process_collection(db, collection_name, session)
+        logging.info(f"Найдено {len(collections_to_process)} коллекций для обработки.")
+        for collection_name in collections_to_process:
+            process_collection(db, collection_name, session)
 
-            logging.info("Все коллекции обработаны. Ожидание новых задач...")
-            time.sleep(5)
-        except Exception as e:
-            logging.exception(f"Ошибка в процессе обработки: {e}")
-            logging.info("Повторная попытка после 60 секунд.")
-            time.sleep(120)
+        logging.info("Все коллекции обработаны. Ожидание новых задач...")
+        time.sleep(5)
+    except Exception as e:
+        logging.exception(f"Ошибка в процессе обработки: {e}")
 
 
 def main() -> None:
@@ -204,8 +199,11 @@ def main() -> None:
     configure_logging()
     logging.info("Загрузка переменных окружения и инициализация подключения...")
     client = get_mongo_client()
-    db = client["TrustLLM_ru"]
-    run_processing_loop(db)
+    while True:
+        for db_name in ["TrustLLM_ru", "TrustGen"]:
+            db = client[db_name]
+            run_processing_loop(db)
+            time.sleep(10)
 
 
 if __name__ == "__main__":

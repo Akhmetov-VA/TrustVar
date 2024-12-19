@@ -39,3 +39,44 @@ def load_file(uploaded_file) -> Optional[pd.DataFrame]:
         except Exception as e:
             st.error(f"Ошибка при чтении CSV файла: {e}")
             return None
+
+
+def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
+    """Загрузка файла в любом формате: CSV, XLSX или JSON."""
+    if uploaded_file is None:
+        return None
+    try:
+        if uploaded_file.name.lower().endswith(".json"):
+            # Загрузка JSON
+            try:
+                df = pd.read_json(uploaded_file)
+                return df
+            except ValueError as e:
+                st.error(f"Ошибка при чтении JSON файла: {e}")
+                return None
+        elif uploaded_file.name.lower().endswith(".xlsx"):
+            # Загрузка Excel
+            try:
+                df = pd.read_excel(uploaded_file)
+                return df
+            except Exception as e:
+                st.error(f"Ошибка при чтении Excel файла: {e}")
+                return None
+        else:
+            # Пытаемся как CSV
+            try:
+                df = pd.read_csv(uploaded_file, encoding="utf-8")
+                return df
+            except UnicodeDecodeError:
+                try:
+                    df = pd.read_csv(uploaded_file, encoding="latin-1")
+                    return df
+                except Exception as e:
+                    st.error(f"Не удалось прочитать CSV файл: {e}")
+                    return None
+            except Exception as e:
+                st.error(f"Ошибка при чтении CSV файла: {e}")
+                return None
+    except Exception as e:
+        st.error(f"Не удалось загрузить файл: {e}")
+        return None
