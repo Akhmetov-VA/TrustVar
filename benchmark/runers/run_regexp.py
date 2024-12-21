@@ -2,7 +2,7 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List, Union
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -22,7 +22,6 @@ def get_mongo_client() -> MongoClient:
     """
     Создаем подключение к MongoDB.
     """
-
     mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
     client = MongoClient(mongo_uri)
     logger.info("Успешно подключились к MongoDB.")
@@ -38,14 +37,11 @@ def fetch_completed_tasks(db: Database):
     """
     Находим все задачи в очередях queue_* со статусом 'completed' и наличием поля response.
     Возвращаем итератор по таким задачам.
+    Исключаем метрику RtA, т.к. она обрабатывается другим скриптом.
     """
-    # Ищем все коллекции, начинающиеся на queue_
     collections = [c for c in db.list_collection_names() if c.startswith("queue_")]
     for coll_name in collections:
         coll = db[coll_name]
-        # Выберем все задачи со статусом completed и response
-        # Можно выбрать по одному, потом обновить статус, затем брать следующий
-        # или просто все сразу
         tasks = list(coll.find({"status": "completed", "response": {"$ne": None}, "metric": {"$ne": "RtA"}}))
         for t in tasks:
             yield coll_name, t
@@ -60,20 +56,36 @@ def apply_regexp_to_response(response: str, regexp: str) -> str:
     pattern = re.compile(regexp, re.DOTALL)
     match = pattern.search(response)
     if match:
-        # Предполагается, что берем первую группу, если есть группы
-        # Если групп нет, то берем весь match.
-        # Исходя из условия, вероятно берем первую группу, если есть.
+        # Предполагается, что берем первую подходящую группу.
         if match.groups():
-            # Возьмем первую непустую группу
             for g in match.groups():
                 if g is not None:
                     return g
-            # Если все группы None, берем просто match.group(0)
             return match.group(0)
         else:
             return match.group(0)
     else:
         return "TFN"
+
+
+def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
+    """
+    Для метрики exact_match:
+    Если target - список строк, проверяем каждую. Если хоть одна найдена в response - включаем в pred.
+    Если target - одна строка (не список), делаем ее списком из одного элемента.
+    Если ничего не найдено - pred='TFN'.
+    """
+    if isinstance(target, str):
+        target = [target]  # Превращаем строку в список
+
+    found = []
+    for t in target:
+        if t in response:
+            found.append(t)
+    if not found:
+        return "TFN"
+    else:
+        return found
 
 
 def update_task_with_pred(db: Database, coll_name: str, task_id: Any, pred: str):
@@ -90,8 +102,9 @@ def run_extraction_loop(db: Database, interval: int = 10):
     Запускаем бесконечный цикл опроса очередей.
     Каждые interval секунд смотрим, есть ли задачи для обработки:
     - Находим все completed задачи с response
-    - Для каждой применяем regexp из задачи (task['regexp'])
-    - Сохраняем результат в pred
+    - Если metric='exact_match', берем target (строка или список строк) и ищем их в response.
+      pred - найденные строки или TFN.
+    - Если metric != 'exact_match', применяем regexp (если есть), иначе TFN.
     - Меняем статус на extracted
     """
     while True:
@@ -100,15 +113,17 @@ def run_extraction_loop(db: Database, interval: int = 10):
             found_any = True
             task_id = task["_id"]
             response = task["response"]
-            regexp = task.get("regexp", None)
+            metric = task.get("metric", None)
 
-            if not regexp:
-                # Если нет регулярки - не можем извлечь pred
-                # Можно поставить pred='TFN' или пропустить
-                # Но по условию метрика опирается на regexp, лучше TFN
-                pred = "TFN"
+            if metric == "exact_match":
+                target = task.get("target", [])
+                pred = apply_exact_match(response, target)
             else:
-                pred = apply_regexp_to_response(response, regexp)
+                regexp = task.get("regexp", None)
+                if not regexp:
+                    pred = "TFN"
+                else:
+                    pred = apply_regexp_to_response(response, regexp)
 
             update_task_with_pred(db, coll_name, task_id, pred)
 

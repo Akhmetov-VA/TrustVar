@@ -61,7 +61,7 @@ def add_target_field_to_collection(db: Database, collection_name: str, value) ->
         result = collection.update_many(
             {},  # Условие: все документы
             {
-                "$set": {"target": value}
+                "$set": {"task_name": value}
             },  # Действие: добавить поле target со значением 0
         )
         logging.info(
@@ -82,9 +82,9 @@ def main() -> None:
         configure_logging()
 
         # Имя базы данных и коллекции
-        database_name = "TrustLLM_ru"
-        collection_name = "ruBia_short_12_11"
-        value = 0
+        database_name = "TrustGen"
+        collection_name = "queue_rta_Misuse_ru"
+        value = "Misuse_ru"
 
         # Подключение к MongoDB
         client = get_mongo_client()

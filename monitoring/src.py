@@ -42,7 +42,7 @@ def load_file(uploaded_file) -> Optional[pd.DataFrame]:
 
 
 def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
-    """Загрузка файла в любом формате: CSV, XLSX или JSON."""
+    """Загрузка файла в любом формате: CSV, XLSX, JSON или Parquet."""
     if uploaded_file is None:
         return None
     try:
@@ -61,6 +61,14 @@ def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
                 return df
             except Exception as e:
                 st.error(f"Ошибка при чтении Excel файла: {e}")
+                return None
+        elif uploaded_file.name.lower().endswith(".parquet"):
+            # Загрузка Parquet
+            try:
+                df = pd.read_parquet(uploaded_file)
+                return df
+            except Exception as e:
+                st.error(f"Ошибка при чтении Parquet файла: {e}")
                 return None
         else:
             # Пытаемся как CSV

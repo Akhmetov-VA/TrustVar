@@ -108,6 +108,8 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
 
     # Формируем новый документ
     doc = {
+        'task_name': task.get('task_name', None),
+        'dataset_name': task.get('dataset_name', None),
         "init_prompt": original_prompt,
         "init_model": original_model,
         "regexp": task.get('regexp', None),

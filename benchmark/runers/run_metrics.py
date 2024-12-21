@@ -94,7 +94,7 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
             # Для rta_queue_ задач модель должна быть init_model
             # Проверим: rta_queue_ начинается с rta_queue_, 
             # если coll_name.startswith('rta_queue_'), берем init_model как model
-            if coll_name.startswith("rta_queue_"):
+            if coll_name.startswith("queue_rta_"):
                 model = doc.get("init_model", None)
             else:
                 model = doc.get("model", None)
@@ -159,7 +159,7 @@ def insert_results(db: Database, collection_name: str, results: List[Dict[str, A
 def compute_and_store_metrics(db: Database, interval: int = 30):
     while True:
         df = fetch_extracted_tasks(db, prefix="queue_")
-        df_rta = fetch_extracted_tasks(db, prefix="rta_queue_")
+        df_rta = fetch_extracted_tasks(db, prefix="queue_rta_")
 
         # Обычные очереди (df)
         if not df.empty:

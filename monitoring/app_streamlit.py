@@ -1,6 +1,6 @@
 import logging
 from typing import Any, Dict, List, Optional, Tuple
-
+from collections import Counter
 import pandas as pd
 import streamlit as st
 
@@ -85,7 +85,12 @@ def render_tasks_visualization_tab():
         st.write("Нет задач в базе для выбранной группы или вообще.")
     else:
         display_task_summary(df_tasks)
-        st.dataframe(df_tasks[["task_name", "dataset_name", "group", "metric"]])
+        
+
+        st.dataframe(df_tasks[["task_name", "dataset_name", "group", "metric", "models"]])
+        render_update_task()
+        
+        render_progressbar()
 
 
 def render_dataset_registry_section():
@@ -107,8 +112,8 @@ def render_dataset_upload_section() -> Optional[str]:
     with st.expander("Добавить новый датасет", expanded=False):
         st.write("Вы можете загрузить CSV, Excel или JSON файл.")
         uploaded_file = st.file_uploader(
-            "Загрузите CSV, Excel или JSON файл",
-            type=["csv", "xlsx", "json"],
+            "Загрузите CSV, Excel, JSON или Parquet файл",
+            type=["csv", "xlsx", "json", "parquet"],
             key="file_uploader_experiments",
         )
         dataset_name_input = st.text_input("Введите имя нового датасета (латиницей):")
@@ -183,14 +188,6 @@ def render_dataset_varcols_section(
         return var_cols, chosen_metric, target_column
 
 
-# -------------------- Изменения для единого хранилища промптов и регулярок --------------------
-
-# Предполагаем что у нас есть единая коллекция для промптов: "prompt_storage"
-# Структура: {"name": str, "prompt": str}
-# Аналогично для регулярок: "regexp_storage"
-# Структура: {"name": str, "pattern": str, "metric": str}
-
-
 def get_all_prompts() -> List[Dict[str, Any]]:
     coll = db_client.get_collection("prompt_storage")
     return list(coll.find({}))
@@ -217,7 +214,6 @@ def insert_regexp_global(name: str, pattern: str, metric: str):
 
 
 def show_existing_regexp(metric: str):
-    """Показать таблицу с уже существующими регулярками для метрики из единого хранилища."""
     docs = get_all_regexps_for_metric(metric)
     if docs:
         df = pd.DataFrame(docs)
@@ -230,7 +226,6 @@ def show_existing_regexp(metric: str):
 
 
 def render_regexp_section(metric: str) -> Optional[str]:
-    """Выбор регулярки из единого хранилища."""
     with st.expander("Выбор или создание регулярки для метрики", expanded=False):
         show_existing_regexp(metric)
 
@@ -265,7 +260,6 @@ def render_regexp_section(metric: str) -> Optional[str]:
 
 
 def show_all_prompts():
-    """Показать все промпты из единого хранилища."""
     prompts = get_all_prompts()
     if prompts:
         df = pd.DataFrame(prompts)
@@ -278,7 +272,6 @@ def show_all_prompts():
 
 
 def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
-    """Отображает создание нового промпта в едином хранилище."""
     hint, placeholders = generate_prompt_hint(var_cols)
     st.write(hint)
     prompt_name = st.text_input("Введите имя нового промпта:")
@@ -288,14 +281,11 @@ def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
         if missing_cols:
             st.error("Отсутствуют плейсхолдеры: " + ", ".join(missing_cols))
         else:
-            # Проверяем существует ли промпт с таким именем
             if prompt_exists(prompt_name):
                 st.warning(
                     f"Промпт с именем '{prompt_name}' уже существует. Вы можете использовать его."
                 )
-                # Здесь можно дать кнопку "Использовать существующий"
                 if st.button("Использовать существующий промпт"):
-                    # Возвращаем существующий промпт
                     existing_prompts = get_all_prompts()
                     for p in existing_prompts:
                         if p["name"] == prompt_name:
@@ -309,7 +299,6 @@ def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
 
 
 def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
-    """Отображает выбор промпта по имени из единого хранилища."""
     with st.expander("Выбор или создание промпта", expanded=False):
         show_all_prompts()
 
@@ -338,15 +327,11 @@ def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
 
 
 def show_all_rta_prompts():
-    """Показать все промпты, так как RTA тоже хранятся в едином хранилище."""
-    # Предполагаем, что RTA промпты тоже в prompt_storage, просто пользователь выбирает любой промпт.
-    # Если нужно фильтровать RTA промпты - нужно бы поле. Но в условии не было.
-    # Будем считать, что rta_prompt - это просто любой промпт.
+    # Для упрощения считаем, что RTA промпты также находятся в prompt_storage
     show_all_prompts()
 
 
-def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str]]:
-    """Отображает выбор RTA промпта по имени."""
+def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
     with st.expander("Выбор или создание RTA промпта", expanded=False):
         show_all_rta_prompts()
 
@@ -365,17 +350,9 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str]]:
             else:
                 st.write("Нет доступных RTA промптов. Введите свой.")
         else:
-            # Используем ту же функцию для создания промпта, нет разницы для RTA
-            # Просто вар_cols можем попросить снаружи, но у нас их нет.
-            # Допустим, что RTA промпт тоже основан на тех же var_cols:
-            # Если var_cols нам не доступны, пусть будет пустой список или пользователь сам решит.
-            # Для RTA промпта var_cols не критичны, можно передать пустой список.
-            rta_prompt_selected = render_prompt_creation_section(
-                var_cols=[]
-            )  # RTA промпт может быть без var_cols
+            rta_prompt_selected = render_prompt_creation_section(var_cols=[])
 
-        rta_target = st.text_input("Целевая значение для RtA:", value=1)
-        
+        rta_target = st.text_input("Целевое значение для RtA:", value=1)
         rta_model = st.selectbox(
             "Модель для RTA:",
             MODELS,
@@ -385,7 +362,6 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str]]:
 
 
 def render_models_section() -> List[str]:
-    """Выбор моделей."""
     with st.expander("Выбор моделей для задачи", expanded=False):
         selected_models = st.multiselect("Выберите модели:", MODELS)
         return selected_models
@@ -396,13 +372,12 @@ def render_preview_and_save_task(
     var_cols: List[str],
     selected_prompt: str,
     selected_regexp: str,
-    target_value: [str, int],
+    target_value: Any,
     selected_models: List[str],
     metric: str,
     rta_prompt_selected: Optional[str],
     rta_model: Optional[str],
 ):
-    """Предпросмотр и сохранение задачи."""
     with st.expander("Предпросмотр и сохранение задачи", expanded=False):
         if (
             selected_prompt
@@ -452,7 +427,6 @@ def render_preview_and_save_task(
 
 
 def render_create_task_tab():
-    """Отрисовка вкладки 'Создать задачу'."""
     st.header("Создать новую задачу")
 
     all_datasets = db_client.get_all_datasets()
@@ -486,60 +460,295 @@ def render_create_task_tab():
                 )
 
 
-def render_update_task_tab():
-    """Отрисовка вкладки 'Обновить задачу'."""
-    st.header("Обновить задачу")
-    df_tasks = db_client.get_all_tasks()
-    if df_tasks.empty:
-        st.write("Нет задач для обновления.")
-        return
+def render_update_task():
+    with st.expander("Обновить задачу", expanded=False):            
+        st.header("Обновить задачу")
+        df_tasks = db_client.get_all_tasks()
+        if df_tasks.empty:
+            st.write("Нет задач для обновления.")
+            return
 
-    df_tasks = filter_tasks_by_group(df_tasks)
-    if df_tasks.empty:
-        st.write("Нет задач в выбранной группе для обновления.")
-        return
+        df_tasks = filter_tasks_by_group(df_tasks)
+        if df_tasks.empty:
+            st.write("Нет задач в выбранной группе для обновления.")
+            return
 
-    task_names = df_tasks["task_name"].unique().tolist()
-    selected_task_name = st.selectbox("Выберите задачу:", task_names)
-    task_to_update = df_tasks[df_tasks["task_name"] == selected_task_name].iloc[0]
+        task_names = df_tasks["task_name"].unique().tolist()
+        selected_task_name = st.selectbox("Выберите задачу:", task_names)
+        task_to_update = df_tasks[df_tasks["task_name"] == selected_task_name].iloc[0]
 
-    metrics = METRICS
-    current_metric = task_to_update.get("metric", metrics[0])
-    if current_metric not in metrics:
-        current_metric = metrics[0]
+        # Получаем текущий список моделей для задачи
+        current_models = task_to_update.get("models", [])
 
-    new_task_name = st.text_input(
-        "Название задачи:", value=task_to_update.get("task_name", "")
-    )
-    new_metric = st.selectbox("Метрика:", metrics, index=metrics.index(current_metric))
-    new_group = st.text_input("Группа:", value=task_to_update.get("group", ""))
-    current_status = task_to_update.get("status", "pending")
-    if current_status not in STATUSES:
-        current_status = "pending"
-    new_status = st.selectbox("Статус:", STATUSES, index=STATUSES.index(current_status))
+        # Предполагается, что есть функция get_models(), которая возвращает список всех доступных моделей
+        all_models = MODELS
 
-    if st.button("Обновить задачу"):
-        update_data = {
-            "task_name": new_task_name,
-            "metric": new_metric,
-            "group": new_group,
-            "status": new_status,
+        # Предлагаем выбрать новые модели для задачи
+        selected_models = st.multiselect(
+            "Выберите модели для задачи:",
+            options=all_models,
+            default=current_models
+            )
+
+        if st.button("Обновить модели задачи"):
+            update_data = {
+                "models": selected_models
+            }
+            task_id = task_to_update["_id"]
+            db_client.update_task(task_id, update_data)
+            st.success("Модели для задачи обновлены!")
+            st.rerun()
+
+
+
+# Новый код для вкладки мониторинга очередей
+def highlight_status(s):
+    if s == "Ошибка":
+        return "background-color: red; color: white;"
+    elif s == "В процессе":
+        return "background-color: orange; color: white;"
+    elif s == "Завершено":
+        return "background-color: green; color: white;"
+    else:
+        return ""
+
+
+def load_data_for_dashboard(db_client, collections):
+    data = []
+    # Исключаем некоторые коллекции из отображения
+    exclude = ["delete_me", "test"]
+    collections = [c for c in collections if c not in exclude]
+
+    for collection_name in collections:
+        total_tasks = db_client.count_total_tasks(collection_name)
+        statuses = [
+            "pending",
+            "completed",
+            "failed",
+            "extracted",
+            "processing",
+            "transfered_to_rta",
+        ]
+        status_counts = {
+            status: db_client.count_tasks_by_status(collection_name, status)
+            for status in statuses
         }
-        task_id = task_to_update["_id"]
-        db_client.update_task(task_id, update_data)
-        st.success("Задача обновлена!")
-        st.experimental_rerun()
+
+        # Определение статуса коллекции
+        if status_counts["failed"] > 0:
+            status = "Ошибка"
+        elif status_counts["pending"] > 0 or status_counts["processing"] > 0:
+            status = "В процессе"
+        else:
+            status = "Завершено"
+
+        data_row = {
+            "Коллекция": collection_name,
+            "Всего задач": total_tasks,
+            "В ожидании": status_counts["pending"],
+            "Выполнено": status_counts["completed"] + status_counts["transfered_to_rta"],
+            "Измерено": status_counts["extracted"],
+            "С ошибками": status_counts["failed"],
+            "Статус": status,
+        }
+        data.append(data_row)
+    return pd.DataFrame(data)
+
+
+def show_errors(db_client, collections):
+    st.header("Уникальные сообщения об ошибках")
+    with st.expander("Показать ошибки", expanded=False):
+        for collection_name in collections:
+            failed_tasks = db_client.get_tasks_by_status(collection_name, "failed")
+            if len(failed_tasks) > 0:
+                error_messages = [
+                    task.get("error", "Нет информации об ошибке")
+                    for task in failed_tasks
+                ]
+                error_counts = Counter(error_messages)
+                st.subheader(f"Коллекция: {collection_name}")
+                for error_message, count in error_counts.items():
+                    st.write(
+                        f"**Ошибка:** {error_message} | **Количество:** {count}"
+                    )
+                st.write("---")
+
+        if st.button("Перезапустить задачи с ошибками", key="restart_failed_tasks"):
+            for collection_name in collections:
+                modified_count = restart_failed_tasks(db_client, collection_name)
+                if modified_count > 0:
+                    st.write(
+                        f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
+                    )
+        else:
+            st.write(
+                "Нажмите кнопку выше, чтобы перезапустить все задачи с ошибками."
+            )
+
+def restart_failed_tasks(db_client, collection_name):
+    count1 = db_client.update_tasks_status(
+        collection_name, "failed", "pending"
+    )
+    return count1
+
+
+def render_progressbar():
+    st.header("Мониторинг очередей")
+    collections_to_process = sorted(
+        [
+            col
+            for col in db_client.list_collections()
+            if col.startswith("queue_")
+        ]
+    )
+
+    df = load_data_for_dashboard(db_client, collections_to_process)
+
+    if st.button("Обновить таблицу", key="refresh_dashboard"):
+        df = load_data_for_dashboard(db_client, collections_to_process)
+
+    df = df.sort_values("Коллекция").reset_index(drop=True)
+    df_style = df.style.applymap(highlight_status, subset=["Статус"])
+
+    st.write(df_style)
+
+    if df["С ошибками"].sum() > 0:
+        show_errors(db_client, collections_to_process)
+
+    st.header("Просмотр данных коллекции")
+    if collections_to_process:
+        selected_collection = st.selectbox(
+            "Выберите коллекцию",
+            collections_to_process,
+            key="dashboard_select_collection",
+        )
+
+        if selected_collection:
+            if st.button("Показать данные коллекции", key=f"show_data_{selected_collection}"):
+                st.session_state[f"data_loaded_{selected_collection}"] = True
+
+            if st.session_state.get(f"data_loaded_{selected_collection}", False):
+                collection = db_client.get_collection(selected_collection)
+                data = list(collection.find())
+                df_collection = pd.DataFrame(data)
+
+                if "_id" in df_collection.columns:
+                    df_collection = df_collection.drop(columns=["_id"])
+
+                if "model" in df_collection.columns:
+                    models_in_data = df_collection["model"].unique()
+                    filter_models = st.multiselect(
+                        "Фильтровать по моделям",
+                        options=models_in_data,
+                        default=models_in_data,
+                        key=f"dashboard_filter_models_{selected_collection}",
+                    )
+                    df_filtered = df_collection[df_collection["model"].isin(filter_models)]
+                else:
+                    df_filtered = df_collection
+
+                st.dataframe(df_filtered)
+
+                csv = df_filtered.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="Скачать результаты в CSV",
+                    data=csv,
+                    file_name=f"{selected_collection}_results.csv",
+                    mime="text/csv",
+                    key=f"download_csv_{selected_collection}",
+                )
+    else:
+        st.info("Нет доступных коллекций для просмотра.")
+
+
+def render_metrics_tab():
+    st.header("Метрики моделей")
+
+    # Получаем все коллекции, начинающиеся с 'results'
+    results_collections = ['RtAR', 'TFNR', 'Accuracy', 'Correlation']
+    if results_collections:
+        # Позволяем пользователю выбрать коллекцию
+        selected_results_collection = st.selectbox(
+            "Выберите коллекцию с метриками",
+            options=results_collections,
+            key="metrics_collection_selection",
+        )
+
+        results_collection = db_client.get_collection(selected_results_collection)
+        results_data = list(results_collection.find())
+
+        if results_data:
+            visualize_metrics(results_data, selected_results_collection)
+        else:
+            st.info(f"Данные в коллекции '{selected_results_collection}' отсутствуют.")
+    else:
+        st.info("Нет доступных коллекций с метриками.")
+
+def visualize_metrics(results_data, collection_name):
+    # Преобразуем данные в DataFrame
+    results_df = pd.DataFrame(results_data)
+
+    # Удаляем служебное поле '_id' если оно есть
+    if "_id" in results_df.columns:
+        results_df = results_df.drop(columns=["_id"])
+
+    # Предполагается, что данные метрик содержат поля 'dataset_name', 'model', 'value'
+    # и 'task_name' (если требуется). Для визуализации используем 'dataset_name' и 'model'.
+    if "dataset_name" not in results_df.columns or "model" not in results_df.columns or "value" not in results_df.columns:
+        st.error("В данных отсутствуют необходимые поля (dataset_name, model, value).")
+        return
+
+    datasets = results_df["dataset_name"].unique()
+    models = results_df["model"].unique()
+
+    # Добавляем виджеты для фильтрации
+    selected_datasets = st.multiselect(
+        "Выберите датасеты",
+        options=datasets,
+        default=list(datasets),
+        key=f"metrics_datasets_{collection_name}",
+    )
+    selected_models = st.multiselect(
+        "Выберите модели",
+        options=models,
+        default=list(models),
+        key=f"metrics_models_{collection_name}",
+    )
+
+    # Применяем фильтры к данным
+    filtered_df = results_df[
+        (results_df["dataset_name"].isin(selected_datasets))
+        & (results_df["model"].isin(selected_models))
+    ]
+
+    if filtered_df.empty:
+        st.info("Нет данных для отображения с выбранными фильтрами.")
+        return
+
+    # Группируем данные и вычисляем среднее значение 'value'
+    # для каждой пары 'dataset_name' - 'model'
+    pivot_table = filtered_df.pivot_table(
+        index="model", columns="dataset_name", values="value", aggfunc="mean"
+    )
+
+    st.subheader("Таблица метрик по датасетам и моделям")
+    st.dataframe(pivot_table)
+
+    # Визуализация данных
+    st.subheader("Визуализация метрик")
+    st.bar_chart(pivot_table)
 
 
 # -------------------------------------
 # Основной интерфейс
 # -------------------------------------
+
 tabs = st.tabs(
     [
         "Визуализация по задачам",
         "Управление датасетами",
         "Создать задачу",
-        "Обновить задачу",
+        "Метрики моделей",
     ]
 )
 
@@ -553,4 +762,4 @@ with tabs[2]:
     render_create_task_tab()
 
 with tabs[3]:
-    render_update_task_tab()
+    render_metrics_tab()
