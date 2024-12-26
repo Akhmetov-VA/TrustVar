@@ -49,7 +49,7 @@ RTA_MODEL = "qwen2.5:7b-instruct-q4_0"
 # -------------------------------------
 # Константы
 # -------------------------------------
-METRICS = ["RtA", "accuracy", "correlation"]
+METRICS = ["RtA", "accuracy", "correlation",'include_exclude']
 STATUSES = ["pending", "completed", "measured", "error"]
 RTA_PROMPTS = {
     "check": [

@@ -1,6 +1,7 @@
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
+import numpy as np
 import streamlit as st
 
 
@@ -41,6 +42,20 @@ def load_file(uploaded_file) -> Optional[pd.DataFrame]:
             return None
 
 
+
+def sanitize_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Преобразовать все значения df так, чтобы они были сериализуемы в MongoDB.
+    В частности, конвертировать numpy.ndarray в list, иначе вызовет InvalidDocument.
+    """
+    def convert_value(x: Any) -> Any:
+        if isinstance(x, np.ndarray):
+            return x.tolist()
+        return x
+
+    return df.applymap(convert_value)
+
+
 def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
     """Загрузка файла в любом формате: CSV, XLSX, JSON или Parquet."""
     if uploaded_file is None:
@@ -50,7 +65,7 @@ def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
             # Загрузка JSON
             try:
                 df = pd.read_json(uploaded_file)
-                return df
+                return sanitize_df(df)
             except ValueError as e:
                 st.error(f"Ошибка при чтении JSON файла: {e}")
                 return None
@@ -58,7 +73,7 @@ def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
             # Загрузка Excel
             try:
                 df = pd.read_excel(uploaded_file)
-                return df
+                return sanitize_df(df)
             except Exception as e:
                 st.error(f"Ошибка при чтении Excel файла: {e}")
                 return None
@@ -66,7 +81,7 @@ def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
             # Загрузка Parquet
             try:
                 df = pd.read_parquet(uploaded_file)
-                return df
+                return sanitize_df(df)
             except Exception as e:
                 st.error(f"Ошибка при чтении Parquet файла: {e}")
                 return None
@@ -74,11 +89,11 @@ def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
             # Пытаемся как CSV
             try:
                 df = pd.read_csv(uploaded_file, encoding="utf-8")
-                return df
+                return sanitize_df(df)
             except UnicodeDecodeError:
                 try:
                     df = pd.read_csv(uploaded_file, encoding="latin-1")
-                    return df
+                    return sanitize_df(df)
                 except Exception as e:
                     st.error(f"Не удалось прочитать CSV файл: {e}")
                     return None

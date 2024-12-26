@@ -39,8 +39,7 @@ def get_db() -> Database:
 def fetch_tasks(db: Database) -> List[Dict[str, Any]]:
     """
     Получаем все задачи из коллекции tasks.
-    Предполагается, что здесь можно отфильтровать по статусу, если нужно.
-    В текущей версии возвращаем все.
+    В текущей версии возвращаем все, но при необходимости можно фильтровать по статусу.
     """
     tasks_coll = db["tasks"]
     new_tasks = list(tasks_coll.find({}))
@@ -65,15 +64,26 @@ def get_dataset_head(db: Database, dataset_name: str) -> pd.DataFrame:
 def create_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     """
     На основе задачи из таблицы tasks создаем записи в коллекции queue_{task_name}.
+
+    Новая метрика 'include_exclude':
+      - предполагает наличие двух ключей в задаче:
+         'include_column' (обязательный) и 'exclude_column' (необязательный).
+      - в очереди будет сохраняться:
+         doc["include_list"] = row[include_column]
+         doc["exclude_list"] = row[exclude_column], если exclude_column указана.
+      - при этом doc["target"] может не иметь смысла, поэтому ставим None или пропускаем.
     """
+
     task_name = task["task_name"]
     dataset_name = task["dataset_name"]
     prompt_text = task["prompt"]
     var_cols = task.get("variables_cols", [])
     models = task["models"]
     metric = task["metric"]
-    target = task["target"]
-    regexp = task["regexp"]
+    target = task.get("target", None)        # например, для accuracy/correlation
+    regexp = task.get("regexp", None)        # строка регулярного выражения
+    include_col = task.get("include_column", None)  # только для include_exclude
+    exclude_col = task.get("exclude_column", None)  # опционально для include_exclude
 
     df = get_dataset_head(db, dataset_name)
     if df.empty:
@@ -90,6 +100,7 @@ def create_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
             variables[c] = row[c] if c in row else None
 
         for model in models:
+            # Проверяем, нет ли дубликата (по model + variables).
             existing = queue_coll.find_one({"model": model, "variables": variables})
             if existing:
                 continue
@@ -104,15 +115,32 @@ def create_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                 "regexp": regexp,
                 "status": "pending",
                 "response": None,
-                "target": row[target] if metric != "RtA" else target,
             }
 
+            # Обработка разных метрик
             if metric == "RtA":
+                # target = 'RtA' или row[target]? Обычно 'RtA'.
                 rta_prompt = task.get("rta_prompt")
                 rta_model = task.get("rta_model")
                 if rta_prompt and rta_model:
                     doc["rta_prompt"] = rta_prompt
                     doc["rta_model"] = rta_model
+                doc["target"] = target if isinstance(target, str) else metric
+
+            elif metric == "include_exclude":
+                # include_list и exclude_list
+                if include_col and include_col in row:
+                    doc["include_list"] = [row[include_col]] if isinstance(row[include_col], str) else row[include_col]
+                if exclude_col and exclude_col in row:
+                    doc["exclude_list"] = [row[exclude_col]] if isinstance(row[exclude_col], str) else row[exclude_col]    
+                doc["target"] = target if isinstance(target, str) else metric
+
+            else:
+                # accuracy, correlation, etc.
+                if target and target in row:
+                    doc["target"] = row[target]
+                else:
+                    doc["target"] = None
 
             operations.append(doc)
 
@@ -153,26 +181,9 @@ def delete_unused_queues(db: Database) -> None:
         task_name = q_col.replace("queue_", "")
         if task_name.startswith("rta_"):
             task_name = task_name.replace("rta_", "")
-        if (
-            f"task_{task_name}" not in existing_tasks
-            and task_name not in existing_tasks
-        ):
-            # Возможно в tasks task_name уже хранится с префиксом task_
-            # Проверим оба варианта
-            # Обычно task_name уже содержит префикс task_ согласно коду выше?
-            # Если в tasks мы храним без префикса, то нужно подстроиться.
-            # Посмотрим на код, выше создаем задачи как "task_{task_name}".
-            # Это значит, что в tasks у нас task_name уже с "task_" впереди.
-            # Тогда нужно привести к одному формату:
-            # queue_collections названы queue_{task_name}, где task_name уже в формате "task_..."
-            # Значит task_name из q_col уже task_...
-            # Тогда нам не нужна лишняя проверка.
-            # Сразу проверим: if task_name not in existing_tasks:
-            if task_name not in existing_tasks:
-                # Очередь не соответствует ни одной задаче
-                db.drop_collection(q_col)
-                logger.info(f"Удалена коллекция: {q_col}")
-                
+        if f"task_{task_name}" not in existing_tasks and task_name not in existing_tasks:
+            db.drop_collection(q_col)
+            logger.info(f"Удалена коллекция: {q_col}")
 
 
 def main():
@@ -181,10 +192,10 @@ def main():
     - Подключаемся к БД
     - Каждые N секунд просматриваем tasks
     - Для каждой задачи создаем соответствующие записи в queue_{task_name} (если не созданы)
-    - Вызываем функцию удаления неиспользуемых очередей
+    - Удаляем неиспользуемые очереди
     """
     db = get_db()
-    interval = 60  # 60 секунд, можно изменить
+    interval = 60  # Можно настроить под нужды
 
     while True:
         tasks = fetch_tasks(db)
@@ -194,7 +205,6 @@ def main():
         else:
             logger.info("Нет новых задач для создания очередей.")
 
-        # Удаляем неиспользуемые очереди
         delete_unused_queues(db)
 
         time.sleep(interval)

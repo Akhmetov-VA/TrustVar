@@ -165,43 +165,24 @@
 
 Обработчик задач отвечает за выполнение задач, хранящихся в MongoDB.
 
-1. **Создайте сессию `my_session`:**
+```bash
+screen -S my_session
 
-    ```bash
-    screen -S my_session
-    ```
+/home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runers/run.py
 
-2. **Запустите скрипт обработчика задач:**
-
-    ```bash
-    /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runers/run.py
-    ```
-
-3. **Повторно подключиться к сессии:**
-
-    ```bash
-    screen -r my_session
-    ```
+screen -r my_session
+```
 
 ### Запуск обработчика добавления задач в очередь RtA
 
 Обработчик добавляет задачи из всех коллекций в MongoDB в очередь RtA для дальнейшей обработки.
 
-1. **Создайте сессию `run_rta`:**
 
     ```bash
     screen -S run_rta
-    ```
 
-2. **Запустите скрипт добавления задач в RtA:**
-
-    ```bash
     /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runers/run_rta.py
-    ```
 
-3. **Повторно подключиться к сессии:**
-
-    ```bash
     screen -r run_rta
     ```
 
@@ -209,44 +190,12 @@
 
 Этот обработчик отвечает за обработку задач в коллекции RtA и вычисление метрик.
 
-1. **Создайте сессию `run_metric`:**
-
     ```bash
     screen -S run_metric
-    ```
-
-2. **Запустите скрипт измерения метрик:**
-
-    ```bash
+    
     /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runners/run_metric.py
-    ```
 
-3. **Повторно подключиться к сессии:**
-
-    ```bash
     screen -r run_metric
-    ```
-
-### Запуск мониторинга
-
-Мониторинг предоставляет веб-интерфейс для отслеживания состояния экспериментов.
-
-1. **Создайте сессию `monitoring`:**
-
-    ```bash
-    screen -S monitoring
-    ```
-
-2. **Запустите приложение мониторинга:**
-
-    ```bash
-    /home/vadim/work/TrustLLM_ru/.venv/bin/python -m streamlit run /home/vadim/work/TrustLLM_ru/monitoring/app.py --server.port 27365
-    ```
-
-3. **Повторно подключиться к сессии:**
-
-    ```bash
-    screen -r monitoring
     ```
 
 
@@ -254,22 +203,61 @@
 
 Смотрит какие задачи есть в таблице tasks и на их основе проверяет существование актуальных записей и создает соответствующие очереди
 
-1. **Создайте сессию `task_runner`:**
-
     ```bash
     screen -S task_runner
-    ```
 
-2. **Запустите приложение мониторинга:**
-
-    ```bash
     /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runers/task_processor.py
+
+    screen -r task_runner
     ```
 
-3. **Повторно подключиться к сессии:**
+### Запуск извлекателя из ответов LLM
+
+Смотрит какие задачи есть в таблице tasks и на их основе проверяет существование актуальных записей и создает соответствующие очереди
 
     ```bash
-    screen -r task_runner
+    screen -S run_regexp
+
+    /home/vadim/work/TrustLLM_ru/.venv/bin/python /home/vadim/work/TrustLLM_ru/benchmark/runers/run_regexp.py
+
+    screen -r run_regexp
+    ```
+
+
+### Запуск обработчика измерения метрик 2
+
+Этот обработчик отвечает за обработку задач в коллекции RtA и вычисление метрик.
+
+    ```bash
+    screen -S run_metric2
+    
+    /home/vadim/work/TrustLLM_ru/.venv/bin/python3 /home/vadim/work/TrustLLM_ru/benchmark/runers/run_metrics.py
+
+    screen -r run_metric2
+    ```
+
+### Запуск мониторинга
+
+Мониторинг предоставляет веб-интерфейс для отслеживания состояния экспериментов.
+
+    ```bash
+    screen -S monitoring
+
+    /home/vadim/work/TrustLLM_ru/.venv/bin/python -m streamlit run /home/vadim/work/TrustLLM_ru/monitoring/app.py --server.port 27365
+
+    screen -r monitoring
+    ```
+
+### Запуск мониторинга вторая версия
+
+Новая версия мониторинга, которая позволяет выбирать метрику и на ее основе выводить соответствующие таблицы
+
+    ```bash
+    screen -S monitoring2
+
+    /home/vadim/work/TrustLLM_ru/.venv/bin/python -m streamlit run /home/vadim/work/TrustLLM_ru/monitoring/app_streamlit.py --server.port 27366
+
+    screen -r monitoring2
     ```
 
 ## Использование

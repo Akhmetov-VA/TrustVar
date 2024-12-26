@@ -29,6 +29,7 @@ def get_mongo_client() -> MongoClient:
 
 
 def get_db() -> Database:
+    """Возвращает объект базы данных MongoDB."""
     client = get_mongo_client()
     return client[MONGO_DB]
 
@@ -36,13 +37,19 @@ def get_db() -> Database:
 def fetch_completed_tasks(db: Database):
     """
     Находим все задачи в очередях queue_* со статусом 'completed' и наличием поля response.
-    Возвращаем итератор по таким задачам.
     Исключаем метрику RtA, т.к. она обрабатывается другим скриптом.
+    
+    Возвращаем итератор (coll_name, task).
     """
     collections = [c for c in db.list_collection_names() if c.startswith("queue_")]
     for coll_name in collections:
         coll = db[coll_name]
-        tasks = list(coll.find({"status": "completed", "response": {"$ne": None}, "metric": {"$ne": "RtA"}}))
+        # metric != 'RtA'
+        tasks = list(
+            coll.find(
+                {"status": "completed", "response": {"$ne": None}, "metric": {"$ne": "RtA"}}
+            )
+        )
         for t in tasks:
             yield coll_name, t
 
@@ -71,8 +78,9 @@ def apply_regexp_to_response(response: str, regexp: str) -> str:
 def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
     """
     Для метрики exact_match:
-    Если target - список строк, проверяем каждую. Если хоть одна найдена в response - включаем в pred.
-    Если target - одна строка (не список), делаем ее списком из одного элемента.
+    Если target - список строк, проверяем каждую. 
+    Если хоть одна найдена в response, она включается в pred.
+    Если target - одна строка (не список), делаем её списком из одного элемента.
     Если ничего не найдено - pred='TFN'.
     """
     if isinstance(target, str):
@@ -85,7 +93,9 @@ def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
     if not found:
         return "TFN"
     else:
-        return found
+        # Вернем список найденных строк (или, например, через запятую).
+        # Для удобства пусть будет просто список в виде string.
+        return str(found)
 
 
 def update_task_with_pred(db: Database, coll_name: str, task_id: Any, pred: str):
@@ -99,13 +109,15 @@ def update_task_with_pred(db: Database, coll_name: str, task_id: Any, pred: str)
 
 def run_extraction_loop(db: Database, interval: int = 10):
     """
-    Запускаем бесконечный цикл опроса очередей.
-    Каждые interval секунд смотрим, есть ли задачи для обработки:
-    - Находим все completed задачи с response
-    - Если metric='exact_match', берем target (строка или список строк) и ищем их в response.
-      pred - найденные строки или TFN.
-    - Если metric != 'exact_match', применяем regexp (если есть), иначе TFN.
+    Запускаем бесконечный цикл опроса очередей:
+    - Находим все задачи в статусе completed (response != None) и metric != RtA
+    - В зависимости от metric:
+       1) exact_match: используем apply_exact_match
+       2) include_exclude: просто берем response в pred
+       3) любые другие: используем regexp (если есть) -> apply_regexp_to_response
+         если нет - TFN
     - Меняем статус на extracted
+    - Ждем interval секунд и повторяем
     """
     while True:
         found_any = False
@@ -114,11 +126,19 @@ def run_extraction_loop(db: Database, interval: int = 10):
             task_id = task["_id"]
             response = task["response"]
             metric = task.get("metric", None)
+            target = task.get("target", [])
 
             if metric == "exact_match":
-                target = task.get("target", [])
+                # exact_match логика
                 pred = apply_exact_match(response, target)
+
+            elif metric == "include_exclude":
+                # По условию "просто берем response и переносим в pred"
+                # Логику проверки include/exclude выполняет следующий ранер.
+                pred = response
+
             else:
+                # Любая другая метрика -> regexp
                 regexp = task.get("regexp", None)
                 if not regexp:
                     pred = "TFN"
@@ -133,6 +153,11 @@ def run_extraction_loop(db: Database, interval: int = 10):
 
 
 def main():
+    """
+    Точка входа:
+    1) Подключаемся к базе
+    2) Запускаем цикл обработки
+    """
     db = get_db()
     run_extraction_loop(db, interval=60)
 
