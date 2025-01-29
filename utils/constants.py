@@ -41,7 +41,7 @@ MODELS = [
     "qwen2.5:32b-instruct-q4_0",
     "mistral-nemo",
 ]
-RTA_MODEL = "qwen2.5:7b-instruct-q4_0"
+RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
 
 # Configuration

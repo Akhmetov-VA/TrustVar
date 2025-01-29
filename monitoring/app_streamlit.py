@@ -361,20 +361,8 @@ def render_dataset_upload_section() -> Optional[str]:
                 include_col = None
                 exclude_col = None
 
-                if chosen_metric == "RtA":
-                    potential_targets = [
-                        c for c in df_uploaded.columns if c not in var_cols
-                    ]
-                    if not potential_targets:
-                        target_column = st.text_input(
-                            "Введите название колонки с таргетом:"
-                        )
-                    else:
-                        target_column = st.selectbox(
-                            "Выберите колонку с таргетом:", potential_targets, key="dataset_upload_target_selectbox"
-                        )
 
-                elif chosen_metric == "include_exclude":
+                if chosen_metric == "include_exclude":
                     st.write(
                         "Для метрики 'include_exclude' необходимо указать:\n"
                         "1) Колонку, где хранится список строк, которые должны присутствовать в ответе.\n"
@@ -439,6 +427,8 @@ def render_dataset_management_tab():
     - Отображение registry
     - Загрузка нового датасета
     """
+    ## TODO: добавить вкладку для просмотра и удаления датасетов
+    ## TODO: добавить возможность создавать датасет в конкретной группе (например privacy или safety)
     st.header("Управление датасетами")
     render_dataset_registry_section()
     render_dataset_upload_section()
