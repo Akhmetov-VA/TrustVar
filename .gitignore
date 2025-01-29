@@ -5,8 +5,10 @@
 *.tsv
 *.log
 *.jsonl
+*.xlsx
 
 __pycache__
 .env
 TrustLLM
 poetry.lock
+db

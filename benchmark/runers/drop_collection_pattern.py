@@ -1,35 +1,73 @@
 import os
+from typing import List
 
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-# Load environment variables from .env file
-load_dotenv()
 
-# Retrieve connection details from environment variables
-MONGO_USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME")
-MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-MONGO_HOST = os.getenv("MONGO_HOST")
-MONGO_PORT = os.getenv("MONGO_INITDB_ROOT_PORT")
+def get_mongo_client() -> MongoClient:
+    """
+    Создает и возвращает подключение к MongoDB на основе переменных окружения.
 
-# Construct MongoDB URI
-mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+    Returns:
+        MongoClient: Клиент для подключения к MongoDB.
+    """
+    # Загрузка переменных окружения из файла .env
+    load_dotenv()
 
-pattern = "rubia_"
+    # Получение деталей подключения из переменных окружения
+    mongo_username = os.getenv("MONGO_INITDB_ROOT_USERNAME")
+    mongo_password = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
+    mongo_host = os.getenv("MONGO_HOST")
+    mongo_port = os.getenv("MONGO_INITDB_ROOT_PORT")
 
-# Connect to MongoDB
-client = MongoClient(mongo_uri)
-db = client["TrustLLM_ru"]
+    # Формирование URI для подключения к MongoDB
+    mongo_uri = (
+        f"mongodb://{mongo_username}:{mongo_password}@{mongo_host}:{mongo_port}/"
+    )
 
-# List all collections in the database
-collections = db.list_collection_names()
+    return MongoClient(mongo_uri)
 
-# Filter collections that start with 'ethics_'
-collections_to_delete = [col for col in collections if col.startswith(pattern)]
 
-# Delete the collections
-for collection_name in collections_to_delete:
-    db.drop_collection(collection_name)
-    print(f"Collection '{collection_name}' has been deleted.")
+def delete_collections_by_pattern(db, pattern: str) -> None:
+    """
+    Удаляет коллекции из базы данных MongoDB, названия которых начинаются с заданного паттерна.
 
-print(f"All collections starting with {pattern} have been deleted.")
+    Args:
+        db: Экземпляр базы данных MongoDB.
+        pattern (str): Паттерн, с которого начинаются названия коллекций.
+
+    Returns:
+        None
+    """
+    # Получение списка всех коллекций в базе данных
+    collections = db.list_collection_names()
+
+    # Фильтрация коллекций, начинающихся с заданного паттерна
+    collections_to_delete = [col for col in collections if col.startswith(pattern)]
+
+    # Удаление найденных коллекций
+    for collection_name in collections_to_delete:
+        db.drop_collection(collection_name)
+        print(f"Коллекция '{collection_name}' успешно удалена.")
+
+    print(f"Все коллекции, начинающиеся с '{pattern}', были удалены.")
+
+
+def main() -> None:
+    """
+    Основная функция для удаления коллекций, начинающихся с определенного паттерна.
+    """
+    # Паттерн для фильтрации коллекций
+    pattern = "rubia_"
+
+    # Подключение к MongoDB
+    client = get_mongo_client()
+    db = client["TrustLLM_ru"]
+
+    # Удаление коллекций по паттерну
+    delete_collections_by_pattern(db, pattern)
+
+
+if __name__ == "__main__":
+    main()

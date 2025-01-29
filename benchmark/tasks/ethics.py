@@ -1,17 +1,19 @@
 import os
 import uuid
+from typing import List
 
 import pandas as pd
 from pymongo import MongoClient
+from pymongo.collection import Collection
 
-from benchmark.constants import (
+from utils.constants import (
     MODELS,
     MONGO_HOST,
     MONGO_PASSWORD,
     MONGO_PORT,
     MONGO_USERNAME,
 )
-from benchmark.src import add_task
+from utils.src import add_task, filter_models
 
 # Получение имени текущего файла
 filename = os.path.basename(__file__)
@@ -76,10 +78,18 @@ sit_ethics = pd.read_csv("/home/vadim/work/TrustLLM_ru/data/ethics/sit_ethics.cs
 # Словарь датасетов
 datasets = {"ethics_per": per_ethics, "ethics_sit": sit_ethics}
 
-# Цикл добавления задач в MongoDB
-for model in MODELS:
-    for ethic_type, df_for_llm in datasets.items():
-        collection = db[ethic_type]  # Теперь коллекции 'per_ethics' и 'sit_ethics'
+# Цикл добавления задач в MongoDB с использованием фильтрации моделей
+for ethic_type, df_for_llm in datasets.items():
+    collection = db[ethic_type]  # Коллекции 'ethics_per' и 'ethics_sit'
+
+    # Фильтруем модели для текущей коллекции
+    available_models = filter_models(MODELS, collection)
+
+    if not available_models:
+        print(f"No new models to add for collection '{ethic_type}'.")
+        continue  # Переходим к следующей коллекции, если нет новых моделей
+
+    for model in available_models:
         for kind, prompts in ethics_prompts[ethic_type].items():
             for i in range(len(df_for_llm)):
                 row = df_for_llm.iloc[i].to_dict()
