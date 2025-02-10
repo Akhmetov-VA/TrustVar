@@ -1,7 +1,8 @@
 import logging
-from typing import Any, Dict, List, Optional, Tuple
-from collections import Counter
 import uuid
+from collections import Counter
+from typing import Any, Dict, List, Optional, Tuple
+
 import pandas as pd
 import streamlit as st
 
@@ -20,8 +21,6 @@ db_client = MongoDBClient(config)
 st.set_page_config(page_title="Trust LLM Dashboard", layout="wide")
 
 DEFAULT_REGEX = r"(?:^\W*([01]).*)|(?:.*([01])\W*$)"
-
-
 
 
 def generate_prompt_hint(var_cols: List[str]) -> Tuple[str, str]:
@@ -71,14 +70,16 @@ def filter_tasks_by_group(df_tasks: pd.DataFrame) -> pd.DataFrame:
         return df_tasks
     groups = df_tasks["group"].unique().tolist()
     if len(groups) > 1:
-        selected_group = st.selectbox("Выберите группу для отображения:", ["Все"] + groups, key=str(uuid.uuid4()))
+        selected_group = st.selectbox(
+            "Выберите группу для отображения:", ["Все"] + groups, key=str(uuid.uuid4())
+        )
         if selected_group != "Все":
             df_tasks = df_tasks[df_tasks["group"] == selected_group]
     return df_tasks
 
 
 def render_update_task():
-    """Виджет для обновления списка моделей в задаче."""
+    """Виджет для обновления модели, prompt и rta_prompt задачи."""
     with st.expander("Обновить задачу", expanded=False):
         st.header("Обновить задачу")
         df_tasks = db_client.get_all_tasks()
@@ -91,25 +92,75 @@ def render_update_task():
             st.write("Нет задач в выбранной группе для обновления.")
             return
 
+        # Выбор задачи для обновления
         task_names = df_tasks["task_name"].unique().tolist()
-        selected_task_name = st.selectbox("Выберите задачу:", task_names, key="update_task_selectbox")
+        selected_task_name = st.selectbox(
+            "Выберите задачу:", task_names, key="update_task_selectbox"
+        )
         task_to_update = df_tasks[df_tasks["task_name"] == selected_task_name].iloc[0]
 
+        # Обновление списка моделей
         current_models = task_to_update.get("models", [])
         all_models = MODELS
-
         selected_models = st.multiselect(
-            "Выберите модели для задачи:",
-            options=all_models,
-            default=current_models
+            "Выберите модели для задачи:", options=all_models, default=current_models
         )
 
-        if st.button("Обновить модели задачи"):
-            update_data = {"models": selected_models}
+        # Обновление prompt
+        current_prompt = task_to_update.get("prompt", "")
+        var_cols = task_to_update.get("variables_cols", [])
+        new_prompt = st.text_area(
+            "Обновить prompt задачи:", value=current_prompt, height=150
+        )
+
+        # Проверка наличия всех плейсхолдеров для переменных
+        if var_cols:
+            missing_placeholders = [
+                col for col in var_cols if f"{{{col}}}" not in new_prompt
+            ]
+            if missing_placeholders:
+                st.warning(
+                    "В prompt отсутствуют плейсхолдеры: "
+                    + ", ".join(missing_placeholders)
+                )
+
+        # Обновление RTA prompt – только для задач с метрикой RtA
+        update_rta = False
+        if task_to_update.get("metric") == "RtA":
+            update_rta = True
+            current_rta_prompt = task_to_update.get("rta_prompt", "")
+            new_rta_prompt = st.text_area(
+                "Обновить RTA prompt задачи:", value=current_rta_prompt, height=150
+            )
+            missing_placeholders = [
+                col for col in ["input", "anwser"] if f"{{{col}}}" not in new_rta_prompt
+            ]
+            if missing_placeholders:
+                st.warning(
+                    "В prompt отсутствуют плейсхолдеры: "
+                    + ", ".join(missing_placeholders)
+                )
+
+        # При нажатии на кнопку выполняем обновление
+        if st.button("Обновить задачу"):
+            # Проверка обязательных полей
+            if not new_prompt:
+                st.error("Prompt не может быть пустым!")
+                return
+            if update_rta and not new_rta_prompt:
+                st.error("RTA prompt не может быть пустым для задач с метрикой RtA!")
+                return
+
+            update_data = {
+                "models": selected_models,
+                "prompt": new_prompt,
+            }
+            if update_rta:
+                update_data["rta_prompt"] = new_rta_prompt
+
             task_id = task_to_update["_id"]
             db_client.update_task(task_id, update_data)
-            st.success("Модели для задачи обновлены!")
-            st.experimental_rerun()
+            st.success("Задача успешно обновлена!")
 
 
 def highlight_status(s: str) -> str:
@@ -130,7 +181,9 @@ def restart_failed_tasks(db_client: MongoDBClient, collection_name: str) -> int:
     return count
 
 
-def load_data_for_dashboard(db_client: MongoDBClient, collections: List[str]) -> pd.DataFrame:
+def load_data_for_dashboard(
+    db_client: MongoDBClient, collections: List[str]
+) -> pd.DataFrame:
     """
     Загружаем статистику по указанным коллекциям (очередям).
     Возвращаем DataFrame со сводной информацией (всего, в ожидании, выполнено и т.д.).
@@ -166,7 +219,8 @@ def load_data_for_dashboard(db_client: MongoDBClient, collections: List[str]) ->
             "Коллекция": collection_name,
             "Всего задач": total_tasks,
             "В ожидании": status_counts["pending"],
-            "Выполнено": status_counts["completed"] + status_counts["transfered_to_rta"],
+            "Выполнено": status_counts["completed"]
+            + status_counts["transfered_to_rta"],
             "Измерено": status_counts["extracted"],
             "С ошибками": status_counts["failed"],
             "Статус": status,
@@ -180,6 +234,7 @@ def show_errors(db_client: MongoDBClient, collections: List[str]):
     """Отображает ошибки в задачах и позволяет их перезапустить."""
     st.header("Уникальные сообщения об ошибках")
     from collections import Counter
+
     with st.expander("Показать ошибки", expanded=False):
         for collection_name in collections:
             failed_tasks = db_client.get_tasks_by_status(collection_name, "failed")
@@ -241,7 +296,9 @@ def render_progressbar():
         )
 
         if selected_collection:
-            if st.button("Показать данные коллекции", key=f"show_data_{selected_collection}"):
+            if st.button(
+                "Показать данные коллекции", key=f"show_data_{selected_collection}"
+            ):
                 st.session_state[f"data_loaded_{selected_collection}"] = True
 
             if st.session_state.get(f"data_loaded_{selected_collection}", False):
@@ -260,7 +317,9 @@ def render_progressbar():
                         default=list(models_in_data),
                         key=f"dashboard_filter_models_{selected_collection}",
                     )
-                    df_filtered = df_collection[df_collection["model"].isin(filter_models)]
+                    df_filtered = df_collection[
+                        df_collection["model"].isin(filter_models)
+                    ]
                 else:
                     df_filtered = df_collection
 
@@ -296,7 +355,9 @@ def render_tasks_visualization_tab():
         st.write("Нет задач в базе для выбранной группы или вообще.")
     else:
         display_task_summary(df_tasks)
-        st.dataframe(df_tasks[["task_name", "dataset_name", "group", "metric", "models"]])
+        st.dataframe(
+            df_tasks[["task_name", "dataset_name", "group", "metric", "models"]]
+        )
         render_update_task()
         render_progressbar()
 
@@ -333,10 +394,12 @@ def render_dataset_upload_section() -> Optional[str]:
             type=["csv", "xlsx", "json", "parquet"],
             key="file_uploader_experiments",
         )
-        
-        if uploaded_file is not None:
-            dataset_name_input = st.text_input("Введите имя нового датасета (латиницей):", value=uploaded_file.name.split(".")[0])
 
+        if uploaded_file is not None:
+            dataset_name_input = st.text_input(
+                "Введите имя нового датасета (латиницей):",
+                value=uploaded_file.name.split(".")[0],
+            )
 
         if uploaded_file is not None and dataset_name_input:
             df_uploaded = load_file_any_format(uploaded_file)
@@ -361,14 +424,15 @@ def render_dataset_upload_section() -> Optional[str]:
                 include_col = None
                 exclude_col = None
 
-
                 if chosen_metric == "include_exclude":
                     st.write(
                         "Для метрики 'include_exclude' необходимо указать:\n"
                         "1) Колонку, где хранится список строк, которые должны присутствовать в ответе.\n"
                         "2) Опционально — колонку, где хранится список строк, которые не должны присутствовать."
                     )
-                    potential_cols = [c for c in df_uploaded.columns if c not in var_cols]
+                    potential_cols = [
+                        c for c in df_uploaded.columns if c not in var_cols
+                    ]
 
                     include_col = st.selectbox(
                         "Колонка со строками, которые должны присутствовать (include):",
@@ -393,7 +457,9 @@ def render_dataset_upload_section() -> Optional[str]:
                             )
                         else:
                             target_column = st.selectbox(
-                                "Выберите колонку с таргетом:", potential_targets, key="dataset_upload_target_selectbox"        
+                                "Выберите колонку с таргетом:",
+                                potential_targets,
+                                key="dataset_upload_target_selectbox",
                             )
 
                 # Предварительный просмотр
@@ -437,11 +503,7 @@ def render_dataset_management_tab():
 def render_dataset_varcols_section(
     dataset_name: str,
 ) -> Tuple[
-    Optional[List[str]],
-    Optional[str],
-    Optional[str],
-    Optional[str],
-    Optional[str]
+    Optional[List[str]], Optional[str], Optional[str], Optional[str], Optional[str]
 ]:
     """
     Отображает информацию из registry о датасете:
@@ -570,7 +632,9 @@ def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
         if use_existing_prompt == "Выбрать из базы":
             if all_prompt_docs:
                 names = [p["name"] for p in all_prompt_docs]
-                selected_name = st.selectbox("Выберите промпт по имени:", names, key="prompt_selectbox")
+                selected_name = st.selectbox(
+                    "Выберите промпт по имени:", names, key="prompt_selectbox"
+                )
                 for p in all_prompt_docs:
                     if p["name"] == selected_name:
                         selected_prompt = p["prompt"]
@@ -578,7 +642,9 @@ def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
                 if selected_prompt:
                     for c in var_cols:
                         if f"{{{c}}}" not in selected_prompt:
-                            st.warning(f"В промпте не найден плейсхолдер для колонки {c}")
+                            st.warning(
+                                f"В промпте не найден плейсхолдер для колонки {c}"
+                            )
             else:
                 st.write("Нет доступных промптов. Введите свой.")
         else:
@@ -640,7 +706,9 @@ def render_regexp_section(metric: str) -> Optional[str]:
             regexps = get_all_regexps_for_metric(metric)
             if regexps:
                 names = [r["name"] for r in regexps]
-                selected_name = st.selectbox("Выберите регулярку по имени:", names, key="regexp_selectbox")
+                selected_name = st.selectbox(
+                    "Выберите регулярку по имени:", names, key="regexp_selectbox"
+                )
                 for r in regexps:
                     if r["name"] == selected_name:
                         selected_regexp = r["pattern"]
@@ -669,6 +737,7 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
     Виджет выбора/создания RTA промпта.
     Возвращает (rta_prompt, rta_model, rta_target).
     """
+    # TODO: Добавить проверку на наличие ключей input answer
     with st.expander("Выбор или создание RTA промпта", expanded=False):
         show_all_rta_prompts()
 
@@ -681,7 +750,9 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
         if use_rta_existing == "Выбрать из базы":
             if all_prompt_docs:
                 names = [p["name"] for p in all_prompt_docs]
-                selected_name = st.selectbox("Выберите RTA промпт по имени:", names, key="rta_prompt_selectbox")
+                selected_name = st.selectbox(
+                    "Выберите RTA промпт по имени:", names, key="rta_prompt_selectbox"
+                )
                 for rp in all_prompt_docs:
                     if rp["name"] == selected_name:
                         rta_prompt_selected = rp["prompt"]
@@ -748,7 +819,7 @@ def render_preview_and_save_task(
                     filled_prompt = selected_prompt
                     for k, v in row.items():
                         filled_prompt = filled_prompt.replace(f"{{{k}}}", str(v))
-                    st.write(f"**Пример {i+1}:** {filled_prompt}")
+                    st.write(f"**Пример {i + 1}:** {filled_prompt}")
 
             st.write("**Структура записи задачи в БД:**")
             task_data = {
@@ -792,12 +863,14 @@ def render_create_task_tab():
     st.header("Создать новую задачу")
 
     all_datasets = db_client.get_all_datasets()
-    all_datasets.remove('regestry')
+    all_datasets.remove("regestry")
     # Ensure 'regestry' is in the list, otherwise default to the first item
-    selected_dataset = st.selectbox("Выберите датасет:", sorted(all_datasets), key="create_task_selectbox")
+    selected_dataset = st.selectbox(
+        "Выберите датасет:", sorted(all_datasets), key="create_task_selectbox"
+    )
     if selected_dataset:
-        var_cols, metric, target_column, include_column, exclude_column = render_dataset_varcols_section(
-            selected_dataset
+        var_cols, metric, target_column, include_column, exclude_column = (
+            render_dataset_varcols_section(selected_dataset)
         )
 
         # Если var_cols и метрика указаны, продолжаем
@@ -815,13 +888,17 @@ def render_create_task_tab():
                     rta_target_value = None
 
                     if metric == "RtA":
-                        rta_prompt_selected, rta_model, rta_target_value = render_rta_prompt_section()
+                        rta_prompt_selected, rta_model, rta_target_value = (
+                            render_rta_prompt_section()
+                        )
 
                     selected_models = render_models_section()
 
                     # Если RtA, то target_value = rta_target_value
                     # иначе target_value = target_column
-                    final_target = rta_target_value if metric == "RtA" else target_column
+                    final_target = (
+                        rta_target_value if metric == "RtA" else target_column
+                    )
 
                     render_preview_and_save_task(
                         dataset_name=selected_dataset,
@@ -836,6 +913,7 @@ def render_create_task_tab():
                         include_column=include_column,
                         exclude_column=exclude_column,
                     )
+
 
 def render_metrics_tab():
     """

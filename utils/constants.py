@@ -40,6 +40,7 @@ MODELS = [
     "llama3.3:70b-instruct-q4_0",
     "qwen2.5:32b-instruct-q4_0",
     "mistral-nemo",
+    "mistral-nemo:12b-instruct-2407-q4_0",
 ]
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
@@ -49,7 +50,7 @@ RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 # -------------------------------------
 # Константы
 # -------------------------------------
-METRICS = ["RtA", "accuracy", "correlation",'include_exclude']
+METRICS = ["RtA", "accuracy", "correlation", "include_exclude"]
 STATUSES = ["pending", "completed", "measured", "error"]
 RTA_PROMPTS = {
     "check": [

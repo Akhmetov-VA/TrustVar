@@ -4,8 +4,6 @@ import time
 from typing import Any, Dict, List
 
 import pandas as pd
-from bson.objectid import ObjectId
-from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.database import Database
 
@@ -32,23 +30,21 @@ def get_mongo_client() -> MongoClient:
 
 def get_db() -> Database:
     client = get_mongo_client()
-    db = client[MONGO_DB]
-    return db
+    return client[MONGO_DB]
 
 
 def fetch_tasks(db: Database) -> List[Dict[str, Any]]:
     """
     Получаем все задачи из коллекции tasks.
-    В текущей версии возвращаем все, но при необходимости можно фильтровать по статусу.
     """
     tasks_coll = db["tasks"]
-    new_tasks = list(tasks_coll.find({}))
-    return new_tasks
+    tasks = list(tasks_coll.find({}))
+    return tasks
 
 
 def get_dataset_head(db: Database, dataset_name: str) -> pd.DataFrame:
     """
-    Возвращаем весь датасет в формате DataFrame.
+    Возвращаем датасет в формате DataFrame из коллекции dataset_<dataset_name>.
     """
     coll_name = f"dataset_{dataset_name}"
     coll = db[coll_name]
@@ -61,50 +57,53 @@ def get_dataset_head(db: Database, dataset_name: str) -> pd.DataFrame:
     return df
 
 
-def create_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
+def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     """
-    На основе задачи из таблицы tasks создаем записи в коллекции queue_{task_name}.
-
-    Новая метрика 'include_exclude':
-      - предполагает наличие двух ключей в задаче:
-         'include_column' (обязательный) и 'exclude_column' (необязательный).
-      - в очереди будет сохраняться:
-         doc["include_list"] = row[include_column]
-         doc["exclude_list"] = row[exclude_column], если exclude_column указана.
-      - при этом doc["target"] может не иметь смысла, поэтому ставим None или пропускаем.
+    Для задачи из коллекции tasks:
+      - Создаем записи в очереди (коллекция queue_<task_name>) для каждой строки датасета и для каждой модели.
+      - Если запись уже существует (определяется по паре (line_index, model)), она пропускается.
     """
-
     task_name = task["task_name"]
     dataset_name = task["dataset_name"]
     prompt_text = task["prompt"]
     var_cols = task.get("variables_cols", [])
     models = task["models"]
     metric = task["metric"]
-    target = task.get("target", None)        # например, для accuracy/correlation
-    regexp = task.get("regexp", None)        # строка регулярного выражения
-    include_col = task.get("include_column", None)  # только для include_exclude
-    exclude_col = task.get("exclude_column", None)  # опционально для include_exclude
+    target = task.get("target", None)
+    regexp = task.get("regexp", None)
+    include_col = task.get("include_column", None)
+    exclude_col = task.get("exclude_column", None)
+    rta_prompt = task.get("rta_prompt")
+    rta_model = task.get("rta_model")
 
     df = get_dataset_head(db, dataset_name)
     if df.empty:
-        logger.warning(f"Датасет для {dataset_name} пуст. Нечего добавлять в очередь.")
+        logger.warning(f"Датасет для '{dataset_name}' пуст. Нечего обрабатывать.")
         return
 
     queue_coll_name = f"queue_{task_name}"
     queue_coll = db[queue_coll_name]
 
-    operations = []
-    for i, row in df.iterrows():
-        variables = {}
-        for c in var_cols:
-            variables[c] = row[c] if c in row else None
+    # Собираем ключи уже существующих записей (line_index, model)
+    existing_keys = set()
+    try:
+        for entry in queue_coll.find({}, {"line_index": 1, "model": 1}):
+            existing_keys.add((entry.get("line_index"), entry.get("model")))
+    except Exception as e:
+        logger.error(
+            f"Ошибка при получении существующих записей из '{queue_coll_name}': {e}"
+        )
+        return
 
+    new_inserts = []
+    rows = df.to_dict("records")
+    for i, row in enumerate(rows):
+        variables = {col: row.get(col, None) for col in var_cols}
         for model in models:
-            # Проверяем, нет ли дубликата (по model + variables).
-            existing = queue_coll.find_one({"model": model, "variables": variables})
-            if existing:
-                continue
-
+            key = (i, model)
+            if key in existing_keys:
+                continue  # запись уже существует – пропускаем
+            # Формируем новый документ
             doc = {
                 "line_index": i,
                 "dataset_name": dataset_name,
@@ -116,98 +115,60 @@ def create_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                 "status": "pending",
                 "response": None,
             }
-
-            # Обработка разных метрик
             if metric == "RtA":
-                # target = 'RtA' или row[target]? Обычно 'RtA'.
-                rta_prompt = task.get("rta_prompt")
-                rta_model = task.get("rta_model")
                 if rta_prompt and rta_model:
                     doc["rta_prompt"] = rta_prompt
                     doc["rta_model"] = rta_model
                 doc["target"] = target if isinstance(target, str) else metric
-
             elif metric == "include_exclude":
-                # include_list и exclude_list
                 if include_col and include_col in row:
-                    doc["include_list"] = [row[include_col]] if isinstance(row[include_col], str) else row[include_col]
+                    value = row.get(include_col)
+                    doc["include_list"] = [value] if isinstance(value, str) else value
                 if exclude_col and exclude_col in row:
-                    doc["exclude_list"] = [row[exclude_col]] if isinstance(row[exclude_col], str) else row[exclude_col]    
+                    value = row.get(exclude_col)
+                    doc["exclude_list"] = [value] if isinstance(value, str) else value
                 doc["target"] = target if isinstance(target, str) else metric
-
             else:
-                # accuracy, correlation, etc.
                 if target and target in row:
                     doc["target"] = row[target]
                 else:
                     doc["target"] = None
 
-            operations.append(doc)
+            new_inserts.append(doc)
 
-    if operations:
-        queue_coll.insert_many(operations)
-        logger.info(f"Вставлено {len(operations)} документов в {queue_coll_name}.")
+    if new_inserts:
+        try:
+            result = queue_coll.insert_many(new_inserts, ordered=False)
+            logger.info(
+                f"Вставлено {len(result.inserted_ids)} новых документов в '{queue_coll_name}'."
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при вставке документов в '{queue_coll_name}': {e}")
     else:
-        logger.info(f"Нет новых документов для добавления в {queue_coll_name}.")
-
-
-def update_task_status(db: Database, task: Dict[str, Any], new_status: str) -> None:
-    """
-    Обновление статуса задачи в коллекции tasks.
-    """
-    tasks_coll = db["tasks"]
-    tasks_coll.update_one({"_id": task["_id"]}, {"$set": {"status": new_status}})
-    logger.info(f"Статус задачи {task['task_name']} обновлен на {new_status}.")
-
-
-def delete_unused_queues(db: Database) -> None:
-    """
-    Удаляет таблицы queue_{} которые есть в базе, но которых нет в tasks.
-    Логика:
-    - Получаем список всех коллекций, начинающихся с queue_
-    - Получаем список всех task_name из tasks
-    - Если queue_{task_name} не соответствует ни одной задаче из tasks, удаляем ее
-    """
-    all_collections = db.list_collection_names()
-    queue_collections = [c for c in all_collections if c.startswith("queue_")]
-
-    # Получаем все task_name из tasks
-    tasks_coll = db["tasks"]
-    all_tasks = list(tasks_coll.find({}, {"task_name": 1}))
-    existing_tasks = {t["task_name"] for t in all_tasks if "task_name" in t}
-
-    for q_col in queue_collections:
-        # q_col в формате queue_{task_name}, надо извлечь task_name
-        task_name = q_col.replace("queue_", "")
-        if task_name.startswith("rta_"):
-            task_name = task_name.replace("rta_", "")
-        if f"task_{task_name}" not in existing_tasks and task_name not in existing_tasks:
-            db.drop_collection(q_col)
-            logger.info(f"Удалена коллекция: {q_col}")
+        logger.info(f"Нет новых документов для вставки в '{queue_coll_name}'.")
 
 
 def main():
     """
     Основной цикл:
-    - Подключаемся к БД
-    - Каждые N секунд просматриваем tasks
-    - Для каждой задачи создаем соответствующие записи в queue_{task_name} (если не созданы)
-    - Удаляем неиспользуемые очереди
+      - Подключаемся к БД.
+      - Каждые N секунд перебираем задачи из коллекции tasks и для каждой вызываем функцию создания записей очереди.
     """
     db = get_db()
-    interval = 60  # Можно настроить под нужды
+    interval = 10  # интервал в секундах
 
-    while True:
-        tasks = fetch_tasks(db)
-        if tasks:
-            for task in tasks:
-                create_queue_entries_for_task(db, task)
-        else:
-            logger.info("Нет новых задач для создания очередей.")
-
-        delete_unused_queues(db)
-
-        time.sleep(interval)
+    try:
+        while True:
+            tasks = fetch_tasks(db)
+            if tasks:
+                for task in tasks:
+                    logger.info(f"Обработка задачи: {task['task_name']}")
+                    insert_queue_entries_for_task(db, task)
+            else:
+                logger.info("Нет задач для обработки.")
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        logger.info("Остановка процесса по KeyboardInterrupt")
 
 
 if __name__ == "__main__":
