@@ -105,6 +105,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                 continue  # запись уже существует – пропускаем
             # Формируем новый документ
             doc = {
+                "task_name": task_name,
                 "line_index": i,
                 "dataset_name": dataset_name,
                 "prompt": prompt_text,
