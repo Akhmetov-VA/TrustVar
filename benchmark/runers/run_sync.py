@@ -5,7 +5,7 @@ import time
 from typing import Dict, Tuple
 
 import pandas as pd
-from pymongo import DeleteOne, InsertOne, MongoClient, UpdateOne
+from pymongo import DeleteOne, InsertOne, UpdateOne, MongoClient
 from pymongo.database import Database
 
 from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
@@ -37,22 +37,21 @@ def get_dataset_head(db: Database, dataset_name: str) -> pd.DataFrame:
     Если данных нет, возвращается пустой DataFrame.
     """
     coll_name = f"dataset_{dataset_name}"
-    coll = db[coll_name]
-    docs = list(coll.find({}))
+    docs = list(db[coll_name].find({}))
     if not docs:
         return pd.DataFrame()
     df = pd.DataFrame(docs)
-    if "_id" in df.columns:
-        df = df.drop(columns=["_id"])
+    df.drop(columns=["_id"], errors="ignore", inplace=True)
     return df
 
 
-def compute_expected_queue_entries(
+def compute_expected_main_queue_entries(
     task: dict, df: pd.DataFrame
 ) -> Dict[Tuple[int, str], dict]:
     """
-    Для данного задания и датасета вычисляет, какие документы должны быть в коллекции queue_{task_name}.
-    Ключ – (line_index, model).
+    Вычисляет ожидаемые записи для основной очереди queue_<task_name>.
+    Для каждого ряда датасета и для каждой модели из task["models"] формируется документ.
+    В зависимости от metric добавляются специфичные поля.
     """
     expected = {}
     task_name = task["task_name"]
@@ -62,15 +61,13 @@ def compute_expected_queue_entries(
     models = task["models"]
     metric = task["metric"]
     regexp = task.get("regexp")
-    target = task.get("target", None)
-    rta_prompt = task.get("rta_prompt")
-    rta_model = task.get("rta_model")
+    target = task.get("target")
     include_col = task.get("include_column")
     exclude_col = task.get("exclude_column")
 
     rows = df.to_dict("records")
     for i, row in enumerate(rows):
-        # Формируем переменные из указанных колонок
+        # Формируем словарь с переменными по выбранным колонкам
         variables = {col: row.get(col) for col in var_cols}
         for model in models:
             doc = {
@@ -82,11 +79,12 @@ def compute_expected_queue_entries(
                 "metric": metric,
                 "regexp": regexp,
                 "response": None,
-                "status": "pending",  # при синхронизации core-поля меняются – статус сбрасывается
+                "task_name": task_name,
             }
             if metric == "RtA":
-                doc["rta_prompt"] = rta_prompt
-                doc["rta_model"] = rta_model
+                # Даже если задание с RtA попадает в основную очередь, здесь остаются поля rta для синхронизации
+                doc["rta_prompt"] = task.get("rta_prompt")
+                doc["rta_model"] = task.get("rta_model")
                 doc["target"] = target if isinstance(target, str) else metric
             elif metric == "include_exclude":
                 if include_col and include_col in row:
@@ -97,24 +95,79 @@ def compute_expected_queue_entries(
                     doc["exclude_list"] = [value] if isinstance(value, str) else value
                 doc["target"] = target if isinstance(target, str) else metric
             else:
-                if target and target in row:
-                    doc["target"] = row[target]
-                else:
-                    doc["target"] = None
+                doc["target"] = row.get(target) if target in row else None
+            # Изначально статус выставляем как pending (он может измениться при сравнении)
+            doc["status"] = "pending"
             expected[(i, model)] = doc
     return expected
 
 
-def synchronize_task_queue(db: Database, task: dict):
+def compute_expected_rta_queue_entries(task: dict, df: pd.DataFrame) -> Dict[int, dict]:
     """
-    Синхронизирует основную очередь для задания:
-      – Если изменились core‑поля ([prompt, variables_cols, models]), то производится полный апдейт (status -> pending).
-      – Если изменились только rta‑поля ([rta_prompt, rta_model, target, regexp]), то обновляются только эти поля.
+    Вычисляет ожидаемые записи для RTA-очереди queue_rta_<task_name>.
+    Для заданий с metric "RtA" для каждого ряда датасета формируется документ,
+    в котором вместо стандартных prompt и model используются rta_prompt и rta_model.
+    """
+    expected = {}
+    task_name = task["task_name"]
+    dataset_name = task["dataset_name"]
+    rta_prompt = task.get("rta_prompt")
+    rta_model = task.get("rta_model")
+    metric = task["metric"]
+    regexp = task.get("regexp")
+    target = task.get("target")
+    rows = df.to_dict("records")
+    for i, _ in enumerate(rows):
+        doc = {
+            "line_index": i,
+            "dataset_name": dataset_name,
+            "prompt": rta_prompt,
+            "model": rta_model,
+            "metric": metric,
+            "regexp": regexp,
+            "response": None,
+            "task_name": task_name,
+            "target": target if isinstance(target, str) else metric,
+            "status": "pending",
+        }
+        expected[i] = doc
+    return expected
+
+
+def diff_update(
+    expected_doc: dict, current_doc: dict, critical_keys: list
+) -> Tuple[dict, bool]:
+    """
+    Сравнивает ожидаемый и текущий документ (за исключением служебных полей) и возвращает:
+      - словарь обновлений,
+      - флаг, изменилось ли хоть одно из критических полей.
+    Критическими считаются ключи из critical_keys.
+    """
+    updates = {}
+    critical_changed = False
+    for key, expected_value in expected_doc.items():
+        if key in ["_id", "status", "response"]:
+            continue
+        current_value = current_doc.get(key)
+        if expected_value != current_value:
+            updates[key] = expected_value
+            if key in critical_keys:
+                critical_changed = True
+    return updates, critical_changed
+
+
+def synchronize_queue(db: Database, task: dict):
+    """
+    Синхронизирует задание из tasks с очередями:
+      - Для основной очереди (queue_<task_name>): сравниваются ожидаемые записи и существующие.
+        Если изменились поля prompt или variables (critical для основной очереди), статус переводится в pending,
+        а если изменились только остальные поля – в completed.
+      - Если количество моделей изменилось, то соответствующие документы добавляются или удаляются.
+      - Для RTA-очереди (queue_rta_<task_name>) для заданий с metric "RtA" аналогичным образом сравниваются rta_prompt и rta_model
+        (критические поля для RTA).
     """
     task_name = task["task_name"]
     dataset_name = task["dataset_name"]
-    queue_coll_name = f"queue_{task_name}"
-    queue_coll = db[queue_coll_name]
 
     df = get_dataset_head(db, dataset_name)
     if df.empty:
@@ -123,152 +176,110 @@ def synchronize_task_queue(db: Database, task: dict):
         )
         return
 
-    expected_entries = compute_expected_queue_entries(task, df)
-    expected_keys = set(expected_entries.keys())
+    # --- Основная очередь ---
+    expected_main = compute_expected_main_queue_entries(task, df)
+    main_coll_name = f"queue_{task_name}"
+    main_coll = db[main_coll_name]
+    projection = {
+        "line_index": 1,
+        "model": 1,
+        "prompt": 1,
+        "variables": 1,
+        "regexp": 1,
+        "target": 1,
+        "metric": 1,
+        "include_list": 1,
+        "exclude_list": 1,
+        "task_name": 1,
+        "rta_prompt": 1,
+        "rta_model": 1,
+        "status": 1,
+    }
+    existing_main = {}
+    for doc in main_coll.find({}, projection):
+        key = (doc.get("line_index"), doc.get("model"))
+        existing_main[key] = doc
 
-    # Получаем текущие записи очереди, ключом будет (line_index, model)
-    existing_entries = {}
-    for doc in queue_coll.find(
-        {},
-        {
+    main_operations = []
+    # Критические для основной очереди поля – prompt и variables
+    critical_main = ["prompt", "variables"]
+    for key, exp_doc in expected_main.items():
+        if key in existing_main:
+            curr_doc = existing_main[key]
+            updates, critical_changed = diff_update(exp_doc, curr_doc, critical_main)
+            if updates:
+                new_status = "pending" if critical_changed else "completed"
+                updates["status"] = new_status
+                main_operations.append(
+                    UpdateOne({"_id": curr_doc["_id"]}, {"$set": updates})
+                )
+        else:
+            main_operations.append(InsertOne(exp_doc))
+    # Удаляем документы, которые больше не соответствуют заданию
+    for key, curr_doc in existing_main.items():
+        if key not in expected_main:
+            main_operations.append(DeleteOne({"_id": curr_doc["_id"]}))
+    if main_operations:
+        try:
+            result = main_coll.bulk_write(main_operations, ordered=False)
+            logger.info(
+                f"Синхронизирована очередь '{main_coll_name}': modified {result.modified_count}, "
+                f"inserted {getattr(result, 'inserted_count', 0)}, deleted {result.deleted_count}."
+            )
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации очереди '{main_coll_name}': {e}")
+    else:
+        logger.info(f"Очередь '{main_coll_name}' уже синхронизирована.")
+
+    # --- Очередь RTA (для metric == "RtA") ---
+    if task.get("metric") == "RtA":
+        expected_rta = compute_expected_rta_queue_entries(task, df)
+        rta_coll_name = f"queue_rta_{task_name}"
+        rta_coll = db[rta_coll_name]
+        projection_rta = {
             "line_index": 1,
-            "model": 1,
             "prompt": 1,
-            "variables": 1,
+            "model": 1,
             "regexp": 1,
             "target": 1,
             "metric": 1,
-            "rta_prompt": 1,
-            "rta_model": 1,
+            "task_name": 1,
             "status": 1,
-        },
-    ):
-        key = (doc.get("line_index"), doc.get("model"))
-        existing_entries[key] = doc
-
-    operations = []
-
-    # Для сравнения определим списки полей
-    core_fields = ["prompt", "variables"]
-    rta_fields = ["rta_prompt", "rta_model", "target", "regexp"]
-
-    for key, expected_doc in expected_entries.items():
-        if key in existing_entries:
-            current_doc = existing_entries[key]
-            update_fields = {}
-
-            # Если изменились core-поля – выполняем полный апдейт (перезаписываем все, статус -> pending)
-            if any(
-                expected_doc.get(field) != current_doc.get(field)
-                for field in core_fields
-            ):
-                update_fields.update(expected_doc)
-            else:
-                # Если изменились только rta-поля, обновляем только их
-                if any(
-                    expected_doc.get(field) != current_doc.get(field)
-                    for field in rta_fields
-                ):
-                    for field in rta_fields:
-                        if expected_doc.get(field) != current_doc.get(field):
-                            update_fields[field] = expected_doc.get(field)
-                    update_fields["status"] = "pending"
-            if update_fields:
-                operations.append(
-                    UpdateOne({"_id": current_doc["_id"]}, {"$set": update_fields})
-                )
-        else:
-            # Если записи нет – вставляем
-            operations.append(InsertOne(expected_doc))
-
-    # Удаляем записи, которые больше не должны присутствовать (например, если изменился список моделей или датасета)
-    for key, doc in existing_entries.items():
-        if key not in expected_keys:
-            operations.append(DeleteOne({"_id": doc["_id"]}))
-
-    if operations:
-        try:
-            result = queue_coll.bulk_write(operations, ordered=False)
-            # Для InsertOne в результате может не быть прямого счётчика, поэтому выводим информацию, если возможно.
-            logger.info(
-                f"Синхронизирована очередь '{queue_coll_name}': "
-                f"modified {result.modified_count}, deleted {result.deleted_count}."
-            )
-        except Exception as e:
-            logger.error(f"Ошибка синхронизации очереди '{queue_coll_name}': {e}")
-    else:
-        logger.info(f"Очередь '{queue_coll_name}' уже синхронизирована.")
-
-    # Если задание с метрикой RtA – синхронизируем соответствующую rta‑очередь
-    if task.get("metric") == "RtA":
-        synchronize_rta_queue(db, task, queue_coll)
-
-
-def synchronize_rta_queue(db: Database, task: dict, main_queue_coll):
-    """
-    Для задач с метрикой RtA:
-      – Проверяем, чтобы для каждого документа основной очереди существовала соответствующая запись в rta‑очереди.
-      – Если изменились rta‑поля (или target/regexp) – обновляем их в rta‑очереди.
-    """
-    task_name = task["task_name"]
-    rta_coll_name = f"queue_rta_{task_name}"
-    rta_coll = db[rta_coll_name]
-
-    main_docs = list(main_queue_coll.find({"metric": "RtA"}))
-    operations = []
-
-    for doc in main_docs:
-        source_id = doc["_id"]
-        # Ожидаемые rta‑поля берём из задания
-        expected_rta = {
-            "prompt": task.get("rta_prompt"),
-            "model": task.get("rta_model"),
-            "target": task.get("target")
-            if isinstance(task.get("target"), str)
-            else task["metric"],
-            "regexp": task.get("regexp"),
         }
-        rta_doc = rta_coll.find_one({"source_id": source_id})
-        if rta_doc:
-            update_fields = {}
-            for field, exp_val in expected_rta.items():
-                if rta_doc.get(field) != exp_val:
-                    update_fields[field] = exp_val
-            if update_fields:
-                update_fields["status"] = "pending"
-                operations.append(
-                    UpdateOne({"_id": rta_doc["_id"]}, {"$set": update_fields})
-                )
-        else:
-            # Если записи ещё нет – создаём новую rta запись
-            new_rta_doc = {
-                "task_name": task.get("task_name"),
-                "dataset_name": task.get("dataset_name"),
-                "init_prompt": doc.get("prompt"),
-                "init_model": doc.get("model"),
-                "regexp": task.get("regexp"),
-                "prompt": task.get("rta_prompt"),
-                "model": task.get("rta_model"),
-                "variables": doc.get("variables"),
-                "status": "pending",
-                "metric": "accuracy",  # согласно условию
-                "target": task.get("target")
-                if isinstance(task.get("target"), str)
-                else task["metric"],
-                "source_id": source_id,
-            }
-            operations.append(InsertOne(new_rta_doc))
+        existing_rta = {}
+        for doc in rta_coll.find({}, projection_rta):
+            key = doc.get("line_index")
+            existing_rta[key] = doc
 
-    if operations:
-        try:
-            result = rta_coll.bulk_write(operations, ordered=False)
-            logger.info(
-                f"Синхронизирована RTA очередь '{rta_coll_name}': modified {result.modified_count}."
-            )
-        except Exception as e:
-            logger.error(f"Ошибка синхронизации RTA очереди '{rta_coll_name}': {e}")
-    else:
-        logger.info(f"RTA очередь '{rta_coll_name}' уже синхронизирована.")
+        rta_operations = []
+        # Критические для RTA очереди поля – prompt и model (которые представляют rta_prompt и rta_model)
+        critical_rta = ["prompt", "model"]
+        for key, exp_doc in expected_rta.items():
+            if key in existing_rta:
+                curr_doc = existing_rta[key]
+                updates, critical_changed = diff_update(exp_doc, curr_doc, critical_rta)
+                if updates:
+                    new_status = "pending" if critical_changed else "completed"
+                    updates["status"] = new_status
+                    rta_operations.append(
+                        UpdateOne({"_id": curr_doc["_id"]}, {"$set": updates})
+                    )
+            else:
+                rta_operations.append(InsertOne(exp_doc))
+        for key, curr_doc in existing_rta.items():
+            if key not in expected_rta:
+                rta_operations.append(DeleteOne({"_id": curr_doc["_id"]}))
+        if rta_operations:
+            try:
+                result = rta_coll.bulk_write(rta_operations, ordered=False)
+                logger.info(
+                    f"Синхронизирована RTA очередь '{rta_coll_name}': modified {result.modified_count}, "
+                    f"inserted {getattr(result, 'inserted_count', 0)}, deleted {result.deleted_count}."
+                )
+            except Exception as e:
+                logger.error(f"Ошибка синхронизации RTA очереди '{rta_coll_name}': {e}")
+        else:
+            logger.info(f"RTA очередь '{rta_coll_name}' уже синхронизирована.")
 
 
 def delete_unused_queues(db: Database):
@@ -277,13 +288,10 @@ def delete_unused_queues(db: Database):
     """
     all_cols = db.list_collection_names()
     queue_cols = [c for c in all_cols if c.startswith("queue_")]
-
     tasks_coll = db["tasks"]
     tasks = list(tasks_coll.find({}, {"task_name": 1}))
     valid_tasks = {t.get("task_name") for t in tasks}
-
     for col in queue_cols:
-        # Для rta‑очередей имя имеет вид "queue_rta_{task_name}"
         if col.startswith("queue_rta_"):
             task_name = col[len("queue_rta_") :]
         else:
@@ -297,12 +305,15 @@ def delete_unused_queues(db: Database):
 
 
 def synchronize_all_tasks(db: Database):
+    """
+    Синхронизирует все задания из коллекции tasks с очередями.
+    """
     tasks_coll = db["tasks"]
     tasks = list(tasks_coll.find({}))
     for task in tasks:
         try:
             logger.info(f"Синхронизация задания '{task.get('task_name')}'.")
-            synchronize_task_queue(db, task)
+            synchronize_queue(db, task)
         except Exception as e:
             logger.error(f"Ошибка синхронизации задания '{task.get('task_name')}': {e}")
 

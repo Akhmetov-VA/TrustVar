@@ -2,14 +2,14 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from utils.constants import MONGO_USERNAME, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT
+from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
 
 # Предполагается, что переменные окружения для MONGO_USERNAME, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, MONGO_DB уже заданы
 MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
@@ -22,7 +22,9 @@ def get_mongo_client() -> MongoClient:
     """
     Создаем подключение к MongoDB.
     """
-    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+    mongo_uri = (
+        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+    )
     client = MongoClient(mongo_uri)
     logger.info("Успешно подключились к MongoDB.")
     return client
@@ -38,7 +40,7 @@ def fetch_completed_tasks(db: Database):
     """
     Находим все задачи в очередях queue_* со статусом 'completed' и наличием поля response.
     Исключаем метрику RtA, т.к. она обрабатывается другим скриптом.
-    
+
     Возвращаем итератор (coll_name, task).
     """
     collections = [c for c in db.list_collection_names() if c.startswith("queue_")]
@@ -47,7 +49,11 @@ def fetch_completed_tasks(db: Database):
         # metric != 'RtA'
         tasks = list(
             coll.find(
-                {"status": "completed", "response": {"$ne": None}, "metric": {"$ne": "RtA"}}
+                {
+                    "status": "completed",
+                    "response": {"$ne": None},
+                    "metric": {"$ne": "RtA"},
+                }
             )
         )
         for t in tasks:
@@ -78,7 +84,7 @@ def apply_regexp_to_response(response: str, regexp: str) -> str:
 def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
     """
     Для метрики exact_match:
-    Если target - список строк, проверяем каждую. 
+    Если target - список строк, проверяем каждую.
     Если хоть одна найдена в response, она включается в pred.
     Если target - одна строка (не список), делаем её списком из одного элемента.
     Если ничего не найдено - pred='TFN'.
@@ -104,7 +110,9 @@ def update_task_with_pred(db: Database, coll_name: str, task_id: Any, pred: str)
     """
     coll = db[coll_name]
     coll.update_one({"_id": task_id}, {"$set": {"pred": pred, "status": "extracted"}})
-    logger.info(f"Обновлен документ {task_id} в {coll_name}: pred={pred}, status=extracted")
+    logger.info(
+        f"Обновлен документ {task_id} в {coll_name}: pred={pred}, status=extracted"
+    )
 
 
 def run_extraction_loop(db: Database, interval: int = 10):
