@@ -223,19 +223,6 @@ screen -r my_session
     screen -r run_regexp
     ```
 
-
-### Запуск обработчика измерения метрик 2
-
-Этот обработчик отвечает за обработку задач в коллекции RtA и вычисление метрик.
-
-    ```bash
-    screen -S run_metric2
-    
-    /home/vadim/work/TrustLLM_ru/.venv/bin/python3 /home/vadim/work/TrustLLM_ru/benchmark/runers/run_metrics.py
-
-    screen -r run_metric2
-    ```
-
 ### Запуск мониторинга
 
 Мониторинг предоставляет веб-интерфейс для отслеживания состояния экспериментов.

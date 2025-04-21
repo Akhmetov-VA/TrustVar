@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import streamlit as st
 
 
@@ -42,12 +42,12 @@ def load_file(uploaded_file) -> Optional[pd.DataFrame]:
             return None
 
 
-
 def sanitize_df(df: pd.DataFrame) -> pd.DataFrame:
     """
     Преобразовать все значения df так, чтобы они были сериализуемы в MongoDB.
     В частности, конвертировать numpy.ndarray в list, иначе вызовет InvalidDocument.
     """
+
     def convert_value(x: Any) -> Any:
         if isinstance(x, np.ndarray):
             return x.tolist()

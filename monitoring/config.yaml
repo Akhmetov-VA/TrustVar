@@ -1,0 +1,39 @@
+cookie:
+  expiry_days: 30
+  key: some_signature_key_1 # Must be a string
+  name: some_cookie_name_1
+credentials:
+  usernames:
+    egor:
+      email: jsmith@gmail.com
+      failed_login_attempts: 0 # Will be managed automatically
+      first_name: Егор
+      last_name: Аничков
+      logged_in: False # Will be managed automatically
+      password: roge123 # Will be hashed automatically
+      roles: # Optional
+      - admin
+      - editor
+      - viewer
+    vadim:
+      email: rbriggs@gmail.com
+      failed_login_attempts: 0 # Will be managed automatically
+      first_name: Вадим
+      last_name: Ахметов
+      logged_in: False # Will be managed automatically
+      password: midav123 # Will be hashed automatically
+      roles: # Optional
+      - admin
+      - editor
+      - viewer
+    user:
+      email: rbriggs@gmail.com
+      failed_login_attempts: 0 # Will be managed automatically
+      first_name: Юзер
+      last_name: Юзеров
+      logged_in: False # Will be managed automatically
+      password: resu123 # Will be hashed automatically
+      roles: # Optional
+      - admin
+      - editor
+      - viewer

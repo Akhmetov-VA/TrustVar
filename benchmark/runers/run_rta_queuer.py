@@ -119,9 +119,8 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
     # Проверяем наличие дубликата в rta очереди (по rta_model и заполненным полям)
     existing = rta_coll.find_one(
         {
-            "model": rta_model,
-            "variables.input": filled_input,
-            "variables.answer": response,
+            "init_model": original_model,
+            "variables": new_variables,
         }
     )
     if existing:

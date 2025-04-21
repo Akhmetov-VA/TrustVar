@@ -12,3 +12,4 @@ __pycache__
 TrustLLM
 poetry.lock
 db
+*/.DS_Store
