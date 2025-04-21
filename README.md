@@ -223,17 +223,6 @@ screen -r my_session
     screen -r run_regexp
     ```
 
-### Запуск мониторинга
-
-Мониторинг предоставляет веб-интерфейс для отслеживания состояния экспериментов.
-
-    ```bash
-    screen -S monitoring
-
-    /home/vadim/work/TrustLLM_ru/.venv/bin/python -m streamlit run /home/vadim/work/TrustLLM_ru/monitoring/app.py --server.port 27365
-
-    screen -r monitoring
-    ```
 
 ### Запуск мониторинга вторая версия
 
