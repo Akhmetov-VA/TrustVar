@@ -1,0 +1,124 @@
+version: '3'
+services:
+  mongo:
+    image: mongo
+    container_name: mongodb
+    env_file:
+      - .env
+    ports:
+      - '${MONGO_INITDB_ROOT_PORT}:${MONGO_INITDB_ROOT_PORT}'
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+    restart: on-failure  
+  mongo-express:
+    image: mongo-express
+    container_name: mongodb-express
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - ME_CONFIG_MONGODB_SERVER=mongo
+    ports:
+      - '8081:8081'
+    depends_on:
+      - mongo
+    restart: on-failure  
+  mongo-filler:
+    build: 
+      context: .
+      target: db_filler
+    image: trust_gen:db_filler
+    container_name: filler
+    env_file:
+      - .env
+    depends_on:
+      - mongo
+    volumes:
+      - ./data:/app/data/
+    command: python data/init_db.py
+    restart: on-failure  
+  langchain_backend:
+      build: 
+        context: .
+        target: back
+      image: trust_gen:back
+      container_name: langchain_backend
+      env_file:
+      - .env
+      ports:
+          - "27361:27361"
+      depends_on:
+        - mongo
+      restart: on-failure  
+      command: python langchain_back/main.py
+  run-script:
+    build:
+      context: .
+      target: runners
+    image: trust_gen:runners
+    container_name:  runner_run
+    env_file:
+      - .env
+    command: python runners/run.py
+    depends_on:
+      - mongo
+      - langchain_backend
+    restart: on-failure  
+  run-rta-script:
+    image: trust_gen:runners
+    container_name:  runner_run_rta_queuer
+    env_file:
+      - .env
+    command: python runners/run_rta_queuer.py
+    depends_on:
+      - mongo
+    restart: on-failure  
+  task-processor-script:
+    image: trust_gen:runners
+    container_name:  runner_task_processor
+    env_file:
+      - .env
+    command: python runners/task_processor.py
+    depends_on:
+      - mongo
+    restart: on-failure  
+  run-regexp-script:
+    image: trust_gen:runners
+    container_name:  runner_run_regexp
+    env_file:
+      - .env
+    command: python runners/run_regexp.py
+    depends_on:
+      - mongo
+    restart: on-failure  
+  run-metrics-script:
+    image: trust_gen:runners
+    container_name:  runner_run_metrics
+    env_file:
+      - .env
+    command: python runners/run_metrics.py
+    depends_on:
+      - mongo
+    restart: on-failure  
+  run-sync:
+    image: trust_gen:runners
+    container_name: runner_run_sync
+    env_file:
+      - .env
+    command: python runners/run_sync.py
+  streamlit_frontend:
+    build: 
+      context: .
+      target: front
+    image: trust_gen:front
+    container_name: monitoring_v2
+    env_file:
+      - .env
+    command: python -m streamlit run monitoring/app_streamlit.py --server.port 27366
+    ports:
+      - "27366:27366"
+    volumes: 
+      - ./monitoring:/app/monitoring/
+    depends_on:
+      - mongo
+    restart: on-failure
