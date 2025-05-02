@@ -1,13 +1,23 @@
 version: '3'
+
+x-common-env: &common-env
+  MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+  MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+  MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
+  MONGO_HOST: ${MONGO_HOST}
+  API_URL: ${API_URL}
+  YANDEX_API_KEY: ${YANDEX_API_KEY}
+  YANDEX_MODEL_URI: ${YANDEX_MODEL_URI}
+
 services:  
   langchain_backend:
       build: 
         context: .
         target: back
       image: trust_gen:back
+      environment:
+        <<: *common-env
       container_name: langchain_backend
-      env_file:
-      - .env
       ports:
           - "27361:27361"
       restart: on-failure  
@@ -18,9 +28,9 @@ services:
       context: .
       target: runners
     image: trust_gen:runners
+    environment:
+        <<: *common-env
     container_name:  runner_run
-    env_file:
-      - .env
     command: >
       bash -c " 
       cd /app &&
@@ -33,8 +43,6 @@ services:
       "
     depends_on:
       - langchain_backend
-    volumes:
-      - ./.env:/app/.env
     restart: on-failure  
 
   streamlit_frontend:
@@ -43,8 +51,8 @@ services:
       target: front
     image: trust_gen:front
     container_name: monitoring
-    env_file:
-      - .env
+    environment:
+        <<: *common-env
     command: python -m streamlit run monitoring/app_main.py --server.port 27366
     depends_on:
       - langchain_backend
@@ -52,5 +60,4 @@ services:
       - "27366:27366"
     volumes: 
       - ./monitoring:/app/monitoring/
-      - ./.env:/app/.env
     restart: on-failure

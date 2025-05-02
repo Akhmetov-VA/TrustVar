@@ -7,14 +7,6 @@ build:
   tags:
     - trust_llm_61
   script:
-    - echo "Создание .env ..."
-    - echo "MONGO_INITDB_ROOT_USERNAME=$MONGO_INITDB_ROOT_USERNAME" >> .env
-    - echo "MONGO_INITDB_ROOT_PASSWORD=$MONGO_INITDB_ROOT_PASSWORD" >> .env
-    - echo "MONGO_INITDB_ROOT_PORT=$MONGO_INITDB_ROOT_PORT" >> .env
-    - echo "MONGO_HOST=$MONGO_HOST" >> .env
-    - echo "YANDEX_API_KEY=$YANDEX_API_KEY" >> .env
-    - echo "YANDEX_MODEL_URI=$YANDEX_MODEL_URI" >> .env
-    - echo "API_URL=$API_URL" >> .env
     - echo "Сборка образов"
     - docker compose -f docker-compose.yml build
 
