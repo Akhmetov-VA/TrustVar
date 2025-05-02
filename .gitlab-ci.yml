@@ -4,6 +4,8 @@ stages:
 
 build:
   stage: build
+  tags:
+    - trust_llm_61
   script:
     - echo "Создание .env ..."
     - echo "MONGO_INITDB_ROOT_USERNAME=$MONGO_INITDB_ROOT_USERNAME" >> .env
@@ -18,6 +20,8 @@ build:
 
 deploy:
   stage: deploy
+  tags:
+    - trust_llm_61
   script:
     - echo "Запуск контейнеров ..."
     - docker compose -f docker-compose.yml up -d --build
