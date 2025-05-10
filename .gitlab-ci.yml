@@ -1,3 +1,7 @@
+# workflow:
+#   rules:
+#     - if: '$CI_COMMIT_BRANCH == "main"'
+
 stages:
   - build
   - deploy
@@ -16,4 +20,6 @@ deploy:
     - trust_llm_61
   script:
     - echo "Запуск контейнеров ..."
+    - export CURRENT_UID=$(id -u)
+    - export CURRENT_GID=$(id -g)
     - docker compose -f docker-compose.yml up -d --build

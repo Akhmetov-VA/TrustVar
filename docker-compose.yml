@@ -6,14 +6,13 @@ x-common-env: &common-env
   MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
   MONGO_HOST: ${MONGO_HOST}
   API_URL: ${API_URL}
-  YANDEX_API_KEY: ${YANDEX_API_KEY}
-  YANDEX_MODEL_URI: ${YANDEX_MODEL_URI}
 
 services:  
   langchain_backend:
       build: 
         context: .
         target: back
+      user: "${CURRENT_UID}:${CURRENT_GID}" 
       image: trust_gen:back
       environment:
         <<: *common-env
@@ -27,6 +26,7 @@ services:
     build:
       context: .
       target: runners
+    user: "${CURRENT_UID}:${CURRENT_GID}" 
     image: trust_gen:runners
     environment:
         <<: *common-env
@@ -49,6 +49,7 @@ services:
     build: 
       context: .
       target: front
+    user: "${CURRENT_UID}:${CURRENT_GID}" 
     image: trust_gen:front
     container_name: monitoring
     environment:

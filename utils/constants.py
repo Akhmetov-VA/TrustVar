@@ -17,7 +17,6 @@ API_URL = os.getenv("API_URL")
 MODELS = [
     # "gemma2:27b-instruct-q4_0",
     "gemma2:9b-instruct-q4_0",
-    "ilyagusev/saiga_llama3",
     "llama2:13b",
     "llama3.1:8b-instruct-q4_0",
     # "llama3:70b-instruct-q4_0",
@@ -35,12 +34,40 @@ MODELS = [
     "yi:9b",
     "rscr/ruadapt_qwen2.5_32b:Q4_K_M",
     # "qwq", # не отрабатывает как надо
-    "rscr/vikhr_nemo_12b",
     "qwen2.5:7b-instruct-q4_0",
     "llama3.3:70b-instruct-q4_0",
     "qwen2.5:32b-instruct-q4_0",
     "mistral-nemo",
     "mistral-nemo:12b-instruct-2407-q4_0",
+    ### API models:
+    "openai/gpt-4.1",
+    "openai/o4-mini",
+    "openai/o3",
+    "yandexgpt-lite",
+    "yandexgpt-pro",
+    'sber/GigaChat-2-Pro',
+    'sber/GigaChat-2-Max'
+    #### For russian tasks:
+    "ilyagusev/saiga_nemo_12b",
+    "ilyagusev/saiga_llama3",
+    "yandex/YandexGPT-5-Lite-8B-instruct-GGUF",
+    "qwen3:8b",
+    "qwen3:30b-a3b",
+    "llama3.3",
+    "gemma3:12b",
+    "gemma3:27b",
+    "mistral-small3.1",
+    "rscr/vikhr_nemo_12b",
+    "rscr/ruadapt_qwen2.5_32b:Q8_0",
+    "rscr/vikhr_llama3.1_8b",
+    "IlyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp", # hf only
+    "IlyaGusev/saiga_yandexgpt_8b", # hf only
+    "IlyaGusev/saiga_tlite_8b",# hf only
+    "Vikhrmodels/Vikhr-7B-instruct_0.2",# hf only
+    "Vikhrmodels/RM-Qwen2.5-14B-17.12.24",# hf only
+    "Vikhrmodels/Vikhr-YandexGPT-5-Lite-8B-it",# hf only
+    "lyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp",# hf only
+    "ai-sage/GigaChat-20B-A3B-instruct"# hf only
 ]
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
