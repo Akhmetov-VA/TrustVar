@@ -79,4 +79,4 @@ async def generate_locally(request: Request):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=27361)
+    uvicorn.run(app, host="127.0.0.1", port=45321)
