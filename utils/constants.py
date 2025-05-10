@@ -46,7 +46,7 @@ MODELS = [
     "yandexgpt-lite",
     "yandexgpt-pro",
     'sber/GigaChat-2-Pro',
-    'sber/GigaChat-2-Max'
+    'sber/GigaChat-2-Max',
     #### For russian tasks:
     "ilyagusev/saiga_nemo_12b",
     "ilyagusev/saiga_llama3",
