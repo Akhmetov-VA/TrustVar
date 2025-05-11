@@ -78,4 +78,5 @@ services:
     restart: on-failure
 
 volumes:
-  hf_cache_volume: # Объявляем named volume
+  hf_cache_volume: 
+    driver: local
