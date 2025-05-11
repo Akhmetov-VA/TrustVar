@@ -6,7 +6,7 @@ x-common-env: &common-env
   MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
   MONGO_HOST: ${MONGO_HOST}
   API_URL: ${API_URL}
-  OLLAMA_BASE_URL: http://172.21.0.1:11434
+  OLLAMA_BASE_URL: http://host.docker.internal:11434
 
 services:  
   langchain_backend:
@@ -23,6 +23,8 @@ services:
           - "45321:45321"
       restart: on-failure  
       command: python langchain_back/main.py
+      extra_hosts:
+      - "host.docker.internal:host-gateway"    
 
   runners:
     build:
