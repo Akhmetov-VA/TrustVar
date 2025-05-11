@@ -34,7 +34,7 @@ services:
       extra_hosts:
       - "host.docker.internal:host-gateway"    
       volumes:
-      - hf_cache_volume:${HF_HOME}
+      - hf_cache_volume:/app/.cache
 
   runners:
     build:
