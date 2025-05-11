@@ -7,9 +7,9 @@ from langchain_community.llms import GigaChat, YandexGPT
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import OllamaLLM
-from langchain.llms import LlamaCpp
-from langchain.llms import HuggingFacePipeline
-from langchain.llms import OpenAI
+from langchain_community.llms import LlamaCpp
+from langchain_community.llms import HuggingFacePipeline
+from langchain_community.llms import OpenAI
 from transformers import pipeline
 
 app = FastAPI()
@@ -58,7 +58,7 @@ async def generate_locally(request: Request):
         
         # Модели локальные
         elif (not model_name.startswith('ai-sage')) and model_name[0].islower(): # примитивное правило как отделить модели ollama от hf
-            model = OllamaLLM(model=model_name)
+            model = OllamaLLM(model=model_name, base_url=os.getenv("OLLAMA_BASE_URL"))
         elif model_name.endswith(".gguf"):
             model = LlamaCpp(model=model_name)
         else:
