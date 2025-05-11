@@ -6,7 +6,7 @@ x-common-env: &common-env
   MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
   MONGO_HOST: ${MONGO_HOST}
   API_URL: ${API_URL}
-  OLLAMA_BASE_URL: http://host.docker.internal:11434
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
 
 services:  
   langchain_backend:
