@@ -28,33 +28,33 @@ async def generate_locally(request: Request):
                 api_key=OPENAI_KEY
             )
         elif model_name.startswith('yandexgpt'):
-            MODEL_NAME = model_name
-            YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
-            BASE_URL = os.getenv("YANDEX_BASE_URL")
-
-            model = OpenAI(
-                model_name=MODEL_NAME,
-                api_key=YANDEX_API_KEY,
-                base_url=BASE_URL
-            )
-            # YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name
+            # MODEL_NAME = model_name
             # YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
-            # model = YandexGPT(
+            # BASE_URL = os.getenv("YANDEX_BASE_URL")
+
+            # model = OpenAI(
+            #     model_name=MODEL_NAME,
             #     api_key=YANDEX_API_KEY,
-            #     model_uri=YANDEX_MODEL_URI
-            # )
+            #     base_url=BASE_URL
+            #)
+            YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name
+            YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
+            model = YandexGPT(
+                api_key=YANDEX_API_KEY,
+                model_uri=YANDEX_MODEL_URI
+            )
 
         elif model_name.startswith('sber'):
             MODEL_NAME = model_name.split('/')[-1]
             GIGACHAT_API_KEY = os.getenv("GIGACHAT_API_KEY")
             BASE_URL = os.getenv("GIGACHAT_BASE_URL")
             
-            model = OpenAI(
-                model_name=MODEL_NAME,
-                api_key=GIGACHAT_API_KEY,
-                base_url=BASE_URL
-            )
-            #model = GigaChat(model=model_name, credentials=GIGACHAT_API_TOKEN,verify_ssl_certs=False, scope="GIGACHAT_API_PERS")
+            # model = OpenAI(
+            #     model_name=MODEL_NAME,
+            #     api_key=GIGACHAT_API_KEY,
+            #     base_url=BASE_URL
+            # )
+            model = GigaChat(model=model_name, credentials=GIGACHAT_API_KEY,verify_ssl_certs=False, scope="GIGACHAT_API_PERS")
         
         # Модели локальные
         elif (not model_name.startswith('ai-sage')) and model_name[0].islower(): # примитивное правило как отделить модели ollama от hf
