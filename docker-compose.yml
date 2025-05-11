@@ -13,6 +13,8 @@ x-common-env: &common-env
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
   GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL}
 
+  HF_HOME: ${HF_HOME}
+
 services:  
   langchain_backend:
       build: 
@@ -71,3 +73,4 @@ services:
     volumes: 
       - ./monitoring:/app/monitoring/
     restart: on-failure
+
