@@ -9,7 +9,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import OllamaLLM
 from langchain_community.llms import LlamaCpp
 from langchain_community.llms import HuggingFacePipeline
-from langchain_community.llms import OpenAI
+from langchain_openai import OpenAI
 from transformers import pipeline
 
 app = FastAPI()
