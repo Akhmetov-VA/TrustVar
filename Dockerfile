@@ -4,6 +4,7 @@ WORKDIR /app
 COPY pyproject.toml /app/
 COPY README.md /app/README.md
 COPY requirements.txt /app/requirements.txt
+RUN apt update && apt install -y iproute2 iputils-ping curl && rm -rf /var/lib/apt/lists/*
 RUN pip install --upgrade pip && pip install "uv>=0.5.29"
 
 #langchain-backend
