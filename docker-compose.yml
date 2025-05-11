@@ -14,6 +14,7 @@ x-common-env: &common-env
   GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL}
 
   HF_HOME: ${HF_HOME}
+  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE}
 
 services:  
   langchain_backend:
@@ -32,6 +33,8 @@ services:
       command: python langchain_back/main.py
       extra_hosts:
       - "host.docker.internal:host-gateway"    
+      volumes:
+      - hf_cache_volume:${HF_HOME}
 
   runners:
     build:
@@ -74,3 +77,5 @@ services:
       - ./monitoring:/app/monitoring/
     restart: on-failure
 
+volumes:
+  hf_cache_volume: # Объявляем named volume
