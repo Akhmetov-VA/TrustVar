@@ -14,6 +14,7 @@ x-common-env: &common-env
   GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL}
 
   HF_HOME: ${HF_HOME}
+  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE}
 
 services:  
   langchain_backend:
@@ -33,7 +34,7 @@ services:
       extra_hosts:
       - "host.docker.internal:host-gateway"    
       volumes:
-      - hf_cache_volume:/tmp/.cache
+      - hf_cache_volume:/tmp/hf_cache 
 
   runners:
     build:
