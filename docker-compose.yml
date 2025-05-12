@@ -34,7 +34,7 @@ services:
       extra_hosts:
       - "host.docker.internal:host-gateway"    
       volumes:
-      - hf_cache_volume:/tmp/hf_cache 
+      - /tmp/hf_cache:/tmp/hf_cache 
 
   runners:
     build:
@@ -76,7 +76,3 @@ services:
     volumes: 
       - ./monitoring:/app/monitoring/
     restart: on-failure
-
-volumes:
-  hf_cache_volume: 
-    driver: local
