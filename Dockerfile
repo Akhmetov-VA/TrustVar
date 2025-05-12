@@ -11,6 +11,7 @@ RUN pip install --upgrade pip && pip install "uv>=0.5.29"
 FROM base as back
 RUN uv pip install -r requirements.txt --system
 COPY ./langchain_back /app/langchain_back/
+RUN mkdir /app/.cache && mkdir /app/.transformers
 
 #streamlit-frontend
 FROM base as front
