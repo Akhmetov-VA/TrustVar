@@ -15,51 +15,77 @@ API_URL = os.getenv("API_URL")
 
 
 MODELS = [
+    #OLD MODELS
     # "gemma2:27b-instruct-q4_0",
-    "gemma2:9b-instruct-q4_0",
-    "llama2:13b",
-    "llama3.1:8b-instruct-q4_0",
-    # "llama3:70b-instruct-q4_0",
-    "llama3:8b-instruct-q4_0",
-    "mistral:7b-instruct-v0.3-q4_0",
-    "mixtral:8x7b-instruct-v0.1-q4_0",
-    "phi3:14b-medium-4k-instruct-q4_0",
-    "qwen:7b",
-    "qwen2:72b-instruct-q4_0",
-    "qwen2.5:72b-instruct-q4_0",
-    "qwen2:7b-instruct-q4_0",
-    "solar:10.7b-instruct-v1-q4_0",
-    "wavecut/vikhr:7b-instruct_0.4-Q4_1",
-    "yi:6b",
-    "yi:9b",
-    "rscr/ruadapt_qwen2.5_32b:Q4_K_M",
-    # "qwq", # не отрабатывает как надо
-    "qwen2.5:7b-instruct-q4_0",
-    "llama3.3:70b-instruct-q4_0",
-    "qwen2.5:32b-instruct-q4_0",
-    "mistral-nemo",
-    "mistral-nemo:12b-instruct-2407-q4_0",
+    # "gemma2:9b-instruct-q4_0",
+    # "llama2:13b",
+    # "llama3.1:8b-instruct-q4_0",
+    # # "llama3:70b-instruct-q4_0",
+    # "llama3:8b-instruct-q4_0",
+    # "mistral:7b-instruct-v0.3-q4_0",
+    # "mixtral:8x7b-instruct-v0.1-q4_0",
+    # "phi3:14b-medium-4k-instruct-q4_0",
+    # "qwen:7b",
+    # "qwen2:72b-instruct-q4_0",
+    # "qwen2.5:72b-instruct-q4_0",
+    # "qwen2:7b-instruct-q4_0",
+    # "solar:10.7b-instruct-v1-q4_0",
+    # "wavecut/vikhr:7b-instruct_0.4-Q4_1",
+    # "yi:6b",
+    # "yi:9b",
+    # "rscr/ruadapt_qwen2.5_32b:Q4_K_M",
+    # # "qwq", # не отрабатывает как надо
+    # "qwen2.5:7b-instruct-q4_0",
+    # "llama3.3:70b-instruct-q4_0",
+    # "qwen2.5:32b-instruct-q4_0",
+    # "mistral-nemo",
+    # "mistral-nemo:12b-instruct-2407-q4_0",
+    ###CURRENT MODELS
+    'brxce/qwen2.5-vl:latest',
+    'hf.co/RefalMachine/RuadaptQwen2.5-32B-Pro-Beta-GGUF:Q4_K_M',
+    'yi:6b-q4_0',
+    'ZimaBlueAI/Qwen2.5-VL-7B-Instruct:latest',
+    'bsahane/Qwen2.5-VL-7B-Instruct:Q4_K_M_benxh',
+    'deepseek-r1:latest',
+    'owl/t-lite:q4_0-instruct',
+    'ilyagusev/saiga_nemo_12b:latest',
+    'llama3.2:3b-instruct-q4_0',
+    'llama3.2:1b-instruct-q4_0',
+    'yi:34b-q4_0',
+    'llama3.1:70b-instruct-q4_0',
+    'llama3:latest',
+    'mistral-nemo:latest',
+    'qwen2.5:7b-instruct',
+    'qwen2.5:32b-instruct-q4_0',
+    'llama3.3:70b-instruct-q4_0',
+    'rscr/vikhr_nemo_12b:latest',
+    'qwen2.5:72b-instruct-q2_K',
+    'qwq:latest',
+    'rscr/ruadapt_qwen2.5_32b:Q4_K_M',
+    'qwen2.5:72b-instruct-q4_0',
+    'qwen2.5:7b-instruct-q4_0',
+
     #### For russian tasks:
-    "ilyagusev/saiga_nemo_12b",
-    "ilyagusev/saiga_llama3",
-    "yandex/YandexGPT-5-Lite-8B-instruct-GGUF",
-    "qwen3:8b",
-    "qwen3:30b-a3b",
-    "llama3.3",
-    "gemma3:12b",
-    "gemma3:27b",
-    "mistral-small3.1",
-    "rscr/vikhr_nemo_12b",
-    "rscr/ruadapt_qwen2.5_32b:Q8_0",
-    "rscr/vikhr_llama3.1_8b",
-    "IlyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp", # hf only
-    "IlyaGusev/saiga_yandexgpt_8b", # hf only
-    "IlyaGusev/saiga_tlite_8b",# hf only
-    "Vikhrmodels/Vikhr-7B-instruct_0.2",# hf only
-    "Vikhrmodels/RM-Qwen2.5-14B-17.12.24",# hf only
-    "Vikhrmodels/Vikhr-YandexGPT-5-Lite-8B-it",# hf only
-    "lyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp",# hf only
-    "ai-sage/GigaChat-20B-A3B-instruct"# hf only
+    # "ilyagusev/saiga_nemo_12b",
+    # "ilyagusev/saiga_llama3",
+    # "yandex/YandexGPT-5-Lite-8B-instruct-GGUF",
+    # "qwen3:8b",
+    # "qwen3:30b-a3b",
+    # "llama3.3",
+    # "gemma3:12b",
+    # "gemma3:27b",
+    # "mistral-small3.1",
+    # "rscr/vikhr_nemo_12b",
+    # "rscr/ruadapt_qwen2.5_32b:Q8_0",
+    # "rscr/vikhr_llama3.1_8b",
+    # "IlyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp", # hf only
+    # "IlyaGusev/saiga_yandexgpt_8b", # hf only
+    # "IlyaGusev/saiga_tlite_8b",# hf only
+    # "Vikhrmodels/Vikhr-7B-instruct_0.2",# hf only
+    # "Vikhrmodels/RM-Qwen2.5-14B-17.12.24",# hf only
+    # "Vikhrmodels/Vikhr-YandexGPT-5-Lite-8B-it",# hf only
+    # "lyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp",# hf only
+    # "ai-sage/GigaChat-20B-A3B-instruct"# hf only
     ### API models:
     "api/gpt-4o",
     "api/o3"
