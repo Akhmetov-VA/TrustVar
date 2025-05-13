@@ -61,12 +61,13 @@ MODELS = [
     "lyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp",# hf only
     "ai-sage/GigaChat-20B-A3B-instruct"# hf only
     ### API models:
-    "openai/gpt-4.1",
-    "openai/o4-mini",
-    "openai/o3",
+    "api/gpt-4o",
+    "api/o3"
+    "api/claude-3.7-sonnet",
+    "api/gemini-2.5-pro-preview-03-25",
     "yandexgpt-lite",
-    'sber/GigaChat-2-Pro',
-    'sber/GigaChat-2-Max',
+    # 'sber/GigaChat-2-Pro',
+    # 'sber/GigaChat-2-Max',
 ]
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
