@@ -14,6 +14,7 @@ from transformers import pipeline
 
 app = FastAPI()
 
+
 @app.post("/generate")
 async def generate_locally(request: Request):
     data = await request.json()
@@ -23,9 +24,12 @@ async def generate_locally(request: Request):
         if model_name.startswith('openai'):
             MODEL_NAME = model_name.split('/')[-1]
             OPENAI_KEY = os.getenv("OPENAI_KEY")
+            BASE_URL = os.getenv('OPENAI_BASE_URL')
+            
             model = OpenAI(
                 model_name=MODEL_NAME,
-                api_key=OPENAI_KEY
+                api_key=OPENAI_KEY,
+                base_url=BASE_URL
             )
         elif model_name.startswith('yandexgpt'):
             # MODEL_NAME = model_name
@@ -38,6 +42,7 @@ async def generate_locally(request: Request):
             #     base_url=BASE_URL
             #)
             YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name
+            print(YANDEX_MODEL_URI)
             YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
             model = YandexGPT(
                 api_key=YANDEX_API_KEY,
@@ -72,9 +77,15 @@ async def generate_locally(request: Request):
         output_parser = StrOutputParser()
         chain = prompt | model | output_parser
         result = chain.invoke(data["variables"])
+
+        print(result)
+        print(model_name)
         return result
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Missing key: {e}")
+    except Exception as e:
+        print(e)
+        print(model_name)
     
 if __name__ == "__main__":
     import uvicorn

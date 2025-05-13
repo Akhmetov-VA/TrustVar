@@ -39,14 +39,6 @@ MODELS = [
     "qwen2.5:32b-instruct-q4_0",
     "mistral-nemo",
     "mistral-nemo:12b-instruct-2407-q4_0",
-    ### API models:
-    "openai/gpt-4.1",
-    "openai/o4-mini",
-    "openai/o3",
-    "yandexgpt-lite",
-    "yandexgpt-pro",
-    'sber/GigaChat-2-Pro',
-    'sber/GigaChat-2-Max',
     #### For russian tasks:
     "ilyagusev/saiga_nemo_12b",
     "ilyagusev/saiga_llama3",
@@ -68,6 +60,13 @@ MODELS = [
     "Vikhrmodels/Vikhr-YandexGPT-5-Lite-8B-it",# hf only
     "lyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp",# hf only
     "ai-sage/GigaChat-20B-A3B-instruct"# hf only
+    ### API models:
+    "openai/gpt-4.1",
+    "openai/o4-mini",
+    "openai/o3",
+    "yandexgpt-lite",
+    'sber/GigaChat-2-Pro',
+    'sber/GigaChat-2-Max',
 ]
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 

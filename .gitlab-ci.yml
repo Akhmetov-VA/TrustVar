@@ -1,7 +1,3 @@
-# workflow:
-#   rules:
-#     - if: '$CI_COMMIT_BRANCH == "main"'
-
 stages:
   - build
   - deploy
@@ -12,6 +8,11 @@ build:
     - trust_llm_61
   script:
     - echo "Сборка образов"
+    - export HF_CACHE_HOST_PATH="${CI_PROJECT_DIR}/.hf_cache" # Путь на хосте GitLab Runner
+    - mkdir -p "${HF_CACHE_HOST_PATH}"
+    - export HF_CACHE_HOST_PATH 
+    - export HF_HOME=${HF_HOME_CI_PATH_CONTAINER:-/project_cache/huggingface}
+    - export TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE_CI_PATH_CONTAINER:-/project_cache/transformers}
     - docker compose -f docker-compose.yml build
 
 deploy:
