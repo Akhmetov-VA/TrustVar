@@ -324,8 +324,10 @@ def render_progressbar():
                     pending_queues,
                     key="fail_pending_selectbox",
                 )
-                if st.button(
-                    "Поменять статус задач на 'stopped'", key="fail_pending_button"
+                if st.checkbox(
+                    "Поменять статус задач на 'stopped'",
+                    value=False,
+                    key="fail_pending_button",
                 ):
                     st.write("start")
                     count_stopped = stop_pending_tasks(selected_queue)
