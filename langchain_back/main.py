@@ -60,9 +60,11 @@ async def generate_locally(request: Request):
         output_parser = StrOutputParser()
         chain = prompt | model | output_parser
         result = chain.invoke(data["variables"])
-
         print(model_name, result)
-        return result
+        if isinstance(result, str):
+            return result
+        else:
+            return result.content
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Missing key: {e}")
     except Exception as e:
