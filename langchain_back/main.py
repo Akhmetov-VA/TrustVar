@@ -61,8 +61,7 @@ async def generate_locally(request: Request):
         chain = prompt | model | output_parser
         result = chain.invoke(data["variables"])
 
-        print(result)
-        print(model_name)
+        print(model_name, result)
         return result
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Missing key: {e}")
