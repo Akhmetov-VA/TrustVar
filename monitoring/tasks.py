@@ -322,14 +322,11 @@ def render_progressbar():
                 selected_queue = st.selectbox(
                     "Выберите очередь для остановки:",
                     pending_queues,
+                    index=None,
                     key="fail_pending_selectbox",
                 )
-                if st.checkbox(
-                    "Поменять статус задач на 'stopped'",
-                    value=False,
-                    key="fail_pending_button",
-                ):
-                    st.write("start")
+                if selected_queue:
+                    st.write(f"Start stopping {selected_queue}")
                     count_stopped = stop_pending_tasks(selected_queue)
                     st.success(
                         f"В коллекции '{selected_queue}' остановлено {count_stopped} задач."
