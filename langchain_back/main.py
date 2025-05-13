@@ -83,9 +83,6 @@ async def generate_locally(request: Request):
         return result
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Missing key: {e}")
-    except Exception as e:
-        print(e)
-        print(model_name)
     
 if __name__ == "__main__":
     import uvicorn

@@ -17,4 +17,4 @@ db
 *.DS_Store
 
 *copy*
-trash
+trash*
