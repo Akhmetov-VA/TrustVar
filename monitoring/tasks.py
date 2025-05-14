@@ -304,7 +304,7 @@ def show_errors(collections: List[str]):
 
 def render_progressbar():
     st.header("Мониторинг очередей")
-    if st.button("Загрузить мониторинг очередей", key="load_monitoring"):
+    if st.checkbox("Загрузить мониторинг очередей", value=False, key="load_monitoring"):
         collections_to_process = sorted(
             [col for col in db_client.list_collections() if col.startswith("queue_")]
         )
