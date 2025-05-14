@@ -19,7 +19,7 @@ MODELS = [
 
         ### API models:
     "api/gpt-4o",
-    "api/o3"
+    "api/o3",
     "api/claude-3.7-sonnet",
     "api/gemini-2.5-pro-preview-03-25",
     "yandexgpt-lite",
