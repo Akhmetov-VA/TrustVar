@@ -201,11 +201,11 @@ def main() -> None:
     configure_logging()
     logging.info("Загрузка переменных окружения и инициализация подключения...")
     client = get_mongo_client()
-    db_name = "TrustGen"
     while True:
-        db = client[db_name]
-        run_processing_loop(db)
-        time.sleep(10)
+        for db_name in ["TrustLLM_ru", "TrustGen"]:
+            db = client[db_name]
+            run_processing_loop(db)
+            time.sleep(10)
 
 
 if __name__ == "__main__":
