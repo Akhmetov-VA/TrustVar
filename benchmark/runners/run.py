@@ -83,6 +83,8 @@ def make_request(
         )
         response.raise_for_status()
         logging.info(f"Успешный ответ от API для модели '{model}'.")
+        if response.json() is None:
+            raise "null response"
         return response.json()
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
@@ -118,7 +120,8 @@ def process_task(task: Dict, collection: Collection, session: requests.Session) 
             {"$set": {"status": "error", "error": str(e)}},
         )
         import sys
-        print('Я ЗДЕСЬ',e)
+
+        print("Я ЗДЕСЬ", e)
         sys.exit()
         logging.error(f"Ошибка обработки задачи с id: {task_id}: {e}")
 
