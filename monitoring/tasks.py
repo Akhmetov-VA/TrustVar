@@ -270,9 +270,8 @@ def load_data_for_dashboard(collections: List[str]) -> pd.DataFrame:
 def show_errors(collections: List[str]):
     st.header("Уникальные сообщения об ошибках")
     with st.expander("Показать ошибки", expanded=False):
-        # Словарь для хранения информации о задачах с ошибками по коллекциям и моделям
-        all_failed_tasks = {}
-        all_models = set()
+        # Словарь для хранения информации о коллекциях с ошибками
+        collections_with_errors = {}
 
         # Собираем информацию о задачах с ошибками
         for collection_name in collections:
@@ -281,7 +280,7 @@ def show_errors(collections: List[str]):
             failed_tasks = stopped_tasks + error_tasks
 
             if failed_tasks:
-                all_failed_tasks[collection_name] = failed_tasks
+                collections_with_errors[collection_name] = failed_tasks
 
                 # Отображаем ошибки для коллекции
                 error_messages = [
@@ -290,12 +289,6 @@ def show_errors(collections: List[str]):
                 ]
                 error_counts = Counter(error_messages)
                 st.subheader(f"Коллекция: {collection_name}")
-
-                # Собираем уникальные модели
-                collection_models = {
-                    task.get("model", "Неизвестная модель") for task in failed_tasks
-                }
-                all_models.update(collection_models)
 
                 # Группируем ошибки по моделям
                 models_errors = {}
@@ -315,19 +308,19 @@ def show_errors(collections: List[str]):
                         )
                 st.write("---")
 
-        if all_failed_tasks:
-            # Преобразуем множество в список и сортируем для более предсказуемого отображения
-            all_models_list = sorted(list(all_models))
+        if collections_with_errors:
+            # Получаем список коллекций с ошибками
+            collections_list = list(collections_with_errors.keys())
 
-            # Добавляем опцию "Все модели"
-            all_models_list = ["Все модели"] + all_models_list
+            # Добавляем опцию "Все коллекции"
+            options = ["Все коллекции"] + collections_list
 
-            # Выбор модели для перезапуска
-            selected_model = st.selectbox(
-                "Выберите модель для перезапуска задач:",
-                all_models_list,
+            # Выбор коллекции для перезапуска
+            selected_collection = st.selectbox(
+                "Выберите коллекцию для перезапуска задач:",
+                options,
                 index=0,
-                key="model_to_restart",
+                key="collection_to_restart",
             )
 
             if st.button(
@@ -336,28 +329,22 @@ def show_errors(collections: List[str]):
             ):
                 total_restarted = 0
 
-                for collection_name, failed_tasks in all_failed_tasks.items():
-                    if selected_model == "Все модели":
-                        # Перезапускаем все задачи в коллекции
+                if selected_collection == "Все коллекции":
+                    # Перезапускаем задачи во всех коллекциях с ошибками
+                    for collection_name in collections_with_errors.keys():
                         modified_count = restart_stopped_error_tasks(collection_name)
-                    else:
-                        # Перезапускаем только задачи с выбранной моделью
-                        task_ids = [
-                            task["_id"]
-                            for task in failed_tasks
-                            if task.get("model", "Неизвестная модель") == selected_model
-                        ]
-                        if task_ids:
-                            modified_count = restart_specific_tasks(
-                                collection_name, task_ids
+                        if modified_count > 0:
+                            total_restarted += modified_count
+                            st.write(
+                                f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
                             )
-                        else:
-                            modified_count = 0
-
+                else:
+                    # Перезапускаем задачи только в выбранной коллекции
+                    modified_count = restart_stopped_error_tasks(selected_collection)
                     if modified_count > 0:
                         total_restarted += modified_count
                         st.write(
-                            f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
+                            f"В коллекции '{selected_collection}' перезапущено {modified_count} задач."
                         )
 
                 if total_restarted > 0:
@@ -366,31 +353,6 @@ def show_errors(collections: List[str]):
                     st.info("Не найдено задач для перезапуска.")
         else:
             st.info("Нет задач с ошибками для перезапуска.")
-
-
-# Вспомогательная функция для перезапуска конкретных задач по их ID
-def restart_specific_tasks(collection_name: str, task_ids: List) -> int:
-    """
-    Перезапускает конкретные задачи по их ID.
-
-    Args:
-        collection_name: Имя коллекции
-        task_ids: Список ID задач для перезапуска
-
-    Returns:
-        Количество перезапущенных задач
-    """
-    modified_count = 0
-    for task_id in task_ids:
-        result = db_client.update_task_status(
-            collection_name,
-            task_id,
-            "pending",
-            {"error": None},  # Очищаем поле с ошибкой
-        )
-        if result:
-            modified_count += 1
-    return modified_count
 
 
 def render_progressbar():
