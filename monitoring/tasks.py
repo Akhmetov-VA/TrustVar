@@ -313,7 +313,7 @@ def show_errors(collections: List[str]):
             collections_list = list(collections_with_errors.keys())
 
             # Добавляем опцию "Все коллекции"
-            options = ["Все коллекции"] + collections_list
+            options = [None, "Все коллекции"] + collections_list
 
             # Выбор коллекции для перезапуска
             selected_collection = st.selectbox(
@@ -325,28 +325,29 @@ def show_errors(collections: List[str]):
 
             total_restarted = 0
 
-            if selected_collection == "Все коллекции":
-                # Перезапускаем задачи во всех коллекциях с ошибками
-                for collection_name in collections_with_errors.keys():
-                    modified_count = restart_stopped_error_tasks(collection_name)
+            if selected_collection:
+                if selected_collection == "Все коллекции":
+                    # Перезапускаем задачи во всех коллекциях с ошибками
+                    for collection_name in collections_with_errors.keys():
+                        modified_count = restart_stopped_error_tasks(collection_name)
+                        if modified_count > 0:
+                            total_restarted += modified_count
+                            st.write(
+                                f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
+                            )
+                else:
+                    # Перезапускаем задачи только в выбранной коллекции
+                    modified_count = restart_stopped_error_tasks(selected_collection)
                     if modified_count > 0:
                         total_restarted += modified_count
                         st.write(
-                            f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
+                            f"В коллекции '{selected_collection}' перезапущено {modified_count} задач."
                         )
-            else:
-                # Перезапускаем задачи только в выбранной коллекции
-                modified_count = restart_stopped_error_tasks(selected_collection)
-                if modified_count > 0:
-                    total_restarted += modified_count
-                    st.write(
-                        f"В коллекции '{selected_collection}' перезапущено {modified_count} задач."
-                    )
 
-            if total_restarted > 0:
-                st.success(f"Всего перезапущено {total_restarted} задач.")
-            else:
-                st.info("Не найдено задач для перезапуска.")
+                if total_restarted > 0:
+                    st.success(f"Всего перезапущено {total_restarted} задач.")
+                else:
+                    st.info("Не найдено задач для перезапуска.")
         else:
             st.info("Нет задач с ошибками для перезапуска.")
 
