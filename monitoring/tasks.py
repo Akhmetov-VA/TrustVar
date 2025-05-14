@@ -270,36 +270,127 @@ def load_data_for_dashboard(collections: List[str]) -> pd.DataFrame:
 def show_errors(collections: List[str]):
     st.header("Уникальные сообщения об ошибках")
     with st.expander("Показать ошибки", expanded=False):
+        # Словарь для хранения информации о задачах с ошибками по коллекциям и моделям
+        all_failed_tasks = {}
+        all_models = set()
+
+        # Собираем информацию о задачах с ошибками
         for collection_name in collections:
             stopped_tasks = db_client.get_tasks_by_status(collection_name, "stopped")
             error_tasks = db_client.get_tasks_by_status(collection_name, "error")
             failed_tasks = stopped_tasks + error_tasks
 
             if failed_tasks:
+                all_failed_tasks[collection_name] = failed_tasks
+
+                # Отображаем ошибки для коллекции
                 error_messages = [
                     task.get("error", "Нет информации об ошибке")
                     for task in failed_tasks
                 ]
                 error_counts = Counter(error_messages)
                 st.subheader(f"Коллекция: {collection_name}")
-                for error_message, count in error_counts.items():
-                    st.write(f"**Ошибка:** {error_message} | **Количество:** {count}")
+
+                # Собираем уникальные модели
+                collection_models = {
+                    task.get("model", "Неизвестная модель") for task in failed_tasks
+                }
+                all_models.update(collection_models)
+
+                # Группируем ошибки по моделям
+                models_errors = {}
+                for task in failed_tasks:
+                    model = task.get("model", "Неизвестная модель")
+                    error = task.get("error", "Нет информации об ошибке")
+                    if model not in models_errors:
+                        models_errors[model] = Counter()
+                    models_errors[model][error] += 1
+
+                # Отображаем ошибки по моделям
+                for model, errors in models_errors.items():
+                    st.write(f"**Модель:** {model}")
+                    for error_message, count in errors.items():
+                        st.write(
+                            f"- **Ошибка:** {error_message} | **Количество:** {count}"
+                        )
                 st.write("---")
 
-        if st.button(
-            "Перезапустить задачи со статусами 'stopped' и 'error'",
-            key="restart_failed_tasks",
-        ):
-            for collection_name in collections:
-                modified_count = restart_stopped_error_tasks(collection_name)
-                if modified_count > 0:
-                    st.write(
-                        f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
-                    )
-        else:
-            st.write(
-                "Нажмите кнопку выше, чтобы перезапустить задачи со статусами 'stopped' и 'error'."
+        if all_failed_tasks:
+            # Преобразуем множество в список и сортируем для более предсказуемого отображения
+            all_models_list = sorted(list(all_models))
+
+            # Добавляем опцию "Все модели"
+            all_models_list = ["Все модели"] + all_models_list
+
+            # Выбор модели для перезапуска
+            selected_model = st.selectbox(
+                "Выберите модель для перезапуска задач:",
+                all_models_list,
+                index=0,
+                key="model_to_restart",
             )
+
+            if st.button(
+                "Перезапустить задачи со статусами 'stopped' и 'error'",
+                key="restart_failed_tasks",
+            ):
+                total_restarted = 0
+
+                for collection_name, failed_tasks in all_failed_tasks.items():
+                    if selected_model == "Все модели":
+                        # Перезапускаем все задачи в коллекции
+                        modified_count = restart_stopped_error_tasks(collection_name)
+                    else:
+                        # Перезапускаем только задачи с выбранной моделью
+                        task_ids = [
+                            task["_id"]
+                            for task in failed_tasks
+                            if task.get("model", "Неизвестная модель") == selected_model
+                        ]
+                        if task_ids:
+                            modified_count = restart_specific_tasks(
+                                collection_name, task_ids
+                            )
+                        else:
+                            modified_count = 0
+
+                    if modified_count > 0:
+                        total_restarted += modified_count
+                        st.write(
+                            f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
+                        )
+
+                if total_restarted > 0:
+                    st.success(f"Всего перезапущено {total_restarted} задач.")
+                else:
+                    st.info("Не найдено задач для перезапуска.")
+        else:
+            st.info("Нет задач с ошибками для перезапуска.")
+
+
+# Вспомогательная функция для перезапуска конкретных задач по их ID
+def restart_specific_tasks(collection_name: str, task_ids: List) -> int:
+    """
+    Перезапускает конкретные задачи по их ID.
+
+    Args:
+        collection_name: Имя коллекции
+        task_ids: Список ID задач для перезапуска
+
+    Returns:
+        Количество перезапущенных задач
+    """
+    modified_count = 0
+    for task_id in task_ids:
+        result = db_client.update_task_status(
+            collection_name,
+            task_id,
+            "pending",
+            {"error": None},  # Очищаем поле с ошибкой
+        )
+        if result:
+            modified_count += 1
+    return modified_count
 
 
 def render_progressbar():
