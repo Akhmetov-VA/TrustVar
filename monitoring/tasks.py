@@ -302,7 +302,7 @@ def show_errors(collections: List[str]):
                 # Отображаем ошибки по моделям
                 for model, errors in models_errors.items():
                     st.write(f"**Модель:** {model}")
-                    for error_message, count in errors.items():
+                    for error_message, count in errors.items()[:5]:
                         st.write(
                             f"- **Ошибка:** {error_message} | **Количество:** {count}"
                         )
