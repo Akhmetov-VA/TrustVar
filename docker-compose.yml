@@ -54,7 +54,6 @@ services:
         python -m runners.run & 
         python -m runners.run_rta_queuer & 
         python -m runners.task_processor & 
-        python -m runners.run_sync & 
         python -m runners.run_regexp &
         python -m runners.run_metrics
       "
