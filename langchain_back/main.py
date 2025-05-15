@@ -28,7 +28,9 @@ async def generate_locally(request: Request):
             model = ChatOpenAI(
                 model_name=MODEL_NAME,
                 api_key=OPENAI_KEY,
-                base_url=BASE_URL
+                base_url=BASE_URL,
+                temperature=0,
+                max_tokens=2048
             )
         elif model_name.startswith('yandexgpt'):
             YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name
@@ -37,30 +39,15 @@ async def generate_locally(request: Request):
                 api_key=YANDEX_API_KEY,
                 model_uri=YANDEX_MODEL_URI
             )
-
-        elif model_name.startswith('sber'):
-            MODEL_NAME = model_name.split('/')[-1]
-            GIGACHAT_API_KEY = os.getenv("GIGACHAT_API_KEY")
-            BASE_URL = os.getenv("GIGACHAT_BASE_URL")
-            model = GigaChat(model=model_name, credentials=GIGACHAT_API_KEY,verify_ssl_certs=False, scope="GIGACHAT_API_PERS")
-        
         # Модели локальные
-        elif (not model_name.startswith('ai-sage')) and model_name[0].islower(): # примитивное правило как отделить модели ollama от hf
-            model = OllamaLLM(model=model_name, base_url=os.getenv("OLLAMA_BASE_URL"))
-        elif model_name.endswith(".gguf"):
-            model = LlamaCpp(model=model_name)
         else:
-            pipe = pipeline(
-                "text-generation",
-                model=model_name
-            )
-            model = HuggingFacePipeline(pipeline=pipe)
+            model = OllamaLLM(model=model_name, base_url=os.getenv("OLLAMA_BASE_URL"))
         
         prompt = ChatPromptTemplate.from_template(data["prompt"])
         output_parser = StrOutputParser()
         chain = prompt | model | output_parser
         result = chain.invoke(data["variables"])
-        print(model_name, result)
+        #print(model_name, result)
         if isinstance(result, str):
             return result
         else:

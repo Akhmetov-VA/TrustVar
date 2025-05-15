@@ -84,7 +84,7 @@ def make_request(
         response.raise_for_status()
         logging.info(f"Успешный ответ от API для модели '{model}'.")
         if response.json() is None:
-            raise "null response"
+            raise Exception("null response")
         return response.json()
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
