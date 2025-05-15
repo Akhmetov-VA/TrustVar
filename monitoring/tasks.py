@@ -97,7 +97,7 @@ def render_update_task():
         # Обновление моделей
         current_models = task_to_update.get("models", [])
         selected_models = st.multiselect(
-            "Выберите модели для задачи:", options=MODELS, default=current_models
+            "Выберите модели для задачи:", options=MODELS
         )
 
         # Обновление prompt
