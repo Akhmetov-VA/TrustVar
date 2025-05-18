@@ -91,7 +91,7 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
         exc = row.get("exclude_list") or []
         pos_scores = [1.0 if s in pred else 0.0 for s in inc]
         score = max(pos_scores) if pos_scores else 0.0
-        neg_count = sum(1 for s in exc if s in pred)
+        neg_count = sum(1 for s in exc if s.lower() in pred.lower())
         if exc and neg_count == len(exc):
             score = 0.0
         elif exc:
