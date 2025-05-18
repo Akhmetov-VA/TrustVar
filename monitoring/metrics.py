@@ -1,9 +1,8 @@
 from typing import Any, Dict, List
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.express as px
-import seaborn as sns
+import plotly.graph_objects as go  # 🔹 Для интерактивной heatmap
 import streamlit as st
 
 from utils.db_client import MongoDBClient, MongoDBConfig
@@ -73,7 +72,7 @@ def render_metrics_tab():
     else:
         st.info("Нет доступных коллекций с метриками.")
 
-    # 🔽 Интерактивное сравнение + корреляция
+    # 🔽 Интерактивное сравнение и корреляция
     with st.expander("Сравнение метрик и корреляции между задачами"):
         task_options = set()
         data_per_collection = {}
@@ -92,7 +91,7 @@ def render_metrics_tab():
 
         task_options = sorted(task_options)
 
-        # --- Сравнение двух задач (scatter plot) ---
+        # --- Сравнение двух задач ---
         selected_tasks = st.multiselect(
             "Выберите две задачи для scatter-графика:",
             task_options,
@@ -138,7 +137,7 @@ def render_metrics_tab():
         selected_corr_tasks = st.multiselect(
             "Выберите задачи для анализа корреляции:",
             task_options,
-            default=task_options[:5],  # можно убрать default если не нужно
+            default=task_options[:5],
             key="correlation_tasks",
         )
 
@@ -159,16 +158,26 @@ def render_metrics_tab():
                 st.subheader("Корреляционная матрица задач")
                 st.dataframe(pivot_corr.corr().round(2))
 
-                fig, ax = plt.subplots(figsize=(10, 6))
-                sns.heatmap(
-                    pivot_corr.corr(),
-                    annot=True,
-                    fmt=".2f",
-                    cmap="coolwarm",
-                    square=True,
-                    cbar=True,
+                # 🔹 Построение интерактивной heatmap
+                corr_matrix = pivot_corr.corr()
+                fig = go.Figure(
+                    data=go.Heatmap(
+                        z=corr_matrix.values,
+                        x=corr_matrix.columns,
+                        y=corr_matrix.columns,
+                        colorscale="RdBu",
+                        zmin=-1,
+                        zmax=1,
+                        colorbar=dict(title="Корреляция"),
+                        hovertemplate="Задачи: %{y} и %{x}<br>Значение: %{z:.2f}<extra></extra>",
+                    )
                 )
-                ax.set_title("Корреляции между задачами")
-                st.pyplot(fig)
+                fig.update_layout(
+                    title="Интерактивная корреляционная матрица задач",
+                    xaxis=dict(title=""),
+                    yaxis=dict(title="", autorange="reversed"),
+                    height=600,
+                )
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.warning("Недостаточно данных для построения корреляционной матрицы.")
