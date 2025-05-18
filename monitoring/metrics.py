@@ -1,4 +1,3 @@
-# metrics.py
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -70,3 +69,65 @@ def render_metrics_tab():
             st.info(f"Данные в коллекции '{selected_results_collection}' отсутствуют.")
     else:
         st.info("Нет доступных коллекций с метриками.")
+
+    # ДОПОЛНЕНИЕ: Expander с выбором двух метрик и сравнением
+    with st.expander("Сравнение двух метрик на графике"):
+        task_options = set()
+        data_per_collection = {}
+
+        for collection_name in results_collections:
+            collection = db_client.get_collection(collection_name)
+            records = list(collection.find())
+            if not records:
+                continue
+            df = pd.DataFrame(records)
+            if "_id" in df.columns:
+                df.drop(columns=["_id"], inplace=True)
+            if {"task_name", "model", "value"}.issubset(df.columns):
+                task_options.update(df["task_name"].unique())
+                data_per_collection[collection_name] = df
+
+        task_options = sorted(task_options)
+        selected_tasks = st.multiselect(
+            "Выберите две задачи для сравнения:",
+            task_options,
+            max_selections=2,
+            key="compare_task_names",
+        )
+
+        if len(selected_tasks) == 2:
+            df_all = pd.concat(
+                [
+                    df[df["task_name"].isin(selected_tasks)][
+                        ["task_name", "model", "value"]
+                    ]
+                    for df in data_per_collection.values()
+                ]
+            )
+            pivot = df_all.pivot_table(
+                index="model", columns="task_name", values="value"
+            )
+
+            if pivot.shape[1] == 2:
+                st.subheader("Scatter Plot: Сравнение метрик")
+                st.dataframe(pivot)
+
+                import matplotlib.pyplot as plt
+
+                fig, ax = plt.subplots(figsize=(8, 6))
+                ax.scatter(pivot[selected_tasks[0]], pivot[selected_tasks[1]])
+
+                for model, row in pivot.iterrows():
+                    ax.text(
+                        row[selected_tasks[0]] + 0.002,
+                        row[selected_tasks[1]],
+                        model,
+                        fontsize=7,
+                    )
+
+                ax.set_xlabel(selected_tasks[0])
+                ax.set_ylabel(selected_tasks[1])
+                ax.set_title("Сравнение моделей по выбранным метрикам")
+                st.pyplot(fig)
+            else:
+                st.warning("Недостаточно данных по обеим выбранным задачам.")
