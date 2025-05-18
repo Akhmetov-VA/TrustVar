@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -66,6 +67,9 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
             if df_err.empty:
                 st.info("Ошибок не найдено.")
             else:
+                df_err["errors"] = df_err["errors"].apply(
+                    lambda errs: json.dumps(errs, ensure_ascii=False, indent=2)
+                )
                 df_to_show = df_err.set_index(["task_name", "model"])
                 st.dataframe(df_to_show)
 
