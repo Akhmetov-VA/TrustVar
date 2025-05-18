@@ -1,7 +1,9 @@
 from typing import Any, Dict, List
 
+import matplotlib.pyplot as plt
 import pandas as pd
-import plotly.express as px  # 🔹 Добавлено для интерактивных графиков
+import plotly.express as px
+import seaborn as sns
 import streamlit as st
 
 from utils.db_client import MongoDBClient, MongoDBConfig
@@ -71,8 +73,8 @@ def render_metrics_tab():
     else:
         st.info("Нет доступных коллекций с метриками.")
 
-    # 🔽 Интерактивное сравнение двух задач
-    with st.expander("Сравнение двух метрик на интерактивном графике"):
+    # 🔽 Интерактивное сравнение + корреляция
+    with st.expander("Сравнение метрик и корреляции между задачами"):
         task_options = set()
         data_per_collection = {}
 
@@ -89,8 +91,10 @@ def render_metrics_tab():
                 data_per_collection[collection_name] = df
 
         task_options = sorted(task_options)
+
+        # --- Сравнение двух задач (scatter plot) ---
         selected_tasks = st.multiselect(
-            "Выберите две задачи для сравнения:",
+            "Выберите две задачи для scatter-графика:",
             task_options,
             max_selections=2,
             key="compare_task_names",
@@ -113,7 +117,6 @@ def render_metrics_tab():
                 st.subheader("Интерактивный график: сравнение метрик")
                 st.dataframe(pivot)
 
-                # 🔹 Построение интерактивного scatter plot
                 fig = px.scatter(
                     pivot,
                     x=selected_tasks[0],
@@ -130,3 +133,42 @@ def render_metrics_tab():
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.warning("Недостаточно данных по обеим выбранным задачам.")
+
+        # --- Корреляция между множеством задач ---
+        selected_corr_tasks = st.multiselect(
+            "Выберите задачи для анализа корреляции:",
+            task_options,
+            default=task_options[:5],  # можно убрать default если не нужно
+            key="correlation_tasks",
+        )
+
+        if len(selected_corr_tasks) >= 2:
+            df_corr = pd.concat(
+                [
+                    df[df["task_name"].isin(selected_corr_tasks)][
+                        ["task_name", "model", "value"]
+                    ]
+                    for df in data_per_collection.values()
+                ]
+            )
+            pivot_corr = df_corr.pivot_table(
+                index="model", columns="task_name", values="value"
+            ).dropna()
+
+            if not pivot_corr.empty:
+                st.subheader("Корреляционная матрица задач")
+                st.dataframe(pivot_corr.corr().round(2))
+
+                fig, ax = plt.subplots(figsize=(10, 6))
+                sns.heatmap(
+                    pivot_corr.corr(),
+                    annot=True,
+                    fmt=".2f",
+                    cmap="coolwarm",
+                    square=True,
+                    cbar=True,
+                )
+                ax.set_title("Корреляции между задачами")
+                st.pyplot(fig)
+            else:
+                st.warning("Недостаточно данных для построения корреляционной матрицы.")
