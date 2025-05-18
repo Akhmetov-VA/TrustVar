@@ -53,6 +53,24 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
     st.subheader("Визуализация метрик")
     st.bar_chart(pivot_table)
 
+    # 🔽 Новый expander для просмотра ошибок
+    with st.expander("Просмотр топ-10 ошибок по задачам и моделям"):
+        if "errors" not in filtered_df.columns:
+            st.info("Для этой метрики нет сохранённых ошибок.")
+        else:
+            df_errors = (
+                filtered_df[["task_name", "model", "errors"]]
+                .dropna(subset=["errors"])
+                .drop_duplicates(subset=["task_name", "model"])
+            )
+            if df_errors.empty:
+                st.info("Ошибок не найдено.")
+            else:
+                for _, row in df_errors.iterrows():
+                    header = f"**{row['task_name']} — {row['model']}**"
+                    st.markdown(header)
+                    st.json(row["errors"])
+
 
 def render_metrics_tab():
     st.header("Метрики моделей")
@@ -73,7 +91,7 @@ def render_metrics_tab():
         st.info("Нет доступных коллекций с метриками.")
 
     # 🔽 Интерактивное сравнение и корреляция
-    with st.expander("Сравнение метрик и корреляции между задачами"):
+    with st.expander("Сравнение метрик и корреляция между задачами"):
         task_options = set()
         data_per_collection = {}
 
@@ -157,7 +175,6 @@ def render_metrics_tab():
                 st.subheader("Корреляционная матрица задач")
                 st.dataframe(pivot_corr.corr().round(2))
 
-                # 🔹 Построение интерактивной heatmap
                 corr_matrix = pivot_corr.corr()
                 fig = go.Figure(
                     data=go.Heatmap(
