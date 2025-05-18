@@ -89,7 +89,7 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
         pred = str(row.get("pred", ""))
         inc = row.get("include_list") or []
         exc = row.get("exclude_list") or []
-        pos_scores = [1.0 if s in pred else 0.0 for s in inc]
+        pos_scores = [1.0 if s.lower() in pred.lower() else 0.0 for s in inc]
         score = max(pos_scores) if pos_scores else 0.0
         neg_count = sum(1 for s in exc if s.lower() in pred.lower())
         if exc and neg_count == len(exc):
@@ -109,6 +109,7 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
     cols = [c for c in db.list_collection_names() if c.startswith(prefix)]
     if prefix == "queue_":
         cols = [c for c in cols if not c.startswith("queue_rta_")]
+        cols = ["queue_natural_noise"]
     rows: List[Dict[str, Any]] = []
     for coll_name in cols:
         coll = db[coll_name]
