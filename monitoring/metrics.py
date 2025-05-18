@@ -179,3 +179,31 @@ def render_metrics_tab():
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.warning("Недостаточно данных для построения корреляционной матрицы.")
+
+        # 🔽 Показ ошибок по выбранным задачам
+        with st.expander("Просмотр ошибок по выбранным задачам"):
+            if not corr_sel:
+                st.info("Выберите хотя бы одну задачу выше, чтобы увидеть ошибки.")
+            else:
+                for task in corr_sel:
+                    st.subheader(f"Ошибки для задачи '{task}'")
+                    rows: List[Dict[str, Any]] = []
+                    for df in data_per_collection.values():
+                        if "errors" not in df.columns:
+                            continue
+                        sub = df[df["task_name"] == task]
+                        for _, row in sub.iterrows():
+                            for err in row["errors"]:
+                                rows.append(
+                                    {
+                                        "model": row["model"],
+                                        "input": err.get("input"),
+                                        "pred": err.get("pred"),
+                                        "target": err.get("target"),
+                                    }
+                                )
+                    if rows:
+                        df_errors = pd.DataFrame(rows)
+                        st.dataframe(df_errors)
+                    else:
+                        st.info(f"Нет ошибок для задачи '{task}'.")
