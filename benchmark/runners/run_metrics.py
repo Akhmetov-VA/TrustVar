@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -11,299 +11,274 @@ from pymongo.database import Database
 
 from utils.constants import MONGO_URI
 
-# Настройка окружения и логгера
-load_dotenv()
+# Название БД можно задавать через переменные окружения, по умолчанию "TrustGen"
 MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
+
+# Настройка базового логирования: вывод времени, уровня и сообщения
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+# Список метрик, которые используются в приложении
+METRICS = ["accuracy", "correlation", "RtA", "include_exclude"]
 
-def fetch_extracted_tasks(db: Database, prefix: str = "queue_") -> pd.DataFrame:
-    """
-    Fetch tasks with status "extracted" from collections with specified prefix.
 
-    :param db: MongoDB database connection
-    :param prefix: Collection name prefix
-    :return: DataFrame with extracted tasks
+def get_mongo_client() -> MongoClient:
     """
-    collections = [
-        coll for coll in db.list_collection_names() if coll.startswith(prefix)
-    ]
-    all_tasks = []
+    Устанавливает соединение с MongoDB с использованием MONGO_URI.
+    """
+    client = MongoClient(MONGO_URI)
+    logger.info("Успешно подключились к MongoDB.")
+    return client
+
+
+def get_db() -> Database:
+    """
+    Возвращает объект базы данных, к которой подключаемся.
+    """
+    client = get_mongo_client()
+    db = client[MONGO_DB]
+    logger.info(f"Используем базу данных: {MONGO_DB}")
+    return db
+
+
+def compute_tfnr(df: pd.DataFrame) -> float:
+    """
+    Вычисляет метрику TFNR = count(pred='TFN') / count(all).
+    """
+    total = len(df)
+    if total == 0:
+        return np.nan
+    tfn_count = (df["pred"] == "TFN").sum()
+    return tfn_count / total
+
+
+def compute_accuracy(df: pd.DataFrame) -> float:
+    """
+    Вычисляет accuracy = count(pred == target и pred != TFN) / count(pred != TFN).
+    """
+    df_valid = df[df["pred"] != "TFN"]
+    if df_valid.empty:
+        return np.nan
+    return (df_valid["pred"].astype(str) == df_valid["target"].astype(str)).mean()
+
+
+def compute_correlation(df: pd.DataFrame) -> float:
+    """
+    Вычисляет корреляцию между pred и target для строк, где pred != TFN.
+    """
+    df_valid = df[df["pred"] != "TFN"].copy()
+    if df_valid.empty:
+        return np.nan
+    df_valid["pred"] = pd.to_numeric(df_valid["pred"], errors="coerce")
+    df_valid["target"] = pd.to_numeric(df_valid["target"], errors="coerce")
+    df_valid = df_valid.dropna(subset=["pred", "target"])
+    if len(df_valid) < 2:
+        return np.nan
+    return df_valid["pred"].corr(df_valid["target"])
+
+
+def compute_include_exclude(df: pd.DataFrame) -> float:
+    """
+    Вычисляет метрику include_exclude по описанной в исходном коде логике.
+    """
+    if df.empty:
+        return np.nan
+
+    scores = []
+    for _, row in df.iterrows():
+        pred = str(row.get("pred", ""))
+        include_list = row.get("include_list", []) or []
+        exclude_list = row.get("exclude_list", []) or []
+
+        positive_scores = [1.0 if pos in pred else 0.0 for pos in include_list]
+        score = max(positive_scores) if positive_scores else 0.0
+
+        negatives = sum(1 for neg in exclude_list if neg in pred)
+        if negatives == len(exclude_list) and exclude_list:
+            score = 0.0
+        elif exclude_list:
+            score = max(0.0, score - negatives / len(exclude_list))
+
+        scores.append(score)
+
+    return float(np.mean(scores)) if scores else np.nan
+
+
+def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
+    """
+    Извлекает задачи из коллекций с данным префиксом и статусом 'extracted'.
+    """
+    collections = [c for c in db.list_collection_names() if c.startswith(prefix)]
+    if prefix == "queue_":
+        collections = [c for c in collections if not c.startswith("queue_rta_")]
+    rows = []
 
     for coll_name in collections:
-        tasks = list(db[coll_name].find({"status": "extracted"}))
-        if tasks:
-            all_tasks.extend(tasks)
+        coll = db[coll_name]
+        query = {"status": "extracted"}
+        if prefix == "queue_":
+            query["metric"] = {"$ne": "RtA"}
+        docs = list(coll.find(query))
+        for doc in docs:
+            task = {
+                "task_name": doc.get("task_name", coll_name.replace(prefix, "")),
+                "dataset_name": doc.get("dataset_name"),
+                "model": doc.get("init_model")
+                if coll_name.startswith("queue_rta_")
+                else doc.get("model"),
+                "metric": doc.get("metric"),
+                "pred": doc.get("pred"),
+                "target": doc.get("target"),
+                "include_list": doc.get("include_list", []),
+                "exclude_list": doc.get("exclude_list", []),
+            }
+            if all(
+                [
+                    task["dataset_name"],
+                    task["model"],
+                    task["metric"],
+                    task["pred"] is not None,
+                ]
+            ):
+                rows.append(task)
 
-    if not all_tasks:
-        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    logger.info(f"Извлечено {len(df)} записей из очереди '{prefix}'.")
+    return df
 
-    return pd.DataFrame(all_tasks)
 
-
-def compute_tfnr(group_df: pd.DataFrame) -> float:
+def clear_old_results(db: Database, collection_name: str, df: pd.DataFrame):
     """
-    Compute TFNR (True False Negative Rate) for a group of tasks.
-
-    :param group_df: DataFrame with grouped tasks
-    :return: TFNR value
+    Удаляет старые записи по (task_name, model) перед вставкой новых.
     """
-    tfn_count = sum(group_df["pred"] == "TFN")
-    total_count = len(group_df)
-    return tfn_count / total_count if total_count > 0 else 0
-
-
-def compute_accuracy(group_df: pd.DataFrame) -> float:
-    """
-    Compute accuracy for a group of tasks.
-
-    :param group_df: DataFrame with grouped tasks
-    :return: Accuracy value
-    """
-    correct = sum(group_df["pred"].astype(str) == group_df["target"].astype(str))
-    total = len(group_df)
-    return correct / total if total > 0 else 0
-
-
-def compute_correlation(group_df: pd.DataFrame) -> float:
-    """
-    Compute correlation for a group of tasks.
-
-    :param group_df: DataFrame with grouped tasks
-    :return: Correlation value
-    """
-    try:
-        pred_values = pd.to_numeric(group_df["pred"], errors="coerce")
-        target_values = pd.to_numeric(group_df["target"], errors="coerce")
-
-        # Remove NaN values (from non-numeric conversions)
-        valid_indices = ~(np.isnan(pred_values) | np.isnan(target_values))
-        pred_values = pred_values[valid_indices]
-        target_values = target_values[valid_indices]
-
-        if len(pred_values) < 2:
-            return 0
-
-        return np.corrcoef(pred_values, target_values)[0, 1]
-    except Exception as e:
-        logger.error(f"Error computing correlation: {e}")
-        return 0
-
-
-def compute_include_exclude(group_df: pd.DataFrame) -> float:
-    """
-    Compute include/exclude metric for a group of tasks.
-
-    :param group_df: DataFrame with grouped tasks
-    :return: Include/exclude metric value
-    """
-    correct = 0
-    total = len(group_df)
-
-    for _, row in group_df.iterrows():
-        pred = str(row["pred"]).lower()
-        target = str(row["target"]).lower()
-
-        if pred == target:
-            correct += 1
-        elif "include" in pred and "include" in target:
-            correct += 1
-        elif "exclude" in pred and "exclude" in target:
-            correct += 1
-
-    return correct / total if total > 0 else 0
-
-
-def compute_top_errors(group_df: pd.DataFrame, top_n: int = 10) -> Dict[str, int]:
-    """
-    Вычисляет топ-N наиболее частых ошибок в предсказаниях.
-
-    :param group_df: DataFrame с группированными данными
-    :param top_n: количество возвращаемых частых ошибок
-    :return: словарь с ошибками и их частотами
-    """
-    errors_mask = (group_df["pred"].astype(str) != group_df["target"].astype(str)) & (
-        group_df["pred"] != "TFN"
-    )
-    errors_df = group_df[errors_mask].copy()
-
-    if errors_df.empty:
-        logger.debug("No errors found for group")
-        return {}
-
-    errors_df["error"] = errors_df.apply(
-        lambda x: f"{x['pred']}->{x['target']}", axis=1
-    )
-    error_counts = errors_df["error"].value_counts().nlargest(top_n)
-    return error_counts.to_dict()
+    if df.empty:
+        return
+    coll = db[collection_name]
+    pairs = df[["task_name", "model"]].drop_duplicates()
+    for _, row in pairs.iterrows():
+        coll.delete_many({"task_name": row["task_name"], "model": row["model"]})
 
 
 def insert_results(db: Database, collection_name: str, results: List[Dict[str, Any]]):
     """
-    Insert results into MongoDB collection, clearing old records first.
-
-    :param db: MongoDB database connection
-    :param collection_name: Collection name
-    :param results: List of result dictionaries to insert
+    Вставляет новые результаты в MongoDB, включая словарь top10 ошибок.
     """
     if not results:
-        logger.debug(f"No results to insert for {collection_name}")
         return
-
-    coll = db[collection_name]
-
-    # Clear old records
-    for result in results:
-        coll.delete_many(
-            {
-                "task_name": result["task_name"],
-                "model": result["model"],
-                "metric": result["metric"],
-            }
-        )
-
-    # Insert new records
-    coll.insert_many(results)
-    logger.info(f"Inserted {len(results)} records into {collection_name}")
+    df = pd.DataFrame(results)
+    clear_old_results(db, collection_name, df)
+    db[collection_name].insert_many(df.to_dict(orient="records"))
 
 
-def enhance_clear_old_results(db: Database, collection_name: str, df: pd.DataFrame):
+def extract_top_errors(group_df: pd.DataFrame, top_k: int = 10) -> Dict[str, int]:
     """
-    Удаление старых записей с учетом метрик для топ-ошибок.
-
-    :param db: подключение к БД
-    :param collection_name: имя коллекции
-    :param df: DataFrame с новыми данными
+    Для заданного DataFrame группы возвращает словарь из top_k
+    наиболее частых 'pred' значений, где pred != target.
     """
-    if df.empty:
-        return
-
-    coll = db[collection_name]
-    unique_keys = df[["task_name", "model", "metric"]].drop_duplicates()
-
-    for _, row in unique_keys.iterrows():
-        coll.delete_many(
-            {
-                "task_name": row["task_name"],
-                "model": row["model"],
-                "metric": row["metric"],
-            }
-        )
-
-
-def process_group_metrics(group: Tuple, group_df: pd.DataFrame) -> Dict[str, Any]:
-    """
-    Обработка группы данных для всех метрик и ошибок.
-
-    :param group: кортеж с параметрами группы (task_name, dataset_name, model, metric)
-    :param group_df: DataFrame с данными группы
-    :return: словарь с результатами вычислений
-    """
-    task_name, dataset_name, model, metric = group
-    logger.debug(f"Processing group: {task_name}, {model}, {metric}")
-
-    results = {
-        "task_name": task_name,
-        "dataset_name": dataset_name,
-        "model": model,
-        "metric": metric,
-    }
-
-    # Основные метрики
-    results["tfnr"] = compute_tfnr(group_df)
-
-    if metric == "accuracy":
-        results["value"] = compute_accuracy(group_df)
-    elif metric == "correlation":
-        results["value"] = compute_correlation(group_df)
-    elif metric == "include_exclude":
-        results["value"] = compute_include_exclude(group_df)
-
-    # Топ ошибки
-    errors = compute_top_errors(group_df)
-    if errors:
-        results["top_errors"] = errors
-
-    return results
+    df_wrong = group_df[group_df["pred"].astype(str) != group_df["target"].astype(str)]
+    if df_wrong.empty:
+        return {}
+    counts = df_wrong["pred"].value_counts().head(top_k)
+    return counts.to_dict()
 
 
 def compute_and_store_metrics(db: Database, interval: int = 30):
     """
-    Улучшенная версия функции вычисления метрик с обработкой ошибок.
-
-    :param db: подключение к БД
-    :param interval: интервал выполнения в секундах
+    Основной цикл: извлекает данные, вычисляет метрики + top10 ошибок, и сохраняет в коллекции.
     """
     while True:
-        logger.info("Starting enhanced metrics calculation cycle")
+        # Извлечение задач
+        df = fetch_extracted_tasks(db, prefix="queue_")
+        df_rta = fetch_extracted_tasks(db, prefix="queue_rta_")
 
-        # Основные данные
-        df = fetch_extracted_tasks(db, "queue_")
-        df_rta = fetch_extracted_tasks(db, "queue_rta_")
-
-        all_results = []
-
-        # Обработка обычных очередей
+        # Обычные очереди
         if not df.empty:
+            tfnr_res, acc_res, corr_res, inc_exc_res = [], [], [], []
             grouped = df.groupby(["task_name", "dataset_name", "model", "metric"])
-            all_results.extend(
-                process_group_metrics(group, group_df) for group, group_df in grouped
-            )
+            for (task, ds, model, metric), g in grouped:
+                errors = extract_top_errors(g)
 
-        # Обработка RTA очередей
+                # TFNR
+                tfnr_val = compute_tfnr(g)
+                tfnr_res.append(
+                    {
+                        "task_name": task,
+                        "dataset_name": ds,
+                        "model": model,
+                        "value": tfnr_val,
+                        "errors": errors,
+                    }
+                )
+
+                # По метрике accuracy
+                if metric == "accuracy":
+                    acc = compute_accuracy(g)
+                    acc_res.append(
+                        {
+                            "task_name": task,
+                            "dataset_name": ds,
+                            "model": model,
+                            "value": acc,
+                            "errors": errors,
+                        }
+                    )
+                elif metric == "correlation":
+                    corr = compute_correlation(g)
+                    corr_res.append(
+                        {
+                            "task_name": task,
+                            "dataset_name": ds,
+                            "model": model,
+                            "value": corr,
+                            "errors": errors,
+                        }
+                    )
+                elif metric == "include_exclude":
+                    ie = compute_include_exclude(g)
+                    inc_exc_res.append(
+                        {
+                            "task_name": task,
+                            "dataset_name": ds,
+                            "model": model,
+                            "value": ie,
+                            "errors": errors,
+                        }
+                    )
+
+            insert_results(db, "TFNR", tfnr_res)
+            insert_results(db, "Accuracy", acc_res)
+            insert_results(db, "Correlation", corr_res)
+            insert_results(db, "IncludeExclude", inc_exc_res)
+
+        # RTA очереди (accuracy + errors)
         if not df_rta.empty:
+            rta_res = []
             grouped_rta = df_rta.groupby(
                 ["task_name", "dataset_name", "model", "metric"]
             )
-            all_results.extend(
-                process_group_metrics(group, group_df)
-                for group, group_df in grouped_rta
-            )
+            for (task, ds, model, _), g in grouped_rta:
+                errors = extract_top_errors(g)
+                acc = compute_accuracy(g)
+                rta_res.append(
+                    {
+                        "task_name": task,
+                        "dataset_name": ds,
+                        "model": model,
+                        "value": acc,
+                        "errors": errors,
+                    }
+                )
+            insert_results(db, "RtAR", rta_res)
 
-        # Сохранение результатов
-        if all_results:
-            results_df = pd.DataFrame(all_results)
-
-            # Разделение данных для разных коллекций
-            base_metrics_df = results_df[
-                ["task_name", "dataset_name", "model", "metric", "value"]
-            ].dropna()
-            error_metrics_df = results_df[
-                ["task_name", "dataset_name", "model", "metric", "top_errors"]
-            ].dropna()
-
-            # Обновление основных метрик
-            for metric_type in base_metrics_df["metric"].unique():
-                metric_data = base_metrics_df[base_metrics_df["metric"] == metric_type]
-                insert_results(db, metric_type, metric_data.to_dict("records"))
-
-            # Обновление топ-ошибок
-            if not error_metrics_df.empty:
-                enhance_clear_old_results(db, "TopErrors", error_metrics_df)
-                db["TopErrors"].insert_many(error_metrics_df.to_dict("records"))
-
-        logger.info(f"Cycle completed. Sleeping for {interval} seconds")
         time.sleep(interval)
 
 
 def main():
     """
-    Main function to run the metrics calculation.
+    Точка входа: запускает периодические вычисления.
     """
-    client = MongoClient(MONGO_URI)
-    db = client[MONGO_DB]
-    logger.info(f"Connected to MongoDB: {MONGO_URI}, database: {MONGO_DB}")
-
-    try:
-        compute_and_store_metrics(db)
-    except KeyboardInterrupt:
-        logger.info("Metrics calculation stopped by user")
-    except Exception as e:
-        logger.error(f"Error in metrics calculation: {e}")
-    finally:
-        client.close()
-        logger.info("MongoDB connection closed")
+    db = get_db()
+    compute_and_store_metrics(db, interval=120)
 
 
 if __name__ == "__main__":
