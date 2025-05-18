@@ -101,7 +101,7 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
             idx_err.append(idx)
     value = float(np.mean(scores))
     cond = df.index.isin(idx_err)
-    errors = extract_errors(df, cond)
+    errors = extract_errors(df, cond, k=1)
     return value, errors
 
 
