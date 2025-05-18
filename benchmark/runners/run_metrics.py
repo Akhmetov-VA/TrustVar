@@ -44,239 +44,362 @@ def get_db() -> Database:
 def compute_tfnr(df: pd.DataFrame) -> float:
     """
     Вычисляет метрику TFNR = count(pred='TFN') / count(all).
+
+    :param df: DataFrame с результатами модели.
+    :return: Значение метрики TFNR.
     """
     total = len(df)
     if total == 0:
+        logger.debug("DF пустой при вычислении TFNR.")
         return np.nan
     tfn_count = (df["pred"] == "TFN").sum()
-    return tfn_count / total
+    tfnr = tfn_count / total
+    logger.debug(f"TFNR вычислен: {tfn_count}/{total} = {tfnr}")
+    return tfnr
 
 
 def compute_accuracy(df: pd.DataFrame) -> float:
     """
     Вычисляет accuracy = count(pred == target и pred != TFN) / count(pred != TFN).
+
+    :param df: DataFrame с результатами модели.
+    :return: Значение accuracy.
     """
     df_valid = df[df["pred"] != "TFN"]
-    if df_valid.empty:
+    if len(df_valid) == 0:
+        logger.debug("Нет валидных записей для вычисления accuracy.")
         return np.nan
-    return (df_valid["pred"].astype(str) == df_valid["target"].astype(str)).mean()
+    accuracy = (
+        df_valid["pred"].astype("str") == df_valid["target"].astype("str")
+    ).mean()
+    logger.debug(f"Accuracy вычислен для {len(df_valid)} записей: {accuracy}")
+    return accuracy
 
 
 def compute_correlation(df: pd.DataFrame) -> float:
     """
     Вычисляет корреляцию между pred и target для строк, где pred != TFN.
+    Предполагается, что значения в столбцах pred и target являются числовыми.
+
+    :param df: DataFrame с результатами модели.
+    :return: Коэффициент корреляции.
     """
-    df_valid = df[df["pred"] != "TFN"].copy()
-    if df_valid.empty:
+    df_valid = df[df["pred"] != "TFN"]
+    if len(df_valid) == 0:
+        logger.debug("Нет валидных записей для вычисления корреляции.")
         return np.nan
+
+    # Преобразуем значения в числовой формат
     df_valid["pred"] = pd.to_numeric(df_valid["pred"], errors="coerce")
     df_valid["target"] = pd.to_numeric(df_valid["target"], errors="coerce")
     df_valid = df_valid.dropna(subset=["pred", "target"])
+
     if len(df_valid) < 2:
+        logger.debug("Недостаточно данных для вычисления корреляции.")
         return np.nan
-    return df_valid["pred"].corr(df_valid["target"])
+
+    correlation = df_valid["pred"].corr(df_valid["target"])
+    logger.debug(f"Корреляция вычислена: {correlation}")
+    return correlation
 
 
 def compute_include_exclude(df: pd.DataFrame) -> float:
     """
-    Вычисляет метрику include_exclude по описанной в исходном коде логике.
+    Вычисляет метрику include_exclude.
+
+    Логика:
+      1. Для каждой строки берется ответ модели (pred).
+      2. Проверяется наличие хотя бы одного из строк из include_list. Если найдено, базовый score = 1, иначе 0.
+      3. Если есть negative строки (exclude_list), каждое их вхождение уменьшает score.
+      4. Если все negative строки присутствуют, итоговый score равен 0.
+      5. Итоговая метрика – это среднее значение score по всем строкам.
+
+    :param df: DataFrame с результатами модели.
+    :return: Средний score по строкам.
     """
     if df.empty:
+        logger.debug("DF пустой при вычислении include_exclude.")
         return np.nan
 
     scores = []
-    for _, row in df.iterrows():
+    for index, row in df.iterrows():
         pred = str(row.get("pred", ""))
-        include_list = row.get("include_list", []) or []
-        exclude_list = row.get("exclude_list", []) or []
+        include_list = row.get("include_list", [])
+        exclude_list = row.get("exclude_list", [])
 
-        positive_scores = [1.0 if pos in pred else 0.0 for pos in include_list]
+        # Гарантируем, что include_list и exclude_list имеют тип list
+        if not isinstance(include_list, list):
+            include_list = []
+        if not isinstance(exclude_list, list):
+            exclude_list = []
+
+        # Вычисление базового score на основе include_list
+        positive_scores = []
+        for pos_str in include_list:
+            if pos_str in pred:
+                positive_scores.append(1.0)
+            else:
+                positive_scores.append(0.0)
         score = max(positive_scores) if positive_scores else 0.0
 
-        negatives = sum(1 for neg in exclude_list if neg in pred)
-        if negatives == len(exclude_list) and exclude_list:
+        # Подсчет количества негативных вхождений
+        negatives_count = sum(1 for neg_str in exclude_list if neg_str in pred)
+
+        # Если все негативные строки найдены, score становится 0
+        if negatives_count == len(exclude_list) and len(exclude_list) > 0:
             score = 0.0
-        elif exclude_list:
-            score = max(0.0, score - negatives / len(exclude_list))
+        else:
+            if len(exclude_list) > 0:
+                penalty = (1.0 / len(exclude_list)) * negatives_count
+                score -= penalty
+                if score < 0:
+                    score = 0.0
 
         scores.append(score)
+        logger.debug(
+            f"Строка {index}: score = {score} (negatives_count={negatives_count})"
+        )
 
-    return float(np.mean(scores)) if scores else np.nan
+    if not scores:
+        return np.nan
+    average_score = float(np.mean(scores))
+    logger.debug(f"Средний score для include_exclude: {average_score}")
+    return average_score
 
 
 def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
     """
-    Извлекает задачи из коллекций с данным префиксом и статусом 'extracted'.
+    Извлекает задачи из коллекций, название которых начинается с prefix и имеет статус 'extracted'.
+    Для обычных очередей (prefix='queue_') исключаются задачи с метрикой 'RtA'.
+
+    :param db: Объект базы данных.
+    :param prefix: Префикс коллекций ('queue_' или 'queue_rta_').
+    :return: DataFrame с выборкой задач.
     """
     collections = [c for c in db.list_collection_names() if c.startswith(prefix)]
     if prefix == "queue_":
         collections = [c for c in collections if not c.startswith("queue_rta_")]
+    logger.info(f"Найдено {len(collections)} коллекций с префиксом '{prefix}'.")
     rows = []
-
     for coll_name in collections:
         coll = db[coll_name]
-        query = {"status": "extracted"}
-        if prefix == "queue_":
-            query["metric"] = {"$ne": "RtA"}
-        docs = list(coll.find(query))
-        for doc in docs:
-            task = {
-                "task_name": doc.get("task_name", coll_name.replace(prefix, "")),
-                "dataset_name": doc.get("dataset_name"),
-                "model": doc.get("init_model")
-                if coll_name.startswith("queue_rta_")
-                else doc.get("model"),
-                "metric": doc.get("metric"),
-                "pred": doc.get("pred"),
-                "target": doc.get("target"),
-                "include_list": doc.get("include_list", []),
-                "exclude_list": doc.get("exclude_list", []),
-            }
-            if all(
-                [
-                    task["dataset_name"],
-                    task["model"],
-                    task["metric"],
-                    task["pred"] is not None,
-                ]
-            ):
-                rows.append(task)
+        if prefix == "queue_" and not coll_name.startswith("queue_rta_"):
+            # Выбираем задачи, где метрика не равна RtA
+            cur = coll.find({"status": "extracted", "metric": {"$ne": "RtA"}})
+        else:
+            cur = coll.find({"status": "extracted"})
 
+        count_docs = coll.count_documents({"status": "extracted"})
+        logger.info(
+            f"Коллекция {coll_name}: найдено {count_docs} документов со статусом 'extracted'."
+        )
+
+        for doc in cur:
+            dataset_name = doc.get("dataset_name", None)
+            # Для коллекций с RTA-очередями используем поле init_model, иначе model
+            model = (
+                doc.get("init_model", None)
+                if coll_name.startswith("queue_rta_")
+                else doc.get("model", None)
+            )
+            metric = doc.get("metric", None)
+            pred = doc.get("pred", None)
+            target = doc.get("target", None)
+            task_name = doc.get("task_name", coll_name.replace(prefix, ""))
+            include_list = doc.get("include_list", [])
+            exclude_list = doc.get("exclude_list", [])
+
+            row_dict = {
+                "task_name": task_name,
+                "dataset_name": dataset_name,
+                "model": model,
+                "metric": metric,
+                "pred": pred,
+                "target": target,
+                "include_list": include_list,
+                "exclude_list": exclude_list,
+            }
+
+            # Фильтруем записи: обязательны dataset_name, model, metric и pred
+            if dataset_name and model and metric and pred is not None:
+                rows.append(row_dict)
     df = pd.DataFrame(rows)
-    logger.info(f"Извлечено {len(df)} записей из очереди '{prefix}'.")
+    logger.info(f"Всего извлечено {len(df)} задач из коллекций с префиксом '{prefix}'.")
     return df
 
 
 def clear_old_results(db: Database, collection_name: str, df: pd.DataFrame):
     """
-    Удаляет старые записи по (task_name, model) перед вставкой новых.
+    Удаляет старые записи по уникальным парам (task_name, model) из коллекции,
+    чтобы перед вставкой новых результатов не было дубликатов.
+
+    :param db: Объект базы данных.
+    :param collection_name: Название коллекции для очистки.
+    :param df: DataFrame с новыми результатами.
     """
     if df.empty:
+        logger.debug("Нет данных для очистки старых результатов.")
         return
     coll = db[collection_name]
-    pairs = df[["task_name", "model"]].drop_duplicates()
-    for _, row in pairs.iterrows():
-        coll.delete_many({"task_name": row["task_name"], "model": row["model"]})
+    unique_pairs = df[["task_name", "model"]].drop_duplicates()
+    for _, row in unique_pairs.iterrows():
+        task_name = row["task_name"]
+        model = row["model"]
+        result = coll.delete_many({"task_name": task_name, "model": model})
+        logger.debug(
+            f"Удалено {result.deleted_count} записей для задачи '{task_name}' и модели '{model}'."
+        )
+    logger.info(f"Старые записи удалены из коллекции '{collection_name}'.")
 
 
 def insert_results(db: Database, collection_name: str, results: List[Dict[str, Any]]):
     """
-    Вставляет новые результаты в MongoDB, включая словарь top10 ошибок.
+    Вставляет результаты вычисленных метрик в указанную коллекцию.
+    Перед вставкой удаляет старые записи для уникальных (task_name, model).
+
+    :param db: Объект базы данных.
+    :param collection_name: Название коллекции для вставки результатов.
+    :param results: Список словарей с результатами метрик.
     """
     if not results:
+        logger.info("Нет результатов для вставки.")
         return
     df = pd.DataFrame(results)
+    if df.empty:
+        logger.info("DataFrame с результатами пуст.")
+        return
+
     clear_old_results(db, collection_name, df)
-    db[collection_name].insert_many(df.to_dict(orient="records"))
 
-
-def extract_top_errors(group_df: pd.DataFrame, top_k: int = 10) -> Dict[str, int]:
-    """
-    Для заданного DataFrame группы возвращает словарь из top_k
-    наиболее частых 'pred' значений, где pred != target.
-    """
-    df_wrong = group_df[group_df["pred"].astype(str) != group_df["target"].astype(str)]
-    if df_wrong.empty:
-        return {}
-    counts = df_wrong["pred"].value_counts().head(top_k)
-    return counts.to_dict()
+    coll = db[collection_name]
+    docs = df.to_dict(orient="records")
+    if docs:
+        coll.insert_many(docs)
+        logger.info(
+            f"В коллекцию '{collection_name}' вставлено {len(docs)} результатов."
+        )
 
 
 def compute_and_store_metrics(db: Database, interval: int = 30):
     """
-    Основной цикл: извлекает данные, вычисляет метрики + top10 ошибок, и сохраняет в коллекции.
+    Основной цикл для периодического вычисления и сохранения метрик.
+
+    Шаги:
+      - Извлекаются задачи со статусом 'extracted' из обычных и RTA очередей.
+      - Для обычных очередей рассчитываются метрики: TFNR, accuracy, correlation, include_exclude.
+      - Для RTA очередей рассчитывается accuracy.
+      - Результаты вставляются в соответствующие коллекции.
+      - Пауза на заданный интервал времени.
+
+    :param db: Объект базы данных.
+    :param interval: Интервал ожидания между вычислениями (в секундах).
     """
     while True:
-        # Извлечение задач
+        logger.info("Запуск цикла вычисления метрик.")
+
+        # Извлечение данных из обычных очередей
         df = fetch_extracted_tasks(db, prefix="queue_")
+        # Извлечение данных из RTA очередей
         df_rta = fetch_extracted_tasks(db, prefix="queue_rta_")
 
-        # Обычные очереди
+        # Обработка обычных очередей
         if not df.empty:
-            tfnr_res, acc_res, corr_res, inc_exc_res = [], [], [], []
+            logger.info(f"Начало обработки обычных очередей: {len(df)} задач.")
             grouped = df.groupby(["task_name", "dataset_name", "model", "metric"])
-            for (task, ds, model, metric), g in grouped:
-                errors = extract_top_errors(g)
+            tfnr_results = []
+            accuracy_results = []
+            correlation_results = []
+            include_exclude_results = []
 
-                # TFNR
-                tfnr_val = compute_tfnr(g)
-                tfnr_res.append(
+            for (task_name, dataset_name, model, metric), group_df in grouped:
+                logger.debug(
+                    f"Обработка группы: task_name={task_name}, model={model}, metric={metric}"
+                )
+
+                # Вычисление TFNR для группы
+                tfnr_val = compute_tfnr(group_df)
+                tfnr_results.append(
                     {
-                        "task_name": task,
-                        "dataset_name": ds,
+                        "task_name": task_name,
+                        "dataset_name": dataset_name,
                         "model": model,
                         "value": tfnr_val,
-                        "errors": errors,
                     }
                 )
 
-                # По метрике accuracy
                 if metric == "accuracy":
-                    acc = compute_accuracy(g)
-                    acc_res.append(
+                    acc = compute_accuracy(group_df)
+                    accuracy_results.append(
                         {
-                            "task_name": task,
-                            "dataset_name": ds,
+                            "task_name": task_name,
+                            "dataset_name": dataset_name,
                             "model": model,
                             "value": acc,
-                            "errors": errors,
                         }
                     )
                 elif metric == "correlation":
-                    corr = compute_correlation(g)
-                    corr_res.append(
+                    corr_val = compute_correlation(group_df)
+                    correlation_results.append(
                         {
-                            "task_name": task,
-                            "dataset_name": ds,
+                            "task_name": task_name,
+                            "dataset_name": dataset_name,
                             "model": model,
-                            "value": corr,
-                            "errors": errors,
+                            "value": corr_val,
                         }
                     )
                 elif metric == "include_exclude":
-                    ie = compute_include_exclude(g)
-                    inc_exc_res.append(
+                    inc_exc_val = compute_include_exclude(group_df)
+                    include_exclude_results.append(
                         {
-                            "task_name": task,
-                            "dataset_name": ds,
+                            "task_name": task_name,
+                            "dataset_name": dataset_name,
                             "model": model,
-                            "value": ie,
-                            "errors": errors,
+                            "value": inc_exc_val,
                         }
                     )
+                else:
+                    logger.debug(f"Метрика '{metric}' не обрабатывается отдельно.")
 
-            insert_results(db, "TFNR", tfnr_res)
-            insert_results(db, "Accuracy", acc_res)
-            insert_results(db, "Correlation", corr_res)
-            insert_results(db, "IncludeExclude", inc_exc_res)
+            insert_results(db, "TFNR", tfnr_results)
+            insert_results(db, "Accuracy", accuracy_results)
+            insert_results(db, "Correlation", correlation_results)
+            insert_results(db, "IncludeExclude", include_exclude_results)
+        else:
+            logger.info("Нет задач для обработки в обычных очередях.")
 
-        # RTA очереди (accuracy + errors)
+        # Обработка RTA очередей для метрики accuracy
         if not df_rta.empty:
-            rta_res = []
+            logger.info(f"Начало обработки RTA очередей: {len(df_rta)} задач.")
             grouped_rta = df_rta.groupby(
                 ["task_name", "dataset_name", "model", "metric"]
             )
-            for (task, ds, model, _), g in grouped_rta:
-                errors = extract_top_errors(g)
-                acc = compute_accuracy(g)
-                rta_res.append(
+            rta_results = []
+            for (task_name, dataset_name, model, metric), group_df in grouped_rta:
+                logger.debug(
+                    f"Обработка RTA группы: task_name={task_name}, model={model}"
+                )
+                acc = compute_accuracy(group_df)
+                rta_results.append(
                     {
-                        "task_name": task,
-                        "dataset_name": ds,
+                        "task_name": task_name,
+                        "dataset_name": dataset_name,
                         "model": model,
                         "value": acc,
-                        "errors": errors,
                     }
                 )
-            insert_results(db, "RtAR", rta_res)
+            insert_results(db, "RtAR", rta_results)
+        else:
+            logger.info("Нет задач для обработки в RTA очередях.")
 
+        logger.info("Метрики посчитаны. Ожидание следующего цикла...")
         time.sleep(interval)
 
 
 def main():
     """
-    Точка входа: запускает периодические вычисления.
+    Точка входа в программу: подключается к БД и запускает цикл вычисления метрик.
     """
+    logger.info("Запуск программы вычисления метрик.")
     db = get_db()
     compute_and_store_metrics(db, interval=120)
 
