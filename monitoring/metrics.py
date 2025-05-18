@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 
 import pandas as pd
+import plotly.express as px  # 🔹 Добавлено для интерактивных графиков
 import streamlit as st
 
 from utils.db_client import MongoDBClient, MongoDBConfig
@@ -70,8 +71,8 @@ def render_metrics_tab():
     else:
         st.info("Нет доступных коллекций с метриками.")
 
-    # ДОПОЛНЕНИЕ: Expander с выбором двух метрик и сравнением
-    with st.expander("Сравнение двух метрик на графике"):
+    # 🔽 Интерактивное сравнение двух задач
+    with st.expander("Сравнение двух метрик на интерактивном графике"):
         task_options = set()
         data_per_collection = {}
 
@@ -106,28 +107,26 @@ def render_metrics_tab():
             )
             pivot = df_all.pivot_table(
                 index="model", columns="task_name", values="value"
-            )
+            ).dropna()
 
             if pivot.shape[1] == 2:
-                st.subheader("Scatter Plot: Сравнение метрик")
+                st.subheader("Интерактивный график: сравнение метрик")
                 st.dataframe(pivot)
 
-                import matplotlib.pyplot as plt
-
-                fig, ax = plt.subplots(figsize=(8, 6))
-                ax.scatter(pivot[selected_tasks[0]], pivot[selected_tasks[1]])
-
-                for model, row in pivot.iterrows():
-                    ax.text(
-                        row[selected_tasks[0]] + 0.002,
-                        row[selected_tasks[1]],
-                        model,
-                        fontsize=7,
-                    )
-
-                ax.set_xlabel(selected_tasks[0])
-                ax.set_ylabel(selected_tasks[1])
-                ax.set_title("Сравнение моделей по выбранным метрикам")
-                st.pyplot(fig)
+                # 🔹 Построение интерактивного scatter plot
+                fig = px.scatter(
+                    pivot,
+                    x=selected_tasks[0],
+                    y=selected_tasks[1],
+                    text=pivot.index,
+                    labels={
+                        selected_tasks[0]: selected_tasks[0],
+                        selected_tasks[1]: selected_tasks[1],
+                    },
+                    title="Сравнение моделей по выбранным метрикам",
+                )
+                fig.update_traces(textposition="top center")
+                fig.update_layout(height=600)
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.warning("Недостаточно данных по обеим выбранным задачам.")
