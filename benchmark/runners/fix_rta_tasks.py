@@ -13,9 +13,11 @@ from utils.constants import (
     MONGO_USERNAME,
 )
 
+task = "jailbreak"
+
 # Имена коллекций
-SOURCE_COLLECTION = os.environ.get("SOURCE_COLLECTION", "queue_ood_detection")
-RTA_COLLECTION = os.environ.get("RTA_COLLECTION", "queue_rta_ood_detection")
+SOURCE_COLLECTION = os.environ.get("SOURCE_COLLECTION", f"queue_{task}")
+RTA_COLLECTION = os.environ.get("RTA_COLLECTION", f"queue_rta_{task}")
 
 # Новая модель, которую нужно проставить
 NEW_RTA_MODEL = "qwen2.5:32b-instruct-q4_0"

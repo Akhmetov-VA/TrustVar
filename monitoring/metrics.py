@@ -124,7 +124,6 @@ def render_metrics_tab():
                     for df in data_per_collection.values()
                 ]
             )
-            st.dataframe(df_all)
             pivot = df_all.pivot_table(
                 index="model", columns="task_name", values="value"
             ).dropna()
