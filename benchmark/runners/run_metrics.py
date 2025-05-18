@@ -245,16 +245,6 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                         "errors": errs,
                     }
                 )
-                val_tfnr, errs_tfnr = compute_tfnr(g)
-                rta_res.append(
-                    {
-                        "task_name": task,
-                        "dataset_name": ds,
-                        "model": model,
-                        "value": val_tfnr,
-                        "errors": errs_tfnr,
-                    }
-                )
             insert_results(db, "RtAR", rta_res)
 
         logger.info("Метрики обновлены, ожидаем следующий цикл.")
