@@ -115,12 +115,21 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
         query = {"status": "extracted"}
         if prefix == "queue_":
             query["metric"] = {"$ne": "RtA"}
+
+        logging.info(f"Загружаем данные для метрик из коллекции {coll_name}")
         for doc in coll.find(query):
             prompt = doc.get("prompt", "")
             vars_ = doc.get("variables", {}) or {}
             inp = prompt.format(**vars_)
             inc_list = doc.get("include_list", []) or []
             exc_list = doc.get("exclude_list", []) or []
+
+            # Гарантируем, что include_list и exclude_list имеют тип list
+            if isinstance(inc_list, str):
+                inc_list = [inc_list]
+            if isinstance(exc_list, str):
+                exc_list = [exc_list]
+
             metric = doc.get("metric")
             target_val = inc_list if metric == "include_exclude" else doc.get("target")
             rows.append(
