@@ -76,7 +76,7 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
 
 def render_metrics_tab():
     st.header("Метрики моделей")
-    results_collections = ["RtAR", "Accuracy", "Correlation", "IncludeExclude"]
+    results_collections = ["RtAR", "TFNR", "Accuracy", "Correlation", "IncludeExclude"]
     if results_collections:
         selected_results_collection = st.selectbox(
             "Выберите коллекцию с метриками",
@@ -97,6 +97,8 @@ def render_metrics_tab():
         task_options = set()
         data_per_collection: Dict[str, pd.DataFrame] = {}
         for coll in results_collections:
+            if coll == "TFNR":
+                continue
             recs = list(db_client.get_collection(coll).find())
             if not recs:
                 continue
@@ -122,6 +124,7 @@ def render_metrics_tab():
                     for df in data_per_collection.values()
                 ]
             )
+            st.dataframe(df_all)
             pivot = df_all.pivot_table(
                 index="model", columns="task_name", values="value"
             ).dropna()
