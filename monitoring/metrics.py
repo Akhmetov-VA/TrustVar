@@ -137,7 +137,6 @@ def render_metrics_tab():
         selected_corr_tasks = st.multiselect(
             "Выберите задачи для анализа корреляции:",
             task_options,
-            default=task_options[:5],
             key="correlation_tasks",
         )
 
