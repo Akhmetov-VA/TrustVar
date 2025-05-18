@@ -32,17 +32,17 @@ def get_db() -> Database:
 
 
 def extract_errors(
-    df: pd.DataFrame, condition: pd.Series, k: int = 10
+    df: pd.DataFrame, condition: pd.Series, input_col: str = "input", k: int = 10
 ) -> List[Dict[str, Any]]:
     """
     Берёт случайную выборку до k строк, где condition == True,
-    и возвращает их как dict с полями: prompt + variables оформленный, pred, target/include-exclude.
+    и возвращает их как dict с полями input, pred, target.
     """
     df_err = df[condition]
     if df_err.empty:
         return []
     sample = df_err.sample(n=min(len(df_err), k))
-    return sample[["input", "pred", "target"]].to_dict(orient="records")
+    return sample[[input_col, "pred", "target"]].to_dict(orient="records")
 
 
 def compute_tfnr(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
@@ -84,32 +84,28 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
     if df.empty:
         return np.nan, []
     scores = []
-    error_idxs = []
+    idx_err = []
     for idx, row in df.iterrows():
         pred = str(row.get("pred", ""))
-        inc: List[str] = row.get("include_list") or []
-        exc: List[str] = row.get("exclude_list") or []
-        pos_scores = [1.0 if token in pred else 0.0 for token in inc]
+        inc = row.get("include_list") or []
+        exc = row.get("exclude_list") or []
+        pos_scores = [1.0 if s in pred else 0.0 for s in inc]
         score = max(pos_scores) if pos_scores else 0.0
-        neg_count = sum(1 for token in exc if token in pred)
+        neg_count = sum(1 for s in exc if s in pred)
         if exc and neg_count == len(exc):
             score = 0.0
         elif exc:
             score = max(0.0, score - neg_count / len(exc))
         scores.append(score)
         if score < 1.0:
-            error_idxs.append(idx)
+            idx_err.append(idx)
     value = float(np.mean(scores))
-    cond = df.index.isin(error_idxs)
+    cond = df.index.isin(idx_err)
     errors = extract_errors(df, cond)
     return value, errors
 
 
 def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
-    """
-    Извлекает задачи из коллекций prefix*,
-    формирует input = prompt.format(**variables).
-    """
     cols = [c for c in db.list_collection_names() if c.startswith(prefix)]
     if prefix == "queue_":
         cols = [c for c in cols if not c.startswith("queue_rta_")]
@@ -121,11 +117,12 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
             query["metric"] = {"$ne": "RtA"}
         for doc in coll.find(query):
             prompt = doc.get("prompt", "")
-            variables = doc.get("variables", {}) or {}
-            try:
-                inp = prompt.format(**variables)
-            except Exception:
-                inp = prompt  # fallback если форматирование не удалось
+            vars_ = doc.get("variables", {}) or {}
+            inp = prompt.format(**vars_)
+            inc_list = doc.get("include_list", []) or []
+            exc_list = doc.get("exclude_list", []) or []
+            metric = doc.get("metric")
+            target_val = inc_list if metric == "include_exclude" else doc.get("target")
             rows.append(
                 {
                     "task_name": doc.get("task_name", coll_name.replace(prefix, "")),
@@ -133,18 +130,16 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
                     "model": doc.get("init_model")
                     if coll_name.startswith("queue_rta_")
                     else doc.get("model"),
-                    "metric": doc.get("metric"),
+                    "metric": metric,
                     "input": inp,
                     "pred": doc.get("pred"),
-                    # для include_exclude целевого столбца “target” нет,
-                    # но функции compute_* не используют его в этом случае
-                    "target": doc.get("target"),
-                    "include_list": doc.get("include_list", []),
-                    "exclude_list": doc.get("exclude_list", []),
+                    "target": target_val,
+                    "include_list": inc_list,
+                    "exclude_list": exc_list,
                 }
             )
     df = pd.DataFrame(rows)
-    logger.info(f"Извлечено {len(df)} задач из очередей '{prefix}'.")
+    logger.info(f"Извлечено {len(df)} записей из очереди '{prefix}'.")
     return df
 
 
@@ -171,24 +166,23 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
 
         # обычные очереди
         if not df.empty:
-            out_tfnr, out_acc, out_corr, out_ie = [], [], [], []
+            tfnr_res, acc_res, corr_res, ie_res = [], [], [], []
             for (task, ds, model, metric), g in df.groupby(
                 ["task_name", "dataset_name", "model", "metric"]
             ):
-                # TFNR всегда считаем
-                val_tfnr, err_tfnr = compute_tfnr(g)
-                out_tfnr.append(
+                val_tfnr, errs_tfnr = compute_tfnr(g)
+                tfnr_res.append(
                     {
                         "task_name": task,
                         "dataset_name": ds,
                         "model": model,
                         "value": val_tfnr,
-                        "errors": err_tfnr,
+                        "errors": errs_tfnr,
                     }
                 )
                 if metric == "accuracy":
                     val, errs = compute_accuracy(g)
-                    out_acc.append(
+                    acc_res.append(
                         {
                             "task_name": task,
                             "dataset_name": ds,
@@ -199,7 +193,7 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                     )
                 elif metric == "correlation":
                     val, errs = compute_correlation(g)
-                    out_corr.append(
+                    corr_res.append(
                         {
                             "task_name": task,
                             "dataset_name": ds,
@@ -210,7 +204,7 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                     )
                 elif metric == "include_exclude":
                     val, errs = compute_include_exclude(g)
-                    out_ie.append(
+                    ie_res.append(
                         {
                             "task_name": task,
                             "dataset_name": ds,
@@ -220,38 +214,38 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                         }
                     )
 
-            insert_results(db, "TFNR", out_tfnr)
-            insert_results(db, "Accuracy", out_acc)
-            insert_results(db, "Correlation", out_corr)
-            insert_results(db, "IncludeExclude", out_ie)
+            insert_results(db, "TFNR", tfnr_res)
+            insert_results(db, "Accuracy", acc_res)
+            insert_results(db, "Correlation", corr_res)
+            insert_results(db, "IncludeExclude", ie_res)
 
-        # RTA очереди (accuracy + TFNR)
+        # RTA очереди
         if not df_rta.empty:
-            out_rta = []
+            rta_res = []
             for (task, ds, model, _), g in df_rta.groupby(
                 ["task_name", "dataset_name", "model", "metric"]
             ):
-                val_acc, err_acc = compute_accuracy(g)
-                out_rta.append(
+                val, errs = compute_accuracy(g)
+                rta_res.append(
                     {
                         "task_name": task,
                         "dataset_name": ds,
                         "model": model,
-                        "value": val_acc,
-                        "errors": err_acc,
+                        "value": val,
+                        "errors": errs,
                     }
                 )
-                val_tfnr, err_tfnr = compute_tfnr(g)
-                out_rta.append(
+                val_tfnr, errs_tfnr = compute_tfnr(g)
+                rta_res.append(
                     {
                         "task_name": task,
                         "dataset_name": ds,
                         "model": model,
                         "value": val_tfnr,
-                        "errors": err_tfnr,
+                        "errors": errs_tfnr,
                     }
                 )
-            insert_results(db, "RtAR", out_rta)
+            insert_results(db, "RtAR", rta_res)
 
         logger.info("Метрики обновлены, ожидаем следующий цикл.")
         time.sleep(interval)
