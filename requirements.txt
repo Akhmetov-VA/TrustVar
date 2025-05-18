@@ -179,3 +179,4 @@ xxhash==3.5.0
 yandexcloud==0.319.0
 yarl==1.18.3
 zhipuai==2.1.5.20241204
+plotly
