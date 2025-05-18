@@ -4,7 +4,10 @@ version = "0.1.0"
 description = ""
 readme = "README.md"
 requires-python = ">3.11"
-dependencies = ["python-dotenv>=0.21.0,<0.22.0","ipykernel>=6.29.5,<7.0.0"]
+dependencies = [
+    "python-dotenv>=0.21.0,<0.22.0",
+    "ipykernel>=6.29.5,<7.0.0",
+]
 
 [project.optional-dependencies]
 frontend = [
@@ -15,7 +18,8 @@ frontend = [
     "fastparquet>=2024.5.0, <2025.0.0",
     "datasets>=3.0.1, <4.0.0", 
     "openpyxl>=3.1.5, <4.0.0", 
-    
+    "plotly>=6.1.0",
+
 ]
 backend = [
     "yandexcloud>=0.319.0, <0.320.0",

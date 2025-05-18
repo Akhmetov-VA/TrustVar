@@ -76,7 +76,7 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
 
 def render_metrics_tab():
     st.header("Метрики моделей")
-    results_collections = ["RtAR", "TFNR", "Accuracy", "Correlation", "IncludeExclude"]
+    results_collections = ["RtAR", "Accuracy", "Correlation", "IncludeExclude"]
     if results_collections:
         selected_results_collection = st.selectbox(
             "Выберите коллекцию с метриками",
