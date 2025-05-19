@@ -7,9 +7,7 @@ from pymongo.database import Database
 logger = logging.getLogger(__name__)
 
 
-def update_task_models(
-    db: Database, task_id: Any, new_models: List[str]
-) -> Dict[str, Any]:
+def sync_task_once(db: Database, task_id: Any, new_models: List[str]) -> Dict[str, Any]:
     """
     Обновляет список моделей у задачи с заданным task_id в коллекции 'tasks'.
     :param db: объект базы данных (MongoDB Database)
