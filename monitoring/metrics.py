@@ -121,8 +121,8 @@ def render_metrics_tab():
             df_all = pd.concat(
                 [
                     df[df["task_name"].isin(sel)][["task_name", "model", "value"]]
-                    for df in data_per_collection.values()[:2]
-                ]
+                    for df in data_per_collection.values()
+                ][:2]
             )
             pivot = df_all.pivot_table(
                 index="model", columns="task_name", values="value"
