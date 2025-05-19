@@ -109,7 +109,6 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
     cols = [c for c in db.list_collection_names() if c.startswith(prefix)]
     if prefix == "queue_":
         cols = [c for c in cols if not c.startswith("queue_rta_")]
-        cols = ["queue_natural_noise"]
     rows: List[Dict[str, Any]] = []
     for coll_name in cols:
         coll = db[coll_name]

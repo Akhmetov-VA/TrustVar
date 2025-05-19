@@ -13,7 +13,7 @@ from utils.constants import (
     MONGO_USERNAME,
 )
 
-task = "jailbreak"
+task = "exaggerated_safety"
 
 # Имена коллекций
 SOURCE_COLLECTION = os.environ.get("SOURCE_COLLECTION", f"queue_{task}")
