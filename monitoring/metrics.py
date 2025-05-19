@@ -114,14 +114,14 @@ def render_metrics_tab():
         sel = st.multiselect(
             "Выберите две задачи для scatter-графика:",
             task_options,
-            max_selections=2,
+            max_selections=3,
             key="compare_task_names",
         )
-        if len(sel) == 2:
+        if len(sel) >= 2:
             df_all = pd.concat(
                 [
                     df[df["task_name"].isin(sel)][["task_name", "model", "value"]]
-                    for df in data_per_collection.values()
+                    for df in data_per_collection.values()[:2]
                 ]
             )
             pivot = df_all.pivot_table(
