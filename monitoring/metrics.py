@@ -1,7 +1,9 @@
-# metrics.py
+import json
 from typing import Any, Dict, List
 
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go  # 🔹 Для интерактивной heatmap
 import streamlit as st
 
 from utils.db_client import MongoDBClient, MongoDBConfig
@@ -20,9 +22,9 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
         st.error("В данных отсутствуют необходимые поля (task_name, model, value).")
         return
 
+    # выборка по задачам и моделям
     tasks = results_df["task_name"].unique()
     models = results_df["model"].unique()
-
     selected_tasks = st.multiselect(
         "Выберите задачу(и):",
         options=tasks,
@@ -35,7 +37,6 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
         default=list(models),
         key=f"metrics_models_{collection_name}",
     )
-
     filtered_df = results_df[
         (results_df["task_name"].isin(selected_tasks))
         & (results_df["model"].isin(selected_models))
@@ -44,6 +45,7 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
         st.info("Нет данных для отображения с выбранными фильтрами.")
         return
 
+    # табличное и графическое представление метрик
     pivot_table = filtered_df.pivot_table(
         index="model", columns="task_name", values="value", aggfunc="mean"
     )
@@ -51,6 +53,25 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
     st.dataframe(pivot_table)
     st.subheader("Визуализация метрик")
     st.bar_chart(pivot_table)
+
+    # 🔽 Новый expander: показать ошибки в виде DataFrame
+    with st.expander("Просмотр топ-10 ошибок по выбранным задачам и моделям"):
+        if "errors" not in filtered_df.columns:
+            st.info("Для этой метрики нет сохранённых ошибок.")
+        else:
+            df_err = (
+                filtered_df[["task_name", "model", "errors"]]
+                .dropna(subset=["errors"])
+                .drop_duplicates(subset=["task_name", "model"])
+            )
+            if df_err.empty:
+                st.info("Ошибок не найдено.")
+            else:
+                df_err["errors"] = df_err["errors"].apply(
+                    lambda errs: json.dumps(errs, ensure_ascii=False, indent=2)
+                )
+                df_to_show = df_err.set_index(["task_name", "model"])
+                st.dataframe(df_to_show)
 
 
 def render_metrics_tab():
@@ -70,3 +91,97 @@ def render_metrics_tab():
             st.info(f"Данные в коллекции '{selected_results_collection}' отсутствуют.")
     else:
         st.info("Нет доступных коллекций с метриками.")
+
+    # 🔽 Интерактивное сравнение и корреляция
+    with st.expander("Сравнение метрик и корреляция между задачами"):
+        task_options = set()
+        data_per_collection: Dict[str, pd.DataFrame] = {}
+        for coll in results_collections:
+            if coll == "TFNR":
+                continue
+            recs = list(db_client.get_collection(coll).find())
+            if not recs:
+                continue
+            df = pd.DataFrame(recs)
+            if "_id" in df.columns:
+                df.drop(columns=["_id"], inplace=True)
+            if {"task_name", "model", "value"}.issubset(df.columns):
+                task_options.update(df["task_name"].unique())
+                data_per_collection[coll] = df
+        task_options = sorted(task_options)
+
+        # --- scatter plot для двух задач ---
+        sel = st.multiselect(
+            "Выберите две задачи для scatter-графика:",
+            task_options,
+            max_selections=3,
+            key="compare_task_names",
+        )
+        if len(sel) >= 2:
+            df_all = pd.concat(
+                [
+                    df[df["task_name"].isin(sel)][["task_name", "model", "value"]]
+                    for df in data_per_collection.values()[:2]
+                ]
+            )
+            pivot = df_all.pivot_table(
+                index="model", columns="task_name", values="value"
+            ).dropna()
+            if pivot.shape[1] == 2:
+                st.subheader("Интерактивный график: сравнение метрик")
+                st.dataframe(pivot)
+                fig = px.scatter(
+                    pivot,
+                    x=sel[0],
+                    y=sel[1],
+                    text=pivot.index,
+                    labels={sel[0]: sel[0], sel[1]: sel[1]},
+                    title="Сравнение моделей по выбранным метрикам",
+                )
+                fig.update_traces(textposition="top center")
+                fig.update_layout(height=600)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Недостаточно данных для scatter-графика.")
+
+        # --- интерактивная корреляция для списка задач ---
+        corr_sel = st.multiselect(
+            "Выберите задачи для анализа корреляции:",
+            task_options,
+            key="correlation_tasks",
+        )
+        if len(corr_sel) >= 2:
+            df_corr = pd.concat(
+                [
+                    df[df["task_name"].isin(corr_sel)][["task_name", "model", "value"]]
+                    for df in data_per_collection.values()
+                ]
+            )
+            pivot_corr = df_corr.pivot_table(
+                index="model", columns="task_name", values="value"
+            ).dropna()
+            if not pivot_corr.empty:
+                st.subheader("Корреляционная матрица задач")
+                st.dataframe(pivot_corr.corr().round(2))
+                corr_matrix = pivot_corr.corr()
+                fig = go.Figure(
+                    data=go.Heatmap(
+                        z=corr_matrix.values,
+                        x=corr_matrix.columns,
+                        y=corr_matrix.columns,
+                        colorscale="RdBu",
+                        zmin=-1,
+                        zmax=1,
+                        colorbar=dict(title="Корреляция"),
+                        hovertemplate="Задачи: %{y} и %{x}<br>Значение: %{z:.2f}<extra></extra>",
+                    )
+                )
+                fig.update_layout(
+                    title="Интерактивная корреляционная матрица задач",
+                    xaxis=dict(title=""),
+                    yaxis=dict(title="", autorange="reversed"),
+                    height=600,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Недостаточно данных для построения корреляционной матрицы.")

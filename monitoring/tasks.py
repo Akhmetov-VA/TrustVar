@@ -75,8 +75,8 @@ def filter_tasks_by_group(df_tasks: pd.DataFrame) -> pd.DataFrame:
 
 
 def render_update_task():
-    with st.expander("Изменить задачу", expanded=False):
-        st.header("Изменить задачу")
+    with st.expander("Изменить модели задачи", expanded=False):
+        st.header("Изменить модели задачи")
         df_tasks = db_client.get_all_tasks()
         if df_tasks.empty:
             st.write("Нет задач для обновления.")
@@ -94,112 +94,19 @@ def render_update_task():
         )
         task_to_update = df_tasks[df_tasks["task_name"] == selected_task_name].iloc[0]
 
-        # Обновление моделей
+        # Только обновление списка моделей
         current_models = task_to_update.get("models", [])
         selected_models = st.multiselect(
             "Выберите модели для задачи:", options=MODELS, default=current_models
         )
 
-        # Обновление prompt
-        current_prompt = task_to_update.get("prompt", "")
-        new_prompt = st.text_area(
-            "Обновить prompt задачи:", value=current_prompt, height=150
-        )
-
-        # Обновление regexp и target
-        current_regexp = task_to_update.get("regexp", "")
-        new_regexp = st.text_input(
-            "Обновить регулярное выражение для задачи:", value=current_regexp
-        )
-        current_target = task_to_update.get("target", "")
-        new_target = st.text_input("Обновить target для задачи:", value=current_target)
-
-        # Проверка наличия плейсхолдеров для переменных
-        var_cols = task_to_update.get("variables_cols", [])
-        if var_cols:
-            missing_placeholders = [
-                col for col in var_cols if f"{{{col}}}" not in new_prompt
-            ]
-            if missing_placeholders:
-                st.warning(
-                    "В prompt отсутствуют плейсхолдеры: "
-                    + ", ".join(missing_placeholders)
-                )
-
-        # Обновление include/exclude колонок для метрики "include_exclude"
-        if task_to_update.get("metric") == "include_exclude":
-            current_include = task_to_update.get("include_column", "")
-            new_include = st.text_input(
-                "Обновить include_column для задачи:", value=current_include
-            )
-            current_exclude = task_to_update.get("exclude_column", "")
-            new_exclude = st.text_input(
-                "Обновить exclude_column для задачи:", value=current_exclude
-            )
-        else:
-            new_include = None
-            new_exclude = None
-
-        # Обновление RTA prompt и модели для метрики "RtA"
-        update_rta = False
-        if task_to_update.get("metric") == "RtA":
-            update_rta = True
-            current_rta_prompt = task_to_update.get("rta_prompt", "")
-            new_rta_prompt = st.text_area(
-                "Обновить RTA prompt задачи:", value=current_rta_prompt, height=150
-            )
-            missing_placeholders = [
-                col for col in ["input", "answer"] if f"{{{col}}}" not in new_rta_prompt
-            ]
-            if missing_placeholders:
-                st.warning(
-                    "В RTA prompt отсутствуют плейсхолдеры: "
-                    + ", ".join(missing_placeholders)
-                )
-            current_rta_model = task_to_update.get("rta_model", "")
-            new_rta_model = st.selectbox(
-                "Обновить модель для RTA:",
-                options=MODELS,
-                index=MODELS.index(current_rta_model)
-                if current_rta_model in MODELS
-                else 0,
-                key="update_rta_model_selectbox",
-            )
-        else:
-            new_rta_prompt = None
-            new_rta_model = None
-
-        if st.button("Обновить задачу"):
-            if not new_prompt:
-                st.error("Prompt не может быть пустым!")
-                return
-            if update_rta and not new_rta_prompt:
-                st.error("RTA prompt не может быть пустым для задач с метрикой RtA!")
-                return
-
-            # Формирование данных для обновления, синхронизированных с логикой создания задачи
-            update_data = {
-                "models": selected_models,
-                "prompt": new_prompt,
-                "regexp": new_regexp,
-                "target": new_target,
-            }
-            if var_cols:
-                update_data["variables_cols"] = var_cols
-            if task_to_update.get("metric") == "include_exclude":
-                update_data["include_column"] = new_include
-                update_data["exclude_column"] = new_exclude
-            if update_rta:
-                update_data["rta_prompt"] = new_rta_prompt
-                update_data["rta_model"] = new_rta_model
-
+        if st.button("Обновить модели"):
+            update_data = {"models": selected_models}
             task_id = task_to_update["_id"]
             db_client.update_task(task_id, update_data)
-            # Получаем обновленную задачу (предполагается, что db_client имеет метод get_task)
             updated_task = db_client.get_task(task_id)
-            # Вызываем одноразовую синхронизацию, используя объект базы данных из db_client
             sync_task_once(db_client.db, updated_task)
-            st.success("Задача успешно обновлена и синхронизирована!")
+            st.success("Список моделей успешно обновлён!")
 
 
 def highlight_status(s: str) -> str:
@@ -270,41 +177,93 @@ def load_data_for_dashboard(collections: List[str]) -> pd.DataFrame:
 def show_errors(collections: List[str]):
     st.header("Уникальные сообщения об ошибках")
     with st.expander("Показать ошибки", expanded=False):
+        # Словарь для хранения информации о коллекциях с ошибками
+        collections_with_errors = {}
+
+        # Собираем информацию о задачах с ошибками
         for collection_name in collections:
             stopped_tasks = db_client.get_tasks_by_status(collection_name, "stopped")
             error_tasks = db_client.get_tasks_by_status(collection_name, "error")
             failed_tasks = stopped_tasks + error_tasks
 
             if failed_tasks:
+                collections_with_errors[collection_name] = failed_tasks
+
+                # Отображаем ошибки для коллекции
                 error_messages = [
                     task.get("error", "Нет информации об ошибке")
                     for task in failed_tasks
                 ]
                 error_counts = Counter(error_messages)
                 st.subheader(f"Коллекция: {collection_name}")
-                for error_message, count in error_counts.items():
-                    st.write(f"**Ошибка:** {error_message} | **Количество:** {count}")
+
+                # Группируем ошибки по моделям
+                models_errors = {}
+                for task in failed_tasks:
+                    model = task.get("model", "Неизвестная модель")
+                    error = task.get("error", "Нет информации об ошибке")
+                    if model not in models_errors:
+                        models_errors[model] = Counter()
+                    models_errors[model][error] += 1
+
+                # Отображаем ошибки по моделям
+                for model, errors in models_errors.items():
+                    st.write(f"**Модель:** {model}")
+                    for i, (error_message, count) in enumerate(errors.items()):
+                        st.write(
+                            f"- **Ошибка:** {error_message} | **Количество:** {count}"
+                        )
+                        if i > 5:
+                            break
                 st.write("---")
 
-        if st.button(
-            "Перезапустить задачи со статусами 'stopped' и 'error'",
-            key="restart_failed_tasks",
-        ):
-            for collection_name in collections:
-                modified_count = restart_stopped_error_tasks(collection_name)
-                if modified_count > 0:
-                    st.write(
-                        f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
-                    )
-        else:
-            st.write(
-                "Нажмите кнопку выше, чтобы перезапустить задачи со статусами 'stopped' и 'error'."
+        if collections_with_errors:
+            # Получаем список коллекций с ошибками
+            collections_list = list(collections_with_errors.keys())
+
+            # Добавляем опцию "Все коллекции"
+            options = [None, "Все коллекции"] + collections_list
+
+            # Выбор коллекции для перезапуска
+            selected_collection = st.selectbox(
+                "Выберите коллекцию для перезапуска задач:",
+                options,
+                index=0,
+                key="collection_to_restart",
             )
+
+            total_restarted = 0
+
+            if selected_collection:
+                if selected_collection == "Все коллекции":
+                    # Перезапускаем задачи во всех коллекциях с ошибками
+                    for collection_name in collections_with_errors.keys():
+                        modified_count = restart_stopped_error_tasks(collection_name)
+                        if modified_count > 0:
+                            total_restarted += modified_count
+                            st.write(
+                                f"В коллекции '{collection_name}' перезапущено {modified_count} задач."
+                            )
+                else:
+                    # Перезапускаем задачи только в выбранной коллекции
+                    modified_count = restart_stopped_error_tasks(selected_collection)
+                    if modified_count > 0:
+                        total_restarted += modified_count
+                        st.write(
+                            f"В коллекции '{selected_collection}' перезапущено {modified_count} задач."
+                        )
+
+                if total_restarted > 0:
+                    st.success(f"Всего перезапущено {total_restarted} задач.")
+                else:
+                    st.info("Не найдено задач для перезапуска.")
+        else:
+            st.info("Нет задач с ошибками для перезапуска.")
 
 
 def render_progressbar():
     st.header("Мониторинг очередей")
-    if st.button("Загрузить мониторинг очередей", key="load_monitoring"):
+    if st.checkbox("Загрузить мониторинг очередей", value=False, key="load_monitoring"):
         collections_to_process = sorted(
             [col for col in db_client.list_collections() if col.startswith("queue_")]
         )
@@ -322,12 +281,11 @@ def render_progressbar():
                 selected_queue = st.selectbox(
                     "Выберите очередь для остановки:",
                     pending_queues,
+                    index=None,
                     key="fail_pending_selectbox",
                 )
-                if st.button(
-                    "Поменять статус задач на 'stopped'", key="fail_pending_button"
-                ):
-                    st.write("start")
+                if selected_queue:
+                    st.write(f"Start stopping {selected_queue}")
                     count_stopped = stop_pending_tasks(selected_queue)
                     st.success(
                         f"В коллекции '{selected_queue}' остановлено {count_stopped} задач."
