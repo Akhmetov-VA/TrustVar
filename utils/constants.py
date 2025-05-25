@@ -55,6 +55,7 @@ MODELS = [
     "yandexgpt-lite",
     "yi:34b-q4_0",
     "yi:6b-q4_0",
+    'IlyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp',
 ]
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
