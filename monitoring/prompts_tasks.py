@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 from dataset_management import render_dataset_varcols_section  # для получения var_cols
 
-from utils.constants import MODELS, RTA_MODEL
+from utils.constants import MODELS, RTA_MODEL, AUGMENTATIONS
 from utils.db_client import MongoDBClient, MongoDBConfig
 
 # Инициализация клиента БД
@@ -13,7 +13,6 @@ config = MongoDBConfig(database="TrustGen")
 db_client = MongoDBClient(config)
 
 DEFAULT_REGEX = r"(?:^\W*([01]).*)|(?:.*([01])\W*$)"
-
 
 def show_all_prompts():
     coll_name = "prompt_storage"
@@ -218,6 +217,10 @@ def render_models_section() -> List[str]:
         selected_models = st.multiselect("Выберите модели:", MODELS)
         return selected_models
 
+def render_dynamic_variations() -> List[str]:
+    with st.expander("Динамическая аугментация датасета", expanded=False):
+        selected_variations = st.multiselect("Выберите метод аугментации:", AUGMENTATIONS)
+        return selected_variations
 
 def render_preview_and_save_task(
     dataset_name: str,
@@ -227,6 +230,7 @@ def render_preview_and_save_task(
     target_value: Any,
     selected_models: List[str],
     metric: str,
+    selected_variations: Optional[List[str]],
     rta_prompt_selected: Optional[str],
     rta_model: Optional[str],
     include_column: Optional[str],
@@ -253,6 +257,9 @@ def render_preview_and_save_task(
                     for k, v in row.items():
                         filled_prompt = filled_prompt.replace(f"{{{k}}}", str(v))
                     st.write(f"**Пример {i + 1}:** {filled_prompt}")
+            
+            if selected_variations:
+                st.write(f"**Методы динамической аугментации:** {' '.join(selected_variations)}")
             st.write("**Структура записи задачи в БД:**")
             task_data = {
                 "task_name": task_name,
@@ -273,6 +280,11 @@ def render_preview_and_save_task(
                 task_data["exclude_column"] = exclude_column
             else:
                 task_data["target"] = target_value
+            
+            if selected_variations:
+                task_data['dynamic_augments'] = selected_variations
+            else:
+                task_data['dynamic_augments'] = []
 
             st.json(task_data, expanded=False)
             if st.button("Загрузить задачу в базу"):
@@ -292,6 +304,8 @@ def render_create_task_tab():
         var_cols, metric, target_column, include_column, exclude_column = (
             render_dataset_varcols_section(selected_dataset)
         )
+        selected_variations = render_dynamic_variations()
+
         if var_cols and metric is not None:
             selected_prompt = render_prompt_selection_section(var_cols)
             if selected_prompt:
@@ -319,6 +333,7 @@ def render_create_task_tab():
                         target_value=final_target,
                         selected_models=selected_models,
                         metric=metric,
+                        selected_variations=selected_variations,
                         rta_prompt_selected=rta_prompt_selected,
                         rta_model=rta_model,
                         include_column=include_column,

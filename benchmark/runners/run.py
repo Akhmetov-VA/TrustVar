@@ -1,10 +1,8 @@
 import logging
-import os
 import time
 from typing import Any, Dict
 
 import requests
-from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
@@ -15,6 +13,8 @@ from utils.constants import (
     MONGO_PASSWORD,
     MONGO_PORT,
     MONGO_USERNAME,
+    AUGMENT_MODEL,
+    AUGMENT_PROMPT
 )
 
 
@@ -90,6 +90,21 @@ def make_request(
         logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
         raise e
 
+def generate_answer_by_augmentations(augment_technique, model, prompt, variables, session):
+    augmenter_prompt = AUGMENT_PROMPT + f"""
+    [Техника]:
+        {augment_technique}
+
+    [Исходный текст]:
+        Текст: {prompt}
+        Переменные: {variables}
+
+    [Ответ]:
+    """
+    augmented_response = make_request(AUGMENT_MODEL, augmenter_prompt, variables, session)  # augment
+    # checked_response = make_request(CHECK_MODEL, augmented_response, variables, session)  # check similarity
+    response = make_request(model, augmented_response, variables, session)  # final response
+    return response
 
 def process_task(task: Dict, collection: Collection, session: requests.Session) -> None:
     """
@@ -105,12 +120,24 @@ def process_task(task: Dict, collection: Collection, session: requests.Session) 
     prompt = task["prompt"]
     model = task["model"]
     variables = task.get("variables", {})
+    dynamic_augments = task.get("dynamic_augments", [])
     try:
-        response = make_request(model, prompt, variables, session)
-        collection.update_one(
-            {"_id": task_id},
-            {"$set": {"status": "completed", "response": response}},
-        )
+        if dynamic_augments:
+            responses = []
+            for augment_technique in dynamic_augments:
+                response = generate_answer_by_augmentations(augment_technique, model, prompt, variables, session)
+                responses.append(response)
+                
+            collection.update_one(
+                {"_id": task_id},
+                {"$set": {"status": "completed", "response": responses}},
+            )
+        else:
+            response = make_request(model, prompt, variables, session)
+            collection.update_one(
+                {"_id": task_id},
+                {"$set": {"status": "completed", "response": response}},
+            )
         logging.info(
             f"Задача с id: {task_id} успешно завершена и обновлена в базе данных."
         )
@@ -151,8 +178,17 @@ def process_collection(
             f"Обработка задач для модели '{model}' в коллекции '{collection_name}'."
         )
         while True:
+            # task = collection.find_one_and_update(
+            #     {"status": "pending", "model": model},
+            #     {"$set": {"status": "processing"}},
+            #     return_document=False,
+            # )
+
             task = collection.find_one_and_update(
-                {"status": "pending", "model": model},
+                {
+                    "status": {"$in": ["pending", "augmenting"]},
+                    "model": model
+                },
                 {"$set": {"status": "processing"}},
                 return_document=False,
             )
