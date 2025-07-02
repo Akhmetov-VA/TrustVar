@@ -1,124 +1,80 @@
 version: '3'
-services:
-  mongo:
-    image: mongo
-    container_name: mongodb
-    env_file:
-      - .env
-    ports:
-      - '${MONGO_INITDB_ROOT_PORT}:${MONGO_INITDB_ROOT_PORT}'
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-    restart: on-failure  
-  mongo-express:
-    image: mongo-express
-    container_name: mongodb-express
-    environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-      - ME_CONFIG_MONGODB_SERVER=mongo
-    ports:
-      - '8081:8081'
-    depends_on:
-      - mongo
-    restart: on-failure  
-  mongo-filler:
-    build: 
-      context: .
-      target: db_filler
-    image: trust_gen:db_filler
-    container_name: filler
-    env_file:
-      - .env
-    depends_on:
-      - mongo
-    volumes:
-      - ./data:/app/data/
-    command: python data/init_db.py
-    restart: on-failure  
+
+x-common-env: &common-env
+  MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+  MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+  MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
+  MONGO_HOST: ${MONGO_HOST}
+  YANDEX_API_KEY: ${YANDEX_API_KEY}
+  YANDEX_MODEL_URI: ${YANDEX_MODEL_URI}
+  YANDEX_BASE_URL: ${YANDEX_BASE_URL}
+
+  OPENAI_KEY: ${OPENAI_KEY}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+
+  API_URL: ${API_URL}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+  GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL}
+
+  HF_HOME: ${HF_HOME}
+  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE}
+
+services:  
   langchain_backend:
       build: 
         context: .
         target: back
+      user: "${CURRENT_UID}:${CURRENT_GID}" 
       image: trust_gen:back
+      environment:
+        <<: *common-env
+        
       container_name: langchain_backend
-      env_file:
-      - .env
       ports:
-          - "27361:27361"
-      depends_on:
-        - mongo
+          - "45321:45321"
       restart: on-failure  
       command: python langchain_back/main.py
-  run-script:
+      extra_hosts:
+      - "host.docker.internal:host-gateway"    
+      volumes:
+      - /tmp/hf_cache:/tmp/hf_cache 
+
+  runners:
     build:
       context: .
       target: runners
+    user: "${CURRENT_UID}:${CURRENT_GID}" 
     image: trust_gen:runners
+    environment:
+        <<: *common-env
     container_name:  runner_run
-    env_file:
-      - .env
-    command: python runners/run.py
+    command: >
+      bash -c " 
+      cd /app &&
+        python -m runners.run & 
+        python -m runners.run_rta_queuer & 
+        python -m runners.task_processor & 
+        python -m runners.run_regexp &
+        python -m runners.run_metrics
+      "
     depends_on:
-      - mongo
       - langchain_backend
     restart: on-failure  
-  run-rta-script:
-    image: trust_gen:runners
-    container_name:  runner_run_rta_queuer
-    env_file:
-      - .env
-    command: python runners/run_rta_queuer.py
-    depends_on:
-      - mongo
-    restart: on-failure  
-  task-processor-script:
-    image: trust_gen:runners
-    container_name:  runner_task_processor
-    env_file:
-      - .env
-    command: python runners/task_processor.py
-    depends_on:
-      - mongo
-    restart: on-failure  
-  run-regexp-script:
-    image: trust_gen:runners
-    container_name:  runner_run_regexp
-    env_file:
-      - .env
-    command: python runners/run_regexp.py
-    depends_on:
-      - mongo
-    restart: on-failure  
-  run-metrics-script:
-    image: trust_gen:runners
-    container_name:  runner_run_metrics
-    env_file:
-      - .env
-    command: python runners/run_metrics.py
-    depends_on:
-      - mongo
-    restart: on-failure  
-  run-sync:
-    image: trust_gen:runners
-    container_name: runner_run_sync
-    env_file:
-      - .env
-    command: python runners/run_sync.py
+
   streamlit_frontend:
     build: 
       context: .
       target: front
+    user: "${CURRENT_UID}:${CURRENT_GID}" 
     image: trust_gen:front
-    container_name: monitoring_v2
-    env_file:
-      - .env
-    command: python -m streamlit run monitoring/app_streamlit.py --server.port 27366
+    container_name: monitoring
+    environment:
+        <<: *common-env
+    command: python -m streamlit run monitoring/app_main.py --server.port 27366
+    depends_on:
+      - langchain_backend
     ports:
       - "27366:27366"
     volumes: 
       - ./monitoring:/app/monitoring/
-    depends_on:
-      - mongo
     restart: on-failure

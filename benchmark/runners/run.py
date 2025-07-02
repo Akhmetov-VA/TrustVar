@@ -83,6 +83,8 @@ def make_request(
         )
         response.raise_for_status()
         logging.info(f"Успешный ответ от API для модели '{model}'.")
+        if response.json() is None:
+            raise Exception("null response")
         return response.json()
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
@@ -103,7 +105,6 @@ def process_task(task: Dict, collection: Collection, session: requests.Session) 
     prompt = task["prompt"]
     model = task["model"]
     variables = task.get("variables", {})
-
     try:
         response = make_request(model, prompt, variables, session)
         collection.update_one(
@@ -116,7 +117,7 @@ def process_task(task: Dict, collection: Collection, session: requests.Session) 
     except Exception as e:
         collection.update_one(
             {"_id": task_id},
-            {"$set": {"status": "failed", "error": str(e)}},
+            {"$set": {"status": "error", "error": str(e)}},
         )
         logging.error(f"Ошибка обработки задачи с id: {task_id}: {e}")
 
@@ -199,11 +200,11 @@ def main() -> None:
     configure_logging()
     logging.info("Загрузка переменных окружения и инициализация подключения...")
     client = get_mongo_client()
+    db_name = "TrustGen"
     while True:
-        for db_name in ["TrustLLM_ru", "TrustGen"]:
-            db = client[db_name]
-            run_processing_loop(db)
-            time.sleep(10)
+        db = client[db_name]
+        run_processing_loop(db)
+        time.sleep(10)
 
 
 if __name__ == "__main__":

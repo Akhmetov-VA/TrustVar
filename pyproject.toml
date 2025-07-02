@@ -1,32 +1,40 @@
-[tool.poetry]
+[project]
 name = "trustllm-ru"
 version = "0.1.0"
 description = ""
-authors = ["Vadim Akhmetov <golden312va@gmail.com>"]
 readme = "README.md"
-packages = [
-  { include = "benchmark" }
+requires-python = ">3.11"
+dependencies = [
+    "python-dotenv>=0.21.0,<0.22.0",
+    "ipykernel>=6.29.5,<7.0.0",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-requests = "^2.32.3"
-fastapi = "^0.115.0"
-langchain = "^0.3.0"
-langchain-community = "^0.3.0"
-pymongo = "^4.9.1"
-pandas = "^2.2.3"
-fastparquet = "^2024.5.0"
-yandexcloud = "^0.319.0"
-ipykernel = "^6.29.5"
-ollama = "^0.3.3"
-langchain-ollama = "^0.2.0"
-datasets = "^3.0.1"
-trustllm = "^0.3.0"
-matplotlib = "^3.9.2"
-streamlit = "^1.39.0"
-openpyxl = "^3.1.5"
+[project.optional-dependencies]
+frontend = [
+    "streamlit>=1.39.0, <2.0.0",
+    "pymongo>=4.9.1,<5.0.0", 
+    "pandas>=2.2.3, < 3.0.0",
+    "matplotlib>=3.9.2, <4.0.0",
+    "fastparquet>=2024.5.0, <2025.0.0",
+    "datasets>=3.0.1, <4.0.0", 
+    "openpyxl>=3.1.5, <4.0.0", 
+    "plotly>=6.1.0",
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+]
+backend = [
+    "yandexcloud>=0.319.0, <0.320.0",
+    "requests>=2.32.3, <3.0.0", 
+    "fastparquet>=2024.5.0, <2025.0.0",
+    "fastapi>=0.115.0, <0.116.0",
+    "langchain>=0.3.0, <0.4.0",
+    "langchain-community>=0.3.0, <0.4.0",
+    "langchain-ollama>=0.2.0, <0.3.0",
+    "uvicorn>=0.34.0"
+
+]
+db = [
+    "pymongo>=4.9.1, <5.0.0",
+    "requests>=2.32.3, <3.0.0",
+    "pandas>=2.2.3, <3.0.0",
+    "matplotlib>=3.9.2, <4.0.0"
+]
