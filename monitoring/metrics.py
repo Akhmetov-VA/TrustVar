@@ -5,8 +5,13 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go  # 🔹 Для интерактивной heatmap
 import streamlit as st
-
+# import logging
 from utils.db_client import MongoDBClient, MongoDBConfig
+
+
+# Настройка логирования
+# logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+# logger = logging.getLogger(__name__)
 
 # Инициализация клиента БД
 config = MongoDBConfig(database="TrustGen")
@@ -21,6 +26,12 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
     if not required_cols.issubset(results_df.columns):
         st.error("В данных отсутствуют необходимые поля (task_name, model, value).")
         return
+
+    # logger.info(results_df.columns)
+    # logger.info(results_df.shape)
+    # logger.info(results_df.head())
+    # logger.info(f' Tsks {len(results_df["task_name"].unique())}')
+    # logger.info(f' Models {len(results_df["model"].unique())}')
 
     # выборка по задачам и моделям
     tasks = results_df["task_name"].unique()
@@ -121,8 +132,8 @@ def render_metrics_tab():
             df_all = pd.concat(
                 [
                     df[df["task_name"].isin(sel)][["task_name", "model", "value"]]
-                    for df in data_per_collection.values()[:2]
-                ]
+                    for df in data_per_collection.values()
+                ][:2]
             )
             pivot = df_all.pivot_table(
                 index="model", columns="task_name", values="value"

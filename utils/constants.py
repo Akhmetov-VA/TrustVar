@@ -134,7 +134,12 @@ PATTERNS = {
 
 
 AUGMENTATIONS = [
-    'Синонимия',
-    'Изменение длины',
-    'Перефразирование'
+    'Synonymy',
+    'Change length',
+    'Paraphrasing'
+]
+
+TASKS = [
+    'Evaluate truthworthy problems',
+    'Compare model behaviour'
 ]

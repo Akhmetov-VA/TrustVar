@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 from dataset_management import render_dataset_varcols_section  # для получения var_cols
 
-from utils.constants import MODELS, RTA_MODEL, AUGMENTATIONS
+from utils.constants import MODELS, RTA_MODEL, AUGMENTATIONS, TASKS
 from utils.db_client import MongoDBClient, MongoDBConfig
 
 # Инициализация клиента БД
@@ -223,6 +223,7 @@ def render_dynamic_variations() -> List[str]:
         return selected_variations
 
 def render_preview_and_save_task(
+    selected_task: str,
     dataset_name: str,
     var_cols: List[str],
     selected_prompt: str,
@@ -243,9 +244,10 @@ def render_preview_and_save_task(
             and selected_models
             and (target_value or metric in ["RtA", "include_exclude"])
         ):
-            group_name = st.text_input("Группа задачи (group):", value="default")
-            task_name = st.text_input("Имя задачи:", value=f"{dataset_name}")
-            st.subheader("Предпросмотр 5 случайных примеров:")
+            task_type = st.text_input("Task Name:", value=f"{dataset_name}")
+            group_name = st.text_input("Task Group:", value="default")
+            task_name = st.text_input("Dataset:", value=f"{dataset_name}")
+            st.subheader("5 Random Sample Preview:")
             df_head = db_client.get_dataset_head(dataset_name, limit=100)
             if not df_head.empty:
                 sample_size = min(5, len(df_head))
@@ -256,12 +258,13 @@ def render_preview_and_save_task(
                     filled_prompt = selected_prompt
                     for k, v in row.items():
                         filled_prompt = filled_prompt.replace(f"{{{k}}}", str(v))
-                    st.write(f"**Пример {i + 1}:** {filled_prompt}")
+                    st.write(f"**Example {i + 1}:** {filled_prompt}")
             
             if selected_variations:
-                st.write(f"**Методы динамической аугментации:** {' '.join(selected_variations)}")
-            st.write("**Структура записи задачи в БД:**")
+                st.write(f"**Методы динамической аугментации:** {' | '.join(selected_variations)}")
+            st.write("**DB Record Structure:**")
             task_data = {
+                "task_type": task_type,
                 "task_name": task_name,
                 "dataset_name": dataset_name,
                 "prompt": selected_prompt,
@@ -287,24 +290,34 @@ def render_preview_and_save_task(
                 task_data['dynamic_augments'] = []
 
             st.json(task_data, expanded=False)
-            if st.button("Загрузить задачу в базу"):
+            if st.button("Upload task"):
                 db_client.insert_task(task_data)
-                st.success("Задача успешно добавлена!")
+                st.success("Task was uploaded successfully!")
 
 
 def render_create_task_tab():
-    st.header("Создать новую задачу")
+    st.header("Create new task")
     all_datasets = db_client.get_all_datasets()
     if "regestry" in all_datasets:
         all_datasets.remove("regestry")
-    selected_dataset = st.selectbox(
-        "Выберите датасет:", sorted(all_datasets), key="create_task_selectbox"
+    
+    selected_task = st.selectbox(
+        "Select task:", TASKS, key="select_task_selectbox"
     )
-    if selected_dataset:
+    
+    selected_dataset = st.selectbox(
+        "Select dataset:", sorted(all_datasets), key="select_ds_selectbox"
+    )
+
+    if selected_task and selected_dataset:
         var_cols, metric, target_column, include_column, exclude_column = (
             render_dataset_varcols_section(selected_dataset)
         )
-        selected_variations = render_dynamic_variations()
+        
+        if selected_task == TASKS[-1]: # compare model behaviour
+            selected_variations = render_dynamic_variations()
+        else:
+            selected_variations = None
 
         if var_cols and metric is not None:
             selected_prompt = render_prompt_selection_section(var_cols)
@@ -326,6 +339,7 @@ def render_create_task_tab():
                         rta_target_value if metric == "RtA" else target_column
                     )
                     render_preview_and_save_task(
+                        selected_task=selected_task,
                         dataset_name=selected_dataset,
                         var_cols=var_cols,
                         selected_prompt=selected_prompt,

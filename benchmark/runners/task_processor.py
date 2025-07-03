@@ -63,6 +63,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
       - Создаем записи в очереди (коллекция queue_<task_name>) для каждой строки датасета и для каждой модели.
       - Если запись уже существует (определяется по паре (line_index, model)), она пропускается.
     """
+    task_type = task["task_type"]
     task_name = task["task_name"]
     dataset_name = task["dataset_name"]
     prompt_text = task["prompt"]
@@ -106,6 +107,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                 continue  # запись уже существует – пропускаем
             # Формируем новый документ
             doc = {
+                "task_type": task_type,
                 "task_name": task_name,
                 "line_index": i,
                 "dataset_name": dataset_name,
