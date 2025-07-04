@@ -240,6 +240,7 @@ def render_preview_and_save_task(
     rta_model: Optional[str],
     include_column: Optional[str],
     exclude_column: Optional[str],
+    selected_task_type: str = None,
 ):
     with st.expander("Предпросмотр и сохранение задачи", expanded=False):
         if (
@@ -278,6 +279,8 @@ def render_preview_and_save_task(
                 "regexp": selected_regexp,
                 "group": group_name,
             }
+            if selected_task_type is not None:
+                task_data["task_type"] = selected_task_type
             if metric == "RtA":
                 task_data["rta_prompt"] = rta_prompt_selected
                 task_data["rta_model"] = rta_model
