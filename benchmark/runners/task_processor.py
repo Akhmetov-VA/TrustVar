@@ -63,7 +63,9 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
       - Создаем записи в очереди (коллекция queue_<task_name>) для каждой строки датасета и для каждой модели.
       - Если запись уже существует (определяется по паре (line_index, model)), она пропускается.
     """
-    task_type = task["task_type"]
+    task_type = task.get("task_type", "unknown")
+    if task_type == "unknown":
+        logger.warning(f"Задача без task_type: {task}")
     task_name = task["task_name"]
     dataset_name = task["dataset_name"]
     prompt_text = task["prompt"]
