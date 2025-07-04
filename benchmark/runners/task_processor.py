@@ -63,6 +63,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
       - Создаем записи в очереди (коллекция queue_<task_name>) для каждой строки датасета и для каждой модели.
       - Если запись уже существует (определяется по паре (line_index, model)), она пропускается.
     """
+    task_type = task["task_type"]
     task_name = task["task_name"]
     dataset_name = task["dataset_name"]
     prompt_text = task["prompt"]
@@ -75,6 +76,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     exclude_col = task.get("exclude_column", None)
     rta_prompt = task.get("rta_prompt")
     rta_model = task.get("rta_model")
+    dynamic_augments = task.get('dynamic_augments', [])
 
     df = get_dataset_head(db, dataset_name)
     if df.empty:
@@ -105,6 +107,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                 continue  # запись уже существует – пропускаем
             # Формируем новый документ
             doc = {
+                "task_type": task_type,
                 "task_name": task_name,
                 "line_index": i,
                 "dataset_name": dataset_name,
@@ -113,9 +116,14 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                 "model": model,
                 "metric": metric,
                 "regexp": regexp,
-                "status": "pending",
+                #"status": "pending",
                 "response": None,
             }
+            if dynamic_augments:
+                doc["status"] = "augmenting"
+                doc["dynamic_augments"] = dynamic_augments
+            else:
+                doc["status"] = "pending"
             if metric == "RtA":
                 if rta_prompt and rta_model:
                     doc["rta_prompt"] = rta_prompt

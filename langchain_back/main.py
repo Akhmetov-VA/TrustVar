@@ -6,7 +6,6 @@ from langchain_community.llms import GigaChat, YandexGPT
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import OllamaLLM
-from langchain_community.llms import LlamaCpp
 from langchain_community.llms import HuggingFacePipeline
 from langchain_openai import ChatOpenAI
 from transformers import pipeline
@@ -39,6 +38,12 @@ async def generate_locally(request: Request):
                 api_key=YANDEX_API_KEY,
                 model_uri=YANDEX_MODEL_URI
             )
+        # elif model_name[0].isupper() and not model_name.startswith('ZimaBlueAI'):
+        #     pipe = pipeline(
+        #         "text-generation",
+        #         model=model_name
+        #     )
+        #     model = HuggingFacePipeline(pipeline=pipe)
         # Модели локальные
         else:
             model = OllamaLLM(model=model_name, base_url=os.getenv("OLLAMA_BASE_URL"))
@@ -47,7 +52,7 @@ async def generate_locally(request: Request):
         output_parser = StrOutputParser()
         chain = prompt | model | output_parser
         result = chain.invoke(data["variables"])
-        #print(model_name, result)
+        
         if isinstance(result, str):
             return result
         else:
