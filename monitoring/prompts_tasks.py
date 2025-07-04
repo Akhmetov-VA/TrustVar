@@ -307,10 +307,6 @@ def render_create_task_tab():
     selected_dataset = st.selectbox("Select dataset:", sorted(all_datasets), key="select_ds_selectbox")
     if task_type and selected_dataset:
         var_cols, metric, target_column, include_column, exclude_column = render_dataset_varcols_section(selected_dataset)
-        if task_type.lower() == "compare model behaviour":
-            selected_variations = render_dynamic_variations()
-        else:
-            selected_variations = None
         if var_cols and metric is not None:
             selected_prompt = render_prompt_selection_section(var_cols)
             if selected_prompt:
@@ -326,6 +322,8 @@ def render_create_task_tab():
                         rta_prompt_selected, rta_model, rta_target_value = render_rta_prompt_section()
                     selected_models = render_models_section()
                     final_target = rta_target_value if metric == "RtA" else target_column
+                    # Экспандер аугментации всегда в самом конце и значения реально используются
+                    selected_variations = render_dynamic_variations()
                     render_preview_and_save_task(
                         task_type=task_type,
                         dataset_name=selected_dataset,
