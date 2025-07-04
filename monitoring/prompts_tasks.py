@@ -218,9 +218,9 @@ def render_models_section() -> List[str]:
         return selected_models
 
 def render_dynamic_variations() -> List[str]:
-    with st.expander("Динамическая аугментация датасета", expanded=False, key="dynamic_augments_expander"):
+    with st.expander("Динамическая аугментация датасета [AUG]", expanded=False):
         selected_variations = st.multiselect("Выберите метод аугментации:", AUGMENTATIONS)
-        return selected_variations
+    return selected_variations
 
 def render_preview_and_save_task(
     selected_task: str,
