@@ -8,13 +8,14 @@
 *.xlsx
 *.crt
 *.pyc
-
+*old*
+*temp*
 *__pycache__
 .env
 TrustLLM
 poetry.lock
 db
-*.DS_Store
-
+.DS_Store
+*.txt
 *copy*
 trash*

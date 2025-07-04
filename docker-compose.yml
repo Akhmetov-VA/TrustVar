@@ -14,10 +14,10 @@ x-common-env: &common-env
 
   API_URL: ${API_URL}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
-  GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL}
+  # GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL}
 
-  HF_HOME: ${HF_HOME}
-  TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE}
+  # HF_HOME: ${HF_HOME}
+  # TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE}
 
 services:  
   langchain_backend:
@@ -28,7 +28,6 @@ services:
       image: trust_gen:back
       environment:
         <<: *common-env
-        
       container_name: langchain_backend
       ports:
           - "45321:45321"
@@ -37,29 +36,7 @@ services:
       extra_hosts:
       - "host.docker.internal:host-gateway"    
       volumes:
-      - /tmp/hf_cache:/tmp/hf_cache 
-
-  runners:
-    build:
-      context: .
-      target: runners
-    user: "${CURRENT_UID}:${CURRENT_GID}" 
-    image: trust_gen:runners
-    environment:
-        <<: *common-env
-    container_name:  runner_run
-    command: >
-      bash -c " 
-      cd /app &&
-        python -m runners.run & 
-        python -m runners.run_rta_queuer & 
-        python -m runners.task_processor & 
-        python -m runners.run_regexp &
-        python -m runners.run_metrics
-      "
-    depends_on:
-      - langchain_backend
-    restart: on-failure  
+      - hf-cache:/root/.cache/huggingface
 
   streamlit_frontend:
     build: 
@@ -78,3 +55,62 @@ services:
     volumes: 
       - ./monitoring:/app/monitoring/
     restart: on-failure
+
+  runner-main:
+    build:
+      context: .
+      target: runners
+    #user: "${CURRENT_UID}:${CURRENT_GID}" 
+    image: trust_gen:runners
+    environment:
+        <<: *common-env
+    container_name: runner_main
+    command: python -m runners.run
+    restart: on-failure  
+
+  runner-rta-queuer:
+    build:
+        context: .
+        target: runners
+    image: trust_gen:runners
+    environment:
+        <<: *common-env
+    container_name: runner-rta-queuer
+    command: python -m runners.run_rta_queuer
+    restart: on-failure  
+
+  runner-task-processor:
+    build:
+      context: .
+      target: runners
+    image: trust_gen:runners
+    container_name: runner_task_processor
+    environment:
+        <<: *common-env
+    command: python -m runners.task_processor
+    restart: on-failure  
+
+  runner-regexp:
+    build:
+      context: .
+      target: runners
+    image: trust_gen:runners
+    container_name: runner_regexp
+    environment:
+        <<: *common-env
+    command: python -m runners.run_regexp
+    restart: on-failure  
+
+  runner-metrics:
+    build:
+      context: .
+      target: runners
+    image: trust_gen:runners
+    container_name: runner_metrics
+    environment:
+        <<: *common-env
+    command: python -m runners.run_metrics
+    restart: on-failure
+
+volumes:
+  hf-cache:
