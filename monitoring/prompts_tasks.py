@@ -322,8 +322,11 @@ def render_create_task_tab():
                         rta_prompt_selected, rta_model, rta_target_value = render_rta_prompt_section()
                     selected_models = render_models_section()
                     final_target = rta_target_value if metric == "RtA" else target_column
-                    # Экспандер аугментации всегда в самом конце и значения реально используются
-                    selected_variations = render_dynamic_variations()
+                    # Экспандер аугментации только для Compare model behaviour
+                    if task_type == "Compare model behaviour":
+                        selected_variations = render_dynamic_variations()
+                    else:
+                        selected_variations = None
                     render_preview_and_save_task(
                         task_type=task_type,
                         dataset_name=selected_dataset,
