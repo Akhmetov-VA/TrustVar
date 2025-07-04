@@ -71,6 +71,7 @@ def make_request(
     logging.info(
         f"Отправка запроса к API для модели '{model}' с промптом: {prompt[:100]}..."
     )
+    logging.debug(f"make_request input: model={model}, prompt={prompt}, variables={variables}")
     try:
         response = session.post(
             API_URL,
@@ -82,6 +83,7 @@ def make_request(
             },
         )
         response.raise_for_status()
+        logging.info(f"API raw response: {response.text}")
         logging.info(f"Успешный ответ от API для модели '{model}'.")
         if response.json() is None:
             raise Exception("null response")
@@ -103,17 +105,15 @@ def generate_answer_by_augmentations(
     для каждой техники сначала получаем аугментированный текст,
     а затем подставляем его как новый prompt в основную модель.
     """
+    logging.debug(f"generate_answer_by_augmentations input: dynamic_augments={dynamic_augments}, model={model}, prompt={prompt}, variables={variables}")
     responses = []
     for augment_technique in dynamic_augments:
         # Формируем промпт для модели-аугментатора
         augmenter_prompt = (
             AUGMENT_PROMPT
-            + f"""[Техника]:
-            {augment_technique}
-            [Исходный текст]:
-            {prompt}
-            [Ответ]:"""
+            + f"""[Техника]:\n            {augment_technique}\n            [Исходный текст]:\n            {prompt}\n            [Ответ]:"""
         )
+        logging.debug(f"Augmenter prompt: {augmenter_prompt}")
         # 1) Запрашиваем аугментацию
         augmented_resp = make_request(
             AUGMENT_MODEL, augmenter_prompt, variables, session
@@ -121,7 +121,7 @@ def generate_answer_by_augmentations(
         # 2) Извлекаем именно текст аугментации
         #    подставьте здесь ключ, который реально возвращает ваш API
         logging.info(
-            f"Аугментированный prompt (technique={augment_technique}): {augmented_resp[:100]}"
+            f"Аугментированный prompt (technique={augment_technique}): {str(augmented_resp)[:100]}"
         )
 
         # 3) Передаём аугментированный текст в основную модель

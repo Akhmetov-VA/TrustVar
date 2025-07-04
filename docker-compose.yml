@@ -112,5 +112,19 @@ services:
     command: python -m runners.run_metrics
     restart: on-failure
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:12345
+      - CUDA_VISIBLE_DEVICES=1
+      - OLLAMA_MODELS=/models
+    ports:
+      - "12345:12345"
+    volumes:
+      - /media/admin01/Windows/ollama_models:/models
+    runtime: nvidia
+    restart: on-failure
+
 volumes:
   hf-cache:
