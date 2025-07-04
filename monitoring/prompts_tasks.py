@@ -87,7 +87,7 @@ def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
 
 
 def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
-    with st.expander("Выбор или создание промпта", expanded=False, key="prompt_selection_expander"):
+    with st.expander("Выбор или создание промпта", expanded=False):
         show_all_prompts()
         use_existing_prompt = st.radio("Промпт:", ("Выбрать из базы", "Ввести свой"))
         selected_prompt = None
@@ -147,7 +147,7 @@ def insert_regexp_global(name: str, pattern: str, metric: str):
 
 
 def render_regexp_section(metric: str) -> Optional[str]:
-    with st.expander("Выбор или создание регулярки для метрики", expanded=False, key="regexp_selection_expander"):
+    with st.expander("Выбор или создание регулярки для метрики", expanded=False):
         show_existing_regexp(metric)
         use_existing_regexp = st.radio("Регулярка:", ("Существующая", "Своя"))
         selected_regexp = None
@@ -182,7 +182,7 @@ def render_regexp_section(metric: str) -> Optional[str]:
 
 
 def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
-    with st.expander("Выбор или создание RTA промпта", expanded=False, key="rta_prompt_selection_expander"):
+    with st.expander("Выбор или создание RTA промпта", expanded=False):
         show_all_rta_prompts()
         st.write("Метрика RtA выбрана. Необходим RTA промпт.")
         use_rta_existing = st.radio("RTA промпт:", ("Выбрать из базы", "Ввести свой"))
@@ -213,7 +213,7 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
 
 
 def render_models_section() -> List[str]:
-    with st.expander("Выбор моделей для задачи", expanded=False, key="models_selection_expander"):
+    with st.expander("Выбор моделей для задачи", expanded=False):
         selected_models = st.multiselect("Выберите модели:", MODELS)
         return selected_models
 
@@ -237,7 +237,7 @@ def render_preview_and_save_task(
     include_column: Optional[str],
     exclude_column: Optional[str],
 ):
-    with st.expander("Предпросмотр и сохранение задачи", expanded=False, key="preview_and_save_task_expander" ):
+    with st.expander("Предпросмотр и сохранение задачи", expanded=False):
         if (
             selected_prompt
             and selected_regexp
