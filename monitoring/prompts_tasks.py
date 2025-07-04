@@ -344,7 +344,7 @@ def render_create_task_tab():
                         rta_target_value if metric == "RtA" else target_column
                     )
                     render_preview_and_save_task(
-                        selected_task=selected_task_type,
+                        selected_task_type=selected_task_type,
                         dataset_name=selected_dataset,
                         var_cols=var_cols,
                         selected_prompt=selected_prompt,
