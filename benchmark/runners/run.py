@@ -9,13 +9,14 @@ from pymongo.database import Database
 
 from utils.constants import (
     API_URL,
+    AUGMENT_MODEL,
+    AUGMENT_PROMPT,
     MONGO_HOST,
     MONGO_PASSWORD,
     MONGO_PORT,
     MONGO_USERNAME,
-    AUGMENT_MODEL,
-    AUGMENT_PROMPT
 )
+
 
 def configure_logging() -> None:
     """
@@ -89,35 +90,50 @@ def make_request(
         logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
         raise e
 
+
 def generate_answer_by_augmentations(
-                                    dynamic_augments: List[str], 
-                                    model, 
-                                    prompt, 
-                                    variables, 
-                                    session: requests.Session
-                                ) -> List[Dict]:
+    dynamic_augments: List[str],
+    model: str,
+    prompt: str,
+    variables: Dict[str, Any],
+    session: requests.Session,
+) -> List[Dict]:
     """
-    Generates augmented tasks
+    Генерирует ответы по техникам аугментации:
+    для каждой техники сначала получаем аугментированный текст,
+    а затем подставляем его как новый prompt в основную модель.
     """
     responses = []
     for augment_technique in dynamic_augments:
-        augmenter_prompt = AUGMENT_PROMPT + f"""
-        [Техника]:
+        # Формируем промпт для модели-аугментатора
+        augmenter_prompt = (
+            AUGMENT_PROMPT
+            + f"""[Техника]:
             {augment_technique}
+            [Исходный текст]:
+            {prompt}
+            [Ответ]:"""
+        )
+        # 1) Запрашиваем аугментацию
+        augmented_resp = make_request(
+            AUGMENT_MODEL, augmenter_prompt, variables, session
+        )
+        # 2) Извлекаем именно текст аугментации
+        #    подставьте здесь ключ, который реально возвращает ваш API
+        logging.info(
+            f"Аугментированный prompt (technique={augment_technique}): {augmented_resp[:100]}"
+        )
 
-        [Исходный текст]:
-            Текст: {prompt}
+        # 3) Передаём аугментированный текст в основную модель
+        final_resp = make_request(model, prompt, augmented_resp, session)
+        responses.append(final_resp)
 
-        [Ответ]:
-        """
-        augmented_response = make_request(AUGMENT_MODEL, augmenter_prompt, {}, session)  # augment
-        # checked_response = make_request(CHECK_MODEL, augmented_response, variables, session)  # check similarity
-        response = make_request(model, augmented_response, variables, session)  # final response
-        responses.append(response)
-    
     return responses
 
-def process_ordinary_task(task: Dict, collection: Collection, session: requests.Session) -> None:
+
+def process_ordinary_task(
+    task: Dict, collection: Collection, session: requests.Session
+) -> None:
     """
     Обрабатывает отдельную задачу, отправляя запрос к модели и обновляя статус задачи в базе данных.
 
@@ -148,7 +164,10 @@ def process_ordinary_task(task: Dict, collection: Collection, session: requests.
         )
         logging.error(f"Ошибка обработки задачи с id: {task_id}: {e}")
 
-def process_augment_task(task: Dict, collection: Collection, session: requests.Session) -> None:
+
+def process_augment_task(
+    task: Dict, collection: Collection, session: requests.Session
+) -> None:
     """
     Обрабатывает отдельную задачу, отправляя запрос к модели и обновляя статус задачи в базе данных.
 
@@ -164,16 +183,16 @@ def process_augment_task(task: Dict, collection: Collection, session: requests.S
     variables = task.get("variables", {})
     dynamic_augments = task.get("dynamic_augments", [])
     try:
-        responses = generate_answer_by_augmentations(dynamic_augments, model, prompt, variables, session)# []
-            
+        responses = generate_answer_by_augmentations(
+            dynamic_augments, model, prompt, variables, session
+        )  # []
+
         collection.update_one(
             {"_id": task_id},
             {"$set": {"status": "completed", "response": responses}},
         )
-    
-        logging.info(
-            f"Task: {task_id} augmented and updated in DB."
-        )
+
+        logging.info(f"Task: {task_id} augmented and updated in DB.")
     except Exception as e:
         collection.update_one(
             {"_id": task_id},
@@ -218,10 +237,12 @@ def process_collection(
             )
 
             if ordinary_task:
-                logging.info(f"Найдена задача с id: {ordinary_task['_id']} для обработки.")
+                logging.info(
+                    f"Найдена задача с id: {ordinary_task['_id']} для обработки."
+                )
                 process_ordinary_task(ordinary_task, collection, session)
                 continue
-            
+
             augment_task = collection.find_one_and_update(
                 {"status": "augmenting", "model": model},
                 {"$set": {"status": "processing"}},
@@ -229,7 +250,9 @@ def process_collection(
             )
 
             if augment_task:
-                logging.info(f"Найдена задача с id: {augment_task['_id']} для обработки.")
+                logging.info(
+                    f"Найдена задача с id: {augment_task['_id']} для обработки."
+                )
                 process_augment_task(augment_task, collection, session)
                 continue
 
