@@ -6,6 +6,10 @@ build:
   stage: build
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - Dockerfile
+        - docker-compose.yml
+        - .gitlab-ci.yml
   tags:
     - trust_llm_61
   script:
@@ -26,7 +30,6 @@ deploy:
     - export CURRENT_GID=$(id -g)
     - docker compose -f docker-compose.yml down --remove-orphans
     - docker compose -f docker-compose.yml up -d
-
 
 
 
