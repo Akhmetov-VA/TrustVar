@@ -218,9 +218,9 @@ def render_models_section() -> List[str]:
         return selected_models
 
 def render_dynamic_variations() -> List[str]:
-    with st.expander("Динамическая аугментация датасета", expanded=False, key="dynamic_augments_expander"):
+    with st.expander("Динамическая аугментация датасета [AUG]", expanded=False):
         selected_variations = st.multiselect("Выберите метод аугментации:", AUGMENTATIONS)
-        return selected_variations
+    return selected_variations
 
 def render_preview_and_save_task(
     selected_task: str,
@@ -301,11 +301,6 @@ def render_create_task_tab():
     if "regestry" in all_datasets:
         all_datasets.remove("regestry")
     
-    # Instead of selecting a task type, ask user for a concise, meaningful task name
-    task_name = st.text_input(
-        "Task name (a concise, meaningful name for the generated task):", 
-        value=""
-    )
 
     selected_task_type = st.selectbox(
         "Task type:", TASKS, key="select_task_type_selectbox"
@@ -315,7 +310,7 @@ def render_create_task_tab():
         "Select dataset:", sorted(all_datasets), key="select_ds_selectbox"
     )
 
-    if task_name and selected_task_type and selected_dataset:
+    if selected_task_type and selected_dataset:
         var_cols, metric, target_column, include_column, exclude_column = (
             render_dataset_varcols_section(selected_dataset)
         )
@@ -358,5 +353,4 @@ def render_create_task_tab():
                         rta_model=rta_model,
                         include_column=include_column,
                         exclude_column=exclude_column,
-                        task_name=task_name,  # pass the new task name
                     )
