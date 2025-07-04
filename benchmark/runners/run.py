@@ -17,7 +17,6 @@ from utils.constants import (
     AUGMENT_PROMPT
 )
 
-
 def configure_logging() -> None:
     """
     Настраивает логирование для отображения сообщений в консоли.
@@ -108,11 +107,10 @@ def generate_answer_by_augmentations(
 
         [Исходный текст]:
             Текст: {prompt}
-            Переменные: {variables}
 
         [Ответ]:
         """
-        augmented_response = make_request(AUGMENT_MODEL, augmenter_prompt, variables, session)  # augment
+        augmented_response = make_request(AUGMENT_MODEL, augmenter_prompt, {}, session)  # augment
         # checked_response = make_request(CHECK_MODEL, augmented_response, variables, session)  # check similarity
         response = make_request(model, augmented_response, variables, session)  # final response
         responses.append(response)
