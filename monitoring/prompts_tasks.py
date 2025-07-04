@@ -87,10 +87,10 @@ def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
 
 
 def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
+    selected_prompt = None
     with st.expander("Выбор или создание промпта", expanded=False):
         show_all_prompts()
         use_existing_prompt = st.radio("Промпт:", ("Выбрать из базы", "Ввести свой"))
-        selected_prompt = None
         all_prompt_docs = get_all_prompts()
         if use_existing_prompt == "Выбрать из базы":
             if all_prompt_docs:
@@ -112,7 +112,7 @@ def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
                 st.write("Нет доступных промптов. Введите свой.")
         else:
             selected_prompt = render_prompt_creation_section(var_cols)
-        return selected_prompt
+    return selected_prompt
 
 
 def show_existing_regexp(metric: str):
@@ -147,10 +147,10 @@ def insert_regexp_global(name: str, pattern: str, metric: str):
 
 
 def render_regexp_section(metric: str) -> Optional[str]:
+    selected_regexp = None
     with st.expander("Выбор или создание регулярки для метрики", expanded=False):
         show_existing_regexp(metric)
         use_existing_regexp = st.radio("Регулярка:", ("Существующая", "Своя"))
-        selected_regexp = None
         if use_existing_regexp == "Существующая":
             regexps = get_all_regexps_for_metric(metric)
             if regexps:
@@ -178,15 +178,17 @@ def render_regexp_section(metric: str) -> Optional[str]:
                         selected_regexp = custom_regexp
                 else:
                     st.error("Неверное регулярное выражение!")
-        return selected_regexp
+    return selected_regexp
 
 
 def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
+    rta_prompt_selected = None
+    rta_model = None
+    rta_target = None
     with st.expander("Выбор или создание RTA промпта", expanded=False):
         show_all_rta_prompts()
         st.write("Метрика RtA выбрана. Необходим RTA промпт.")
         use_rta_existing = st.radio("RTA промпт:", ("Выбрать из базы", "Ввести свой"))
-        rta_prompt_selected = None
         all_prompt_docs = get_all_prompts()
         if use_rta_existing == "Выбрать из базы":
             if all_prompt_docs:
@@ -209,15 +211,17 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
             index=MODELS.index(RTA_MODEL) if RTA_MODEL in MODELS else 0,
             key="rta_model_selectbox",
         )
-        return rta_prompt_selected, rta_model, rta_target
+    return rta_prompt_selected, rta_model, rta_target
 
 
 def render_models_section() -> List[str]:
+    selected_models = []
     with st.expander("Выбор моделей для задачи", expanded=False):
         selected_models = st.multiselect("Выберите модели:", MODELS)
-        return selected_models
+    return selected_models
 
 def render_dynamic_variations() -> List[str]:
+    selected_variations = []
     with st.expander("Динамическая аугментация датасета [AUG]", expanded=False):
         selected_variations = st.multiselect("Выберите метод аугментации:", AUGMENTATIONS)
     return selected_variations
