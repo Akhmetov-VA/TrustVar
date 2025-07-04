@@ -87,7 +87,7 @@ def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
 
 
 def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
-    with st.expander("Выбор или создание промпта", expanded=False):
+    with st.expander("Выбор или создание промпта", expanded=False, key="prompt_selection_expander"):
         show_all_prompts()
         use_existing_prompt = st.radio("Промпт:", ("Выбрать из базы", "Ввести свой"))
         selected_prompt = None
@@ -147,7 +147,7 @@ def insert_regexp_global(name: str, pattern: str, metric: str):
 
 
 def render_regexp_section(metric: str) -> Optional[str]:
-    with st.expander("Выбор или создание регулярки для метрики", expanded=False):
+    with st.expander("Выбор или создание регулярки для метрики", expanded=False, key="regexp_selection_expander"):
         show_existing_regexp(metric)
         use_existing_regexp = st.radio("Регулярка:", ("Существующая", "Своя"))
         selected_regexp = None
@@ -182,7 +182,7 @@ def render_regexp_section(metric: str) -> Optional[str]:
 
 
 def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
-    with st.expander("Выбор или создание RTA промпта", expanded=False):
+    with st.expander("Выбор или создание RTA промпта", expanded=False, key="rta_prompt_selection_expander"):
         show_all_rta_prompts()
         st.write("Метрика RtA выбрана. Необходим RTA промпт.")
         use_rta_existing = st.radio("RTA промпт:", ("Выбрать из базы", "Ввести свой"))
@@ -213,12 +213,12 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
 
 
 def render_models_section() -> List[str]:
-    with st.expander("Выбор моделей для задачи", expanded=False):
+    with st.expander("Выбор моделей для задачи", expanded=False, key="models_selection_expander"):
         selected_models = st.multiselect("Выберите модели:", MODELS)
         return selected_models
 
 def render_dynamic_variations() -> List[str]:
-    with st.expander("Динамическая аугментация датасета", expanded=False):
+    with st.expander("Динамическая аугментация датасета", expanded=False, key="dynamic_augments_expander"):
         selected_variations = st.multiselect("Выберите метод аугментации:", AUGMENTATIONS)
         return selected_variations
 
@@ -237,7 +237,7 @@ def render_preview_and_save_task(
     include_column: Optional[str],
     exclude_column: Optional[str],
 ):
-    with st.expander("Предпросмотр и сохранение задачи", expanded=False):
+    with st.expander("Предпросмотр и сохранение задачи", expanded=False, key="preview_and_save_task_expander" ):
         if (
             selected_prompt
             and selected_regexp
@@ -301,20 +301,26 @@ def render_create_task_tab():
     if "regestry" in all_datasets:
         all_datasets.remove("regestry")
     
-    selected_task = st.selectbox(
-        "Select task:", TASKS, key="select_task_selectbox"
+    # Instead of selecting a task type, ask user for a concise, meaningful task name
+    task_name = st.text_input(
+        "Task name (a concise, meaningful name for the generated task):", 
+        value=""
+    )
+
+    selected_task_type = st.selectbox(
+        "Task type:", TASKS, key="select_task_type_selectbox"
     )
     
     selected_dataset = st.selectbox(
         "Select dataset:", sorted(all_datasets), key="select_ds_selectbox"
     )
 
-    if selected_task and selected_dataset:
+    if task_name and selected_task_type and selected_dataset:
         var_cols, metric, target_column, include_column, exclude_column = (
             render_dataset_varcols_section(selected_dataset)
         )
         
-        if selected_task == TASKS[-1]: # compare model behaviour
+        if selected_task_type.lower() == "compare model behaviour":
             selected_variations = render_dynamic_variations()
         else:
             selected_variations = None
@@ -339,7 +345,7 @@ def render_create_task_tab():
                         rta_target_value if metric == "RtA" else target_column
                     )
                     render_preview_and_save_task(
-                        selected_task=selected_task,
+                        selected_task=selected_task_type,
                         dataset_name=selected_dataset,
                         var_cols=var_cols,
                         selected_prompt=selected_prompt,
@@ -352,4 +358,5 @@ def render_create_task_tab():
                         rta_model=rta_model,
                         include_column=include_column,
                         exclude_column=exclude_column,
+                        task_name=task_name,  # pass the new task name
                     )

@@ -54,11 +54,11 @@ MODELS = [
     "yandexgpt-lite",
     "yi:34b-q4_0",
     "yi:6b-q4_0",
-    'IlyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp',
+    "IlyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp",
 ]
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
-AUGMENT_MODEL = RTA_MODEL # Модель для динамической аугментации задач
+AUGMENT_MODEL = RTA_MODEL  # Модель для динамической аугментации задач
 
 # Configuration
 
@@ -134,15 +134,12 @@ PATTERNS = {
 
 
 AUGMENTATIONS = [
-    'Synonymy',
-    'Shorten sentence length',
-    'Increase sentence length',
-    'Paraphrasing',
-    'Reorder words/phrases',
-    'Stylistic change'
+    "Synonymy",
+    "Shorten sentence length",
+    "Increase sentence length",
+    "Paraphrasing",
+    "Reorder words/phrases",
+    "Stylistic change",
 ]
 
-TASKS = [
-    'Evaluate truthworthy problems',
-    'Compare model behaviour'
-]
+TASKS = ["Evaluate truthworthy problems", "Compare model behaviour"]
