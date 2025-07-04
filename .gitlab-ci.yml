@@ -21,7 +21,7 @@ deploy:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
   needs:
-    - job: build
+    - build
   tags:
     - trust_llm_61
   script:
