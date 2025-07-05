@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit_authenticator as stauth
 import yaml
 from dataset_management import render_dataset_management_tab
-from metrics import render_metrics_tab, render_grouped_metrics_tab
+from metrics import render_metrics_tab
 from prompts_tasks import render_create_task_tab
 from tasks import render_tasks_visualization_tab
 from yaml.loader import SafeLoader
@@ -41,7 +41,6 @@ if st.session_state["authentication_status"]:
             "Управление датасетами",
             "Создать задачу",
             "Метрики моделей",
-            "Анализ по группам",
         ]
     )
 
@@ -56,9 +55,6 @@ if st.session_state["authentication_status"]:
 
     with tabs[3]:
         render_metrics_tab()
-        
-    with tabs[4]:
-        render_grouped_metrics_tab()
 
 elif st.session_state["authentication_status"] is False:
     st.error("Неверный логин/пароль")
