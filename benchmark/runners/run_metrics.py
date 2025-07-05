@@ -415,111 +415,75 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
             ]
             
             if not df_with_groups.empty:
-                grouped_tfnr_res, grouped_acc_res, grouped_corr_res, grouped_ie_res = [], [], [], []
-                
-                # Обрабатываем каждую запись отдельно
+                # 1. Разворачиваем по аугментациям
+                expanded_rows = []
                 for _, row in df_with_groups.iterrows():
-                    task = row["task_name"]
-                    ds = row["dataset_name"]
-                    model = row["model"]
-                    task_type = row["task_type"]
-                    metric = row["metric"]
                     dynamic_augments = row["dynamic_augments"]
                     pred = row["pred"]
-                    target = row["target"]
-                    
-                    # Рассчитываем метрики в зависимости от типа
-                    if metric == "accuracy":
-                        # Для каждой аугментации создаем отдельную запись с соответствующим pred
+                    # Для accuracy: pred может быть списком, иначе просто копируем
+                    if isinstance(pred, list) and len(pred) == len(dynamic_augments):
                         for i, augment in enumerate(dynamic_augments):
-                            # Берем соответствующий pred для этой аугментации
-                            if isinstance(pred, list) and i < len(pred):
-                                single_pred = pred[i]
-                            else:
-                                single_pred = pred
-                            
-                            # Создаем DataFrame с одной записью для расчета метрик
-                            single_row = row.copy()
-                            single_row["pred"] = single_pred
-                            single_df = pd.DataFrame([single_row])
-                            
-                            val, errs = compute_accuracy(single_df)
-                            val_tfnr, errs_tfnr = compute_tfnr(single_df)
-                            
-                            grouped_acc_res.append({
-                                "task_name": task,
-                                "dataset_name": ds,
-                                "model": model,
-                                "task_type": task_type,
-                                "dynamic_augments": [augment],
-                                "value": val,
-                                "errors": errs,
-                            })
-                            
-                            grouped_tfnr_res.append({
-                                "task_name": task,
-                                "dataset_name": ds,
-                                "model": model,
-                                "task_type": task_type,
-                                "dynamic_augments": [augment],
-                                "value": val_tfnr,
-                                "errors": errs_tfnr,
-                            })
-                            
+                            new_row = row.copy()
+                            new_row["augment"] = augment
+                            new_row["pred"] = pred[i]
+                            expanded_rows.append(new_row)
+                    else:
+                        for augment in dynamic_augments:
+                            new_row = row.copy()
+                            new_row["augment"] = augment
+                            expanded_rows.append(new_row)
+                expanded_df = pd.DataFrame(expanded_rows)
+                
+                # 2. Группируем по (task_name, dataset_name, model, task_type, augment, metric)
+                grouped_tfnr_res, grouped_acc_res, grouped_corr_res, grouped_ie_res = [], [], [], []
+                for (task, ds, model, task_type, augment, metric), g in expanded_df.groupby([
+                    "task_name", "dataset_name", "model", "task_type", "augment", "metric"
+                ]):
+                    # Считаем метрики по группе
+                    if metric == "accuracy":
+                        val, errs = compute_accuracy(g)
+                        grouped_acc_res.append({
+                            "task_name": task,
+                            "dataset_name": ds,
+                            "model": model,
+                            "task_type": task_type,
+                            "dynamic_augments": [augment],
+                            "value": val,
+                            "errors": errs,
+                        })
                     elif metric == "correlation":
-                        # Для корреляции используем все значения pred
-                        single_df = pd.DataFrame([row])
-                        val, errs = compute_correlation(single_df)
-                        val_tfnr, errs_tfnr = compute_tfnr(single_df)
-                        
-                        for augment in dynamic_augments:
-                            grouped_corr_res.append({
-                                "task_name": task,
-                                "dataset_name": ds,
-                                "model": model,
-                                "task_type": task_type,
-                                "dynamic_augments": [augment],
-                                "value": val,
-                                "errors": errs,
-                            })
-                            
-                            grouped_tfnr_res.append({
-                                "task_name": task,
-                                "dataset_name": ds,
-                                "model": model,
-                                "task_type": task_type,
-                                "dynamic_augments": [augment],
-                                "value": val_tfnr,
-                                "errors": errs_tfnr,
-                            })
-                            
+                        val, errs = compute_correlation(g)
+                        grouped_corr_res.append({
+                            "task_name": task,
+                            "dataset_name": ds,
+                            "model": model,
+                            "task_type": task_type,
+                            "dynamic_augments": [augment],
+                            "value": val,
+                            "errors": errs,
+                        })
                     elif metric == "include_exclude":
-                        # Для include_exclude используем все значения pred
-                        single_df = pd.DataFrame([row])
-                        val, errs = compute_include_exclude(single_df)
-                        val_tfnr, errs_tfnr = compute_tfnr(single_df)
-                        
-                        for augment in dynamic_augments:
-                            grouped_ie_res.append({
-                                "task_name": task,
-                                "dataset_name": ds,
-                                "model": model,
-                                "task_type": task_type,
-                                "dynamic_augments": [augment],
-                                "value": val,
-                                "errors": errs,
-                            })
-                            
-                            grouped_tfnr_res.append({
-                                "task_name": task,
-                                "dataset_name": ds,
-                                "model": model,
-                                "task_type": task_type,
-                                "dynamic_augments": [augment],
-                                "value": val_tfnr,
-                                "errors": errs_tfnr,
-                            })
-
+                        val, errs = compute_include_exclude(g)
+                        grouped_ie_res.append({
+                            "task_name": task,
+                            "dataset_name": ds,
+                            "model": model,
+                            "task_type": task_type,
+                            "dynamic_augments": [augment],
+                            "value": val,
+                            "errors": errs,
+                        })
+                    # TFNR считаем для всех
+                    val_tfnr, errs_tfnr = compute_tfnr(g)
+                    grouped_tfnr_res.append({
+                        "task_name": task,
+                        "dataset_name": ds,
+                        "model": model,
+                        "task_type": task_type,
+                        "dynamic_augments": [augment],
+                        "value": val_tfnr,
+                        "errors": errs_tfnr,
+                    })
                 # Сохраняем группированные метрики в отдельные коллекции
                 insert_grouped_results(db, "TFNR_Groups", grouped_tfnr_res)
                 insert_grouped_results(db, "Accuracy_Groups", grouped_acc_res)
