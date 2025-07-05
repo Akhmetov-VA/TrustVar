@@ -49,31 +49,83 @@ def compute_tfnr(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
     total = len(df)
     if total == 0:
         return np.nan, []
-    cond = df["pred"] == "TFN"
+    
+    # Обрабатываем случаи, когда pred может быть списком
+    def is_tfn(pred):
+        if isinstance(pred, list):
+            return all(p == "TFN" for p in pred)
+        return pred == "TFN"
+    
+    cond = df["pred"].apply(is_tfn)
     value = cond.sum() / total
     errors = extract_errors(df, cond)
     return value, errors
 
 
 def compute_accuracy(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
-    df_valid = df[df["pred"] != "TFN"]
+    # Фильтруем записи, где pred не содержит только TFN
+    def has_valid_pred(pred):
+        if isinstance(pred, list):
+            return not all(p == "TFN" for p in pred)
+        return pred != "TFN"
+    
+    df_valid = df[df["pred"].apply(has_valid_pred)]
     if df_valid.empty:
         return np.nan, []
-    cond = df_valid["pred"].astype(str) != df_valid["target"].astype(str)
+    
+    # Проверяем точность для каждой записи
+    def check_accuracy(row):
+        pred = row["pred"]
+        target = row["target"]
+        
+        if isinstance(pred, list):
+            # Если pred - список, проверяем, есть ли хотя бы один правильный ответ
+            return any(str(p) == str(target) for p in pred)
+        else:
+            # Если pred - одно значение
+            return str(pred) == str(target)
+    
+    cond = ~df_valid.apply(check_accuracy, axis=1)
     value = (~cond).mean()
     errors = extract_errors(df_valid, cond)
     return value, errors
 
 
 def compute_correlation(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
-    df_valid = df[df["pred"] != "TFN"].copy()
-    df_valid["pred"] = pd.to_numeric(df_valid["pred"], errors="coerce")
-    df_valid["target"] = pd.to_numeric(df_valid["target"], errors="coerce")
-    df_valid = df_valid.dropna(subset=["pred", "target"])
+    # Фильтруем записи, где pred не содержит только TFN
+    def has_valid_pred(pred):
+        if isinstance(pred, list):
+            return not all(p == "TFN" for p in pred)
+        return pred != "TFN"
+    
+    df_valid = df[df["pred"].apply(has_valid_pred)].copy()
+    
+    # Обрабатываем числовые значения
+    def extract_numeric_pred(pred):
+        if isinstance(pred, list):
+            # Берем первое не-TFN значение
+            for p in pred:
+                if p != "TFN":
+                    try:
+                        return float(p)
+                    except (ValueError, TypeError):
+                        continue
+            return np.nan
+        else:
+            try:
+                return float(pred)
+            except (ValueError, TypeError):
+                return np.nan
+    
+    df_valid["pred_numeric"] = df_valid["pred"].apply(extract_numeric_pred)
+    df_valid["target_numeric"] = pd.to_numeric(df_valid["target"], errors="coerce")
+    df_valid = df_valid.dropna(subset=["pred_numeric", "target_numeric"])
+    
     if len(df_valid) < 2:
         return np.nan, []
-    value = df_valid["pred"].corr(df_valid["target"])
-    diffs = (df_valid["pred"] - df_valid["target"]).abs()
+    
+    value = df_valid["pred_numeric"].corr(df_valid["target_numeric"])
+    diffs = (df_valid["pred_numeric"] - df_valid["target_numeric"]).abs()
     threshold = diffs.nlargest(min(len(diffs), 10)).min()
     cond = diffs >= threshold
     errors = extract_errors(df_valid, cond)
@@ -86,12 +138,26 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
     scores = []
     idx_err = []
     for idx, row in df.iterrows():
-        pred = str(row.get("pred", ""))
+        pred = row.get("pred", "")
         inc = row.get("include_list") or []
         exc = row.get("exclude_list") or []
-        pos_scores = [1.0 if s.lower() in pred.lower() else 0.0 for s in inc]
+        
+        # Обрабатываем случаи, когда pred может быть списком
+        if isinstance(pred, list):
+            # Берем первое не-TFN значение
+            pred_str = ""
+            for p in pred:
+                if p != "TFN":
+                    pred_str = str(p)
+                    break
+            if not pred_str:  # Если все TFN
+                pred_str = "TFN"
+        else:
+            pred_str = str(pred)
+        
+        pos_scores = [1.0 if s.lower() in pred_str.lower() else 0.0 for s in inc]
         score = max(pos_scores) if pos_scores else 0.0
-        neg_count = sum(1 for s in exc if s.lower() in pred.lower())
+        neg_count = sum(1 for s in exc if s.lower() in pred_str.lower())
         if exc and neg_count == len(exc):
             score = 0.0
         elif exc:
