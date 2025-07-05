@@ -60,25 +60,49 @@ def fetch_completed_tasks(db: Database):
             yield coll_name, t
 
 
-def apply_regexp_to_response(response: str, regexp: str) -> str:
+def apply_regexp_to_response(response: Union[str, List[str]], regexp: str) -> Union[str, List[str]]:
     """
     Применяем регулярку к response.
+    Если response - список строк, применяем регулярку к каждому элементу.
     Если находит совпадение — берем найденное значение.
     Если нет — 'TFN'.
+    Возвращает строку или список строк в зависимости от типа response.
     """
     pattern = re.compile(regexp, re.DOTALL)
-    match = pattern.search(response)
-    if match:
-        # Предполагается, что берем первую подходящую группу.
-        if match.groups():
-            for g in match.groups():
-                if g is not None:
-                    return g
-            return match.group(0)
-        else:
-            return match.group(0)
+    
+    if isinstance(response, list):
+        # Обрабатываем список ответов
+        results = []
+        for resp_item in response:
+            match = pattern.search(resp_item)
+            if match:
+                # Предполагается, что берем первую подходящую группу.
+                if match.groups():
+                    for g in match.groups():
+                        if g is not None:
+                            results.append(g)
+                            break
+                    else:
+                        results.append(match.group(0))
+                else:
+                    results.append(match.group(0))
+            else:
+                results.append("TFN")
+        return results
     else:
-        return "TFN"
+        # Обрабатываем одну строку (старая логика)
+        match = pattern.search(response)
+        if match:
+            # Предполагается, что берем первую подходящую группу.
+            if match.groups():
+                for g in match.groups():
+                    if g is not None:
+                        return g
+                return match.group(0)
+            else:
+                return match.group(0)
+        else:
+            return "TFN"
 
 
 def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
@@ -104,14 +128,21 @@ def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
         return str(found)
 
 
-def update_task_with_pred(db: Database, coll_name: str, task_id: Any, pred: str):
+def update_task_with_pred(db: Database, coll_name: str, task_id: Any, pred: Union[str, List[str]]):
     """
     Обновляем в задаче поле pred и статус на extracted.
     """
     coll = db[coll_name]
     coll.update_one({"_id": task_id}, {"$set": {"pred": pred, "status": "extracted"}})
+    
+    # Логируем информацию о pred в зависимости от его типа
+    if isinstance(pred, list):
+        pred_info = f"pred=[{', '.join(map(str, pred))}]"
+    else:
+        pred_info = f"pred={pred}"
+    
     logger.info(
-        f"Обновлен документ {task_id} в {coll_name}: pred={pred}, status=extracted"
+        f"Обновлен документ {task_id} в {coll_name}: {pred_info}, status=extracted"
     )
 
 
@@ -122,7 +153,8 @@ def run_extraction_loop(db: Database, interval: int = 10):
     - В зависимости от metric:
        1) exact_match: используем apply_exact_match
        2) include_exclude: просто берем response в pred
-       3) любые другие: используем regexp (если есть) -> apply_regexp_to_response
+       3) accuracy: применяем regexp к каждому элементу списка response
+       4) любые другие: используем regexp (если есть) -> apply_regexp_to_response
          если нет - TFN
     - Меняем статус на extracted
     - Ждем interval секунд и повторяем
@@ -145,13 +177,19 @@ def run_extraction_loop(db: Database, interval: int = 10):
                 # Логику проверки include/exclude выполняет следующий ранер.
                 pred = response
 
-            else:
-                # Любая другая метрика -> regexp
+            elif metric == "accuracy":
                 regexp = task.get("regexp", None)
                 if not regexp:
-                    pred = "TFN"
-                else:
-                    pred = apply_regexp_to_response(response, regexp)
+                    logger.error(f"Для метрики accuracy не предоставлена regexp в задаче {task_id} ({coll_name}) — задача пропущена")
+                    continue
+                pred = apply_regexp_to_response(response, regexp)
+
+            else:
+                regexp = task.get("regexp", None)
+                if not regexp:
+                    logger.error(f"Для метрики {metric} не предоставлена regexp в задаче {task_id} ({coll_name}) — задача пропущена")
+                    continue
+                pred = apply_regexp_to_response(response, regexp)
 
             update_task_with_pred(db, coll_name, task_id, pred)
 

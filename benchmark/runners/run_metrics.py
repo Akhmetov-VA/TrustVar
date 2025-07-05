@@ -152,12 +152,96 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
     return df
 
 
+def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame:
+    """
+    Извлекает задачи с дополнительными полями для группировки по task_type и dynamic_augments.
+    """
+    cols = [c for c in db.list_collection_names() if c.startswith(prefix)]
+    if prefix == "queue_":
+        cols = [c for c in cols if not c.startswith("queue_rta_")]
+    rows: List[Dict[str, Any]] = []
+    for coll_name in cols:
+        coll = db[coll_name]
+        query = {"status": "extracted"}
+        if prefix == "queue_":
+            query["metric"] = {"$ne": "RtA"}
+
+        logging.info(f"Загружаем данные для метрик из коллекции {coll_name}")
+        for doc in coll.find(query):
+            prompt = doc.get("prompt", "")
+            vars_ = doc.get("variables", {}) or {}
+            inp = prompt.format(**vars_)
+            inc_list = doc.get("include_list", []) or []
+            exc_list = doc.get("exclude_list", []) or []
+
+            # Гарантируем, что include_list и exclude_list имеют тип list
+            if isinstance(inc_list, str):
+                inc_list = [inc_list]
+            if isinstance(exc_list, str):
+                exc_list = [exc_list]
+
+            metric = doc.get("metric")
+            target_val = inc_list if metric == "include_exclude" else doc.get("target")
+            
+            # Добавляем поля для группировки
+            task_type = doc.get("task_type", "")
+            dynamic_augments = doc.get("dynamic_augments", [])
+            
+            # Если dynamic_augments - строка, преобразуем в список
+            if isinstance(dynamic_augments, str):
+                dynamic_augments = [dynamic_augments]
+            
+            rows.append(
+                {
+                    "task_name": doc.get("task_name", coll_name.replace(prefix, "")),
+                    "dataset_name": doc.get("dataset_name"),
+                    "model": doc.get("init_model")
+                    if coll_name.startswith("queue_rta_")
+                    else doc.get("model"),
+                    "metric": metric,
+                    "input": inp,
+                    "pred": doc.get("pred"),
+                    "target": target_val,
+                    "include_list": inc_list,
+                    "exclude_list": exc_list,
+                    "task_type": task_type,
+                    "dynamic_augments": dynamic_augments,
+                }
+            )
+    df = pd.DataFrame(rows)
+    logger.info(f"Извлечено {len(df)} записей из очереди '{prefix}' с группировкой.")
+    return df
+
+
 def clear_old_results(db: Database, collection_name: str, df: pd.DataFrame):
     if df.empty:
         return
     coll = db[collection_name]
     for task, model in df[["task_name", "model"]].drop_duplicates().values:
         coll.delete_many({"task_name": task, "model": model})
+
+
+def clear_old_grouped_results(db: Database, collection_name: str, df: pd.DataFrame):
+    """
+    Очищает старые результаты для группированных метрик.
+    """
+    if df.empty:
+        return
+    coll = db[collection_name]
+    
+    # Для обычных метрик (без группировки)
+    if "task_type" not in df.columns:
+        for task, model in df[["task_name", "model"]].drop_duplicates().values:
+            coll.delete_many({"task_name": task, "model": model})
+    else:
+        # Для группированных метрик
+        for task, model, task_type, augment in df[["task_name", "model", "task_type", "dynamic_augments"]].drop_duplicates().values:
+            coll.delete_many({
+                "task_name": task, 
+                "model": model, 
+                "task_type": task_type, 
+                "dynamic_augments": augment
+            })
 
 
 def insert_results(db: Database, collection_name: str, results: List[Dict[str, Any]]):
@@ -168,10 +252,24 @@ def insert_results(db: Database, collection_name: str, results: List[Dict[str, A
     db[collection_name].insert_many(df.to_dict(orient="records"))
 
 
+def insert_grouped_results(db: Database, collection_name: str, results: List[Dict[str, Any]]):
+    """
+    Вставляет группированные результаты в базу данных.
+    """
+    if not results:
+        return
+    df = pd.DataFrame(results)
+    clear_old_grouped_results(db, collection_name, df)
+    db[collection_name].insert_many(df.to_dict(orient="records"))
+
+
 def compute_and_store_metrics(db: Database, interval: int = 30):
     while True:
         df = fetch_extracted_tasks(db, prefix="queue_")
         df_rta = fetch_extracted_tasks(db, prefix="queue_rta_")
+        
+        # Загружаем данные с группировкой для расчета метрик по группам
+        df_groups = fetch_extracted_tasks_with_groups(db, prefix="queue_")
 
         # обычные очереди
         if not df.empty:
@@ -227,6 +325,90 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
             insert_results(db, "Accuracy", acc_res)
             insert_results(db, "Correlation", corr_res)
             insert_results(db, "IncludeExclude", ie_res)
+
+        # Расчет метрик по группам task_type и dynamic_augments
+        if not df_groups.empty:
+            # Фильтруем только записи с task_type и dynamic_augments
+            df_with_groups = df_groups[
+                (df_groups["task_type"].notna()) & 
+                (df_groups["task_type"] != "") & 
+                (df_groups["dynamic_augments"].apply(lambda x: len(x) > 0 if isinstance(x, list) else False))
+            ]
+            
+            if not df_with_groups.empty:
+                # Преобразуем списки dynamic_augments в строки для группировки
+                df_with_groups = df_with_groups.copy()
+                df_with_groups["dynamic_augments_str"] = df_with_groups["dynamic_augments"].apply(
+                    lambda x: "|".join(sorted(x)) if isinstance(x, list) else str(x)
+                )
+                
+                grouped_tfnr_res, grouped_acc_res, grouped_corr_res, grouped_ie_res = [], [], [], []
+                
+                # Группируем по task_type, dynamic_augments_str, task_name, dataset_name, model, metric
+                for (task_type, augments_str, task, ds, model, metric), g in df_with_groups.groupby(
+                    ["task_type", "dynamic_augments_str", "task_name", "dataset_name", "model", "metric"]
+                ):
+                    # Восстанавливаем оригинальный список dynamic_augments
+                    augments = g["dynamic_augments"].iloc[0]
+                    
+                    val_tfnr, errs_tfnr = compute_tfnr(g)
+                    grouped_tfnr_res.append(
+                        {
+                            "task_name": task,
+                            "dataset_name": ds,
+                            "model": model,
+                            "task_type": task_type,
+                            "dynamic_augments": augments,
+                            "value": val_tfnr,
+                            "errors": errs_tfnr,
+                        }
+                    )
+                    
+                    if metric == "accuracy":
+                        val, errs = compute_accuracy(g)
+                        grouped_acc_res.append(
+                            {
+                                "task_name": task,
+                                "dataset_name": ds,
+                                "model": model,
+                                "task_type": task_type,
+                                "dynamic_augments": augments,
+                                "value": val,
+                                "errors": errs,
+                            }
+                        )
+                    elif metric == "correlation":
+                        val, errs = compute_correlation(g)
+                        grouped_corr_res.append(
+                            {
+                                "task_name": task,
+                                "dataset_name": ds,
+                                "model": model,
+                                "task_type": task_type,
+                                "dynamic_augments": augments,
+                                "value": val,
+                                "errors": errs,
+                            }
+                        )
+                    elif metric == "include_exclude":
+                        val, errs = compute_include_exclude(g)
+                        grouped_ie_res.append(
+                            {
+                                "task_name": task,
+                                "dataset_name": ds,
+                                "model": model,
+                                "task_type": task_type,
+                                "dynamic_augments": augments,
+                                "value": val,
+                                "errors": errs,
+                            }
+                        )
+
+                # Сохраняем группированные метрики в отдельные коллекции
+                insert_grouped_results(db, "TFNR_Groups", grouped_tfnr_res)
+                insert_grouped_results(db, "Accuracy_Groups", grouped_acc_res)
+                insert_grouped_results(db, "Correlation_Groups", grouped_corr_res)
+                insert_grouped_results(db, "IncludeExclude_Groups", grouped_ie_res)
 
         # RTA очереди
         if not df_rta.empty:
