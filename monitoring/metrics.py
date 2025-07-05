@@ -156,12 +156,18 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                 task_pivot = task_data.groupby("augment")["value"].mean().reset_index()
                 
                 if len(task_pivot) >= 3:  # Нужно минимум 3 точки для паутинки
-                    # Создаем углы для паутинки
+                    # Сортируем аугментации для консистентного отображения
+                    task_pivot = task_pivot.sort_values("augment")
+                    
+                    # Создаем углы для паутинки (равномерно распределяем по кругу)
                     angles = np.linspace(0, 2 * np.pi, len(task_pivot), endpoint=False).tolist()
                     angles += angles[:1]  # Замыкаем круг
                     
                     values = task_pivot["value"].tolist()
                     values += values[:1]  # Замыкаем круг
+                    
+                    # Получаем названия аугментаций для подписей
+                    augment_names = task_pivot["augment"].tolist()
                     
                     fig_radar = go.Figure()
                     
@@ -170,27 +176,35 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                         theta=angles,
                         fill='toself',
                         name=f'{task}',
-                        line_color='blue'
+                        line_color='blue',
+                        line_width=2
                     ))
+                    
+                    # Находим максимальное значение для масштабирования
+                    max_value = max(values) if values else 1.0
                     
                     fig_radar.update_layout(
                         polar=dict(
                             radialaxis=dict(
                                 visible=True,
-                                range=[0, max(values) * 1.1]
+                                range=[0, max_value * 1.1],
+                                tickfont=dict(size=10)
                             ),
                             angularaxis=dict(
-                                ticktext=task_pivot["augment"].tolist(),
-                                tickvals=angles[:-1]
+                                ticktext=augment_names,
+                                tickvals=angles[:-1],
+                                tickfont=dict(size=10),
+                                tickangle=0
                             )
                         ),
                         showlegend=True,
-                        title=f"Паутинка для модели {selected_model_for_radar} - задача {task}"
+                        title=f"Паутинка для модели {selected_model_for_radar} - задача {task}",
+                        height=500
                     )
                     
                     st.plotly_chart(fig_radar, use_container_width=True)
                 else:
-                    st.info(f"Недостаточно данных для паутинки для задачи {task}")
+                    st.info(f"Недостаточно данных для паутинки для задачи {task} (нужно минимум 3 аугментации)")
 
     # 4. Коэффициент вариации для оценки устойчивости
     st.subheader("Коэффициент вариации (устойчивость к аугментациям)")
@@ -245,6 +259,12 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             aggfunc="mean"
         )
         
+        # Проверяем, что массив не пустой перед вызовом max()
+        if cv_pivot.size > 0 and not cv_pivot.isna().all().all():
+            max_cv = cv_pivot.values.max()
+        else:
+            max_cv = 100  # Значение по умолчанию
+        
         fig_heatmap = go.Figure(
             data=go.Heatmap(
                 z=cv_pivot.values,
@@ -252,7 +272,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                 y=cv_pivot.index,
                 colorscale="RdYlGn_r",  # Зеленый = устойчивая, красный = неустойчивая
                 zmin=0,
-                zmax=cv_pivot.values.max(),
+                zmax=max_cv,
                 colorbar=dict(title="CV (%)"),
                 hovertemplate="Модель: %{y}<br>Задача: %{x}<br>CV: %{z:.1f}%<extra></extra>",
             )
