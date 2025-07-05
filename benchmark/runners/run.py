@@ -88,6 +88,11 @@ def make_request(
         return response.json()
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
+        logging.error(f"Тело запроса: model={model}, prompt={prompt}")
+        if hasattr(e, 'response') and e.response is not None:
+            logging.error(f"Ответ сервера: {e.response.text}")
+        elif 'response' in locals():
+            logging.error(f"Ответ сервера: {response.text}")
         raise e
 
 
