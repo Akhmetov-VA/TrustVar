@@ -286,149 +286,159 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
                 st.dataframe(df_to_show)
 
 
-def render_grouped_metrics_tab():
-    """Рендерит вкладку с группированными метриками."""
-    st.header("Анализ метрик по группам (Compare model behaviour)")
-    
-    # Коллекции с группированными метриками
-    grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups"]
-    available_collections = []
-    
-    for coll in grouped_collections:
-        try:
-            collection = db_client.get_collection(coll)
-            if collection.count_documents({}) > 0:
-                available_collections.append(coll)
-        except:
-            continue
-    
-    if not available_collections:
-        st.info("Нет доступных коллекций с группированными метриками.")
-        return
-    
-    selected_collection = st.selectbox(
-        "Выберите коллекцию с группированными метриками:",
-        options=available_collections,
-        key="grouped_metrics_collection_selection",
-    )
-    
-    results_collection = db_client.get_collection(selected_collection)
-    results_data = list(results_collection.find())
-    
-    if results_data:
-        visualize_grouped_metrics(results_data, selected_collection)
-    else:
-        st.info(f"Данные в коллекции '{selected_collection}' отсутствуют.")
+
 
 
 def render_metrics_tab():
     st.header("Метрики моделей")
-    results_collections = ["RtAR", "TFNR", "Accuracy", "Correlation", "IncludeExclude"]
-    if results_collections:
-        selected_results_collection = st.selectbox(
-            "Выберите коллекцию с метриками",
-            options=results_collections,
-            key="metrics_collection_selection",
-        )
-        results_collection = db_client.get_collection(selected_results_collection)
-        results_data = list(results_collection.find())
-        if results_data:
-            visualize_metrics(results_data, selected_results_collection)
+    
+    # Переключатель между типами метрик
+    metric_type = st.radio(
+        "Выберите тип анализа метрик:",
+        ["Обычные метрики", "Анализ по группам (Compare model behaviour)"],
+        key="metrics_type_selection"
+    )
+    
+    if metric_type == "Обычные метрики":
+        # Оригинальная логика для обычных метрик
+        results_collections = ["RtAR", "TFNR", "Accuracy", "Correlation", "IncludeExclude"]
+        if results_collections:
+            selected_results_collection = st.selectbox(
+                "Выберите коллекцию с метриками",
+                options=results_collections,
+                key="metrics_collection_selection",
+            )
+            results_collection = db_client.get_collection(selected_results_collection)
+            results_data = list(results_collection.find())
+            if results_data:
+                visualize_metrics(results_data, selected_results_collection)
+            else:
+                st.info(f"Данные в коллекции '{selected_results_collection}' отсутствуют.")
         else:
-            st.info(f"Данные в коллекции '{selected_results_collection}' отсутствуют.")
-    else:
-        st.info("Нет доступных коллекций с метриками.")
+            st.info("Нет доступных коллекций с метриками.")
 
-    # 🔽 Интерактивное сравнение и корреляция
-    with st.expander("Сравнение метрик и корреляция между задачами"):
-        task_options = set()
-        data_per_collection: Dict[str, pd.DataFrame] = {}
-        for coll in results_collections:
-            if coll == "TFNR":
-                continue
-            recs = list(db_client.get_collection(coll).find())
-            if not recs:
-                continue
-            df = pd.DataFrame(recs)
-            if "_id" in df.columns:
-                df.drop(columns=["_id"], inplace=True)
-            if {"task_name", "model", "value"}.issubset(df.columns):
-                task_options.update(df["task_name"].unique())
-                data_per_collection[coll] = df
-        task_options = sorted(task_options)
+        # 🔽 Интерактивное сравнение и корреляция
+        with st.expander("Сравнение метрик и корреляция между задачами"):
+            task_options = set()
+            data_per_collection: Dict[str, pd.DataFrame] = {}
+            for coll in results_collections:
+                if coll == "TFNR":
+                    continue
+                recs = list(db_client.get_collection(coll).find())
+                if not recs:
+                    continue
+                df = pd.DataFrame(recs)
+                if "_id" in df.columns:
+                    df.drop(columns=["_id"], inplace=True)
+                if {"task_name", "model", "value"}.issubset(df.columns):
+                    task_options.update(df["task_name"].unique())
+                    data_per_collection[coll] = df
+            task_options = sorted(task_options)
 
-        # --- scatter plot для двух задач ---
-        sel = st.multiselect(
-            "Выберите две задачи для scatter-графика:",
-            task_options,
-            max_selections=3,
-            key="compare_task_names",
-        )
-        if len(sel) >= 2:
-            df_all = pd.concat(
-                [
-                    df[df["task_name"].isin(sel)][["task_name", "model", "value"]]
-                    for df in data_per_collection.values()
-                ][:2]
+            # --- scatter plot для двух задач ---
+            sel = st.multiselect(
+                "Выберите две задачи для scatter-графика:",
+                task_options,
+                max_selections=3,
+                key="compare_task_names",
             )
-            pivot = df_all.pivot_table(
-                index="model", columns="task_name", values="value"
-            ).dropna()
-            if pivot.shape[1] == 2:
-                st.subheader("Интерактивный график: сравнение метрик")
-                st.dataframe(pivot)
-                fig = px.scatter(
-                    pivot,
-                    x=sel[0],
-                    y=sel[1],
-                    text=pivot.index,
-                    labels={sel[0]: sel[0], sel[1]: sel[1]},
-                    title="Сравнение моделей по выбранным метрикам",
+            if len(sel) >= 2:
+                df_all = pd.concat(
+                    [
+                        df[df["task_name"].isin(sel)][["task_name", "model", "value"]]
+                        for df in data_per_collection.values()
+                    ][:2]
                 )
-                fig.update_traces(textposition="top center")
-                fig.update_layout(height=600)
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Недостаточно данных для scatter-графика.")
-
-        # --- интерактивная корреляция для списка задач ---
-        corr_sel = st.multiselect(
-            "Выберите задачи для анализа корреляции:",
-            task_options,
-            key="correlation_tasks",
-        )
-        if len(corr_sel) >= 2:
-            df_corr = pd.concat(
-                [
-                    df[df["task_name"].isin(corr_sel)][["task_name", "model", "value"]]
-                    for df in data_per_collection.values()
-                ]
-            )
-            pivot_corr = df_corr.pivot_table(
-                index="model", columns="task_name", values="value"
-            ).dropna()
-            if not pivot_corr.empty:
-                st.subheader("Корреляционная матрица задач")
-                st.dataframe(pivot_corr.corr().round(2))
-                corr_matrix = pivot_corr.corr()
-                fig = go.Figure(
-                    data=go.Heatmap(
-                        z=corr_matrix.values,
-                        x=corr_matrix.columns,
-                        y=corr_matrix.columns,
-                        colorscale="RdBu",
-                        zmin=-1,
-                        zmax=1,
-                        colorbar=dict(title="Корреляция"),
-                        hovertemplate="Задачи: %{y} и %{x}<br>Значение: %{z:.2f}<extra></extra>",
+                pivot = df_all.pivot_table(
+                    index="model", columns="task_name", values="value"
+                ).dropna()
+                if pivot.shape[1] == 2:
+                    st.subheader("Интерактивный график: сравнение метрик")
+                    st.dataframe(pivot)
+                    fig = px.scatter(
+                        pivot,
+                        x=sel[0],
+                        y=sel[1],
+                        text=pivot.index,
+                        labels={sel[0]: sel[0], sel[1]: sel[1]},
+                        title="Сравнение моделей по выбранным метрикам",
                     )
+                    fig.update_traces(textposition="top center")
+                    fig.update_layout(height=600)
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Недостаточно данных для scatter-графика.")
+
+            # --- интерактивная корреляция для списка задач ---
+            corr_sel = st.multiselect(
+                "Выберите задачи для анализа корреляции:",
+                task_options,
+                key="correlation_tasks",
+            )
+            if len(corr_sel) >= 2:
+                df_corr = pd.concat(
+                    [
+                        df[df["task_name"].isin(corr_sel)][["task_name", "model", "value"]]
+                        for df in data_per_collection.values()
+                    ]
                 )
-                fig.update_layout(
-                    title="Интерактивная корреляционная матрица задач",
-                    xaxis=dict(title=""),
-                    yaxis=dict(title="", autorange="reversed"),
-                    height=600,
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Недостаточно данных для построения корреляционной матрицы.")
+                pivot_corr = df_corr.pivot_table(
+                    index="model", columns="task_name", values="value"
+                ).dropna()
+                if not pivot_corr.empty:
+                    st.subheader("Корреляционная матрица задач")
+                    st.dataframe(pivot_corr.corr().round(2))
+                    corr_matrix = pivot_corr.corr()
+                    fig = go.Figure(
+                        data=go.Heatmap(
+                            z=corr_matrix.values,
+                            x=corr_matrix.columns,
+                            y=corr_matrix.columns,
+                            colorscale="RdBu",
+                            zmin=-1,
+                            zmax=1,
+                            colorbar=dict(title="Корреляция"),
+                            hovertemplate="Задачи: %{y} и %{x}<br>Значение: %{z:.2f}<extra></extra>",
+                        )
+                    )
+                    fig.update_layout(
+                        title="Интерактивная корреляционная матрица задач",
+                        xaxis=dict(title=""),
+                        yaxis=dict(title="", autorange="reversed"),
+                        height=600,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Недостаточно данных для построения корреляционной матрицы.")
+    
+    else:
+        # Логика для группированных метрик
+        # Коллекции с группированными метриками
+        grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups"]
+        available_collections = []
+        
+        for coll in grouped_collections:
+            try:
+                collection = db_client.get_collection(coll)
+                if collection.count_documents({}) > 0:
+                    available_collections.append(coll)
+            except:
+                continue
+        
+        if not available_collections:
+            st.info("Нет доступных коллекций с группированными метриками.")
+            return
+        
+        selected_collection = st.selectbox(
+            "Выберите коллекцию с группированными метриками:",
+            options=available_collections,
+            key="grouped_metrics_collection_selection",
+        )
+        
+        results_collection = db_client.get_collection(selected_collection)
+        results_data = list(results_collection.find())
+        
+        if results_data:
+            visualize_grouped_metrics(results_data, selected_collection)
+        else:
+            st.info(f"Данные в коллекции '{selected_collection}' отсутствуют.")

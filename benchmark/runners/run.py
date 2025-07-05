@@ -51,15 +51,14 @@ def get_mongo_client() -> MongoClient:
 
 
 def make_request(
-    model: str, prompt: str, variables: Dict[str, Any], session: requests.Session
+    model: str, prompt: str, session: requests.Session
 ) -> Dict:
     """
-    Отправляет POST-запрос к API с указанной моделью, промптом и переменными.
+    Отправляет POST-запрос к API с указанной моделью и промптом.
 
     Args:
         model (str): Имя модели.
-        prompt (str): Текст запроса.
-        variables (Dict[str, Any]): Переменные для запроса.
+        prompt (str): Текст запроса (уже с подставленными переменными).
         session (requests.Session): Сессия requests для повторного использования соединений.
 
     Returns:
@@ -71,7 +70,7 @@ def make_request(
     logging.info(
         f"Отправка запроса к API для модели '{model}' с промптом: {prompt[:100]}..."
     )
-    logging.debug(f"make_request input: model={model}, prompt={prompt}, variables={variables}")
+    logging.debug(f"make_request input: model={model}, prompt={prompt}")
     try:
         response = session.post(
             API_URL,
@@ -79,7 +78,6 @@ def make_request(
                 "model": model,
                 "stream": False,
                 "prompt": prompt,
-                "variables": variables,
             },
         )
         response.raise_for_status()
@@ -91,6 +89,54 @@ def make_request(
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
         raise e
+
+
+def extract_text_from_response(response: Dict) -> str:
+    """
+    Извлекает текст из ответа API.
+    
+    Args:
+        response (Dict): Ответ от API.
+        
+    Returns:
+        str: Извлеченный текст или None, если не удалось извлечь.
+    """
+    if isinstance(response, dict):
+        # Ищем стандартные ключи с текстом
+        for key in ["response", "text", "content", "result", "output"]:
+            if key in response and isinstance(response[key], str):
+                return response[key]
+        
+        # Если не нашли стандартные ключи, берем первый строковый ключ
+        for key, value in response.items():
+            if isinstance(value, str):
+                return value
+        
+        logging.error(f"Не удалось извлечь текст из ответа: {response}")
+        return None
+    elif isinstance(response, str):
+        return response
+    else:
+        logging.error(f"Неожиданный формат ответа: {type(response)}")
+        return None
+
+
+def format_prompt_with_variables(prompt: str, variables: Dict[str, Any]) -> str:
+    """
+    Форматирует промпт с переменными.
+    
+    Args:
+        prompt (str): Промпт с плейсхолдерами.
+        variables (Dict[str, Any]): Переменные для подстановки.
+        
+    Returns:
+        str: Промпт с подставленными переменными.
+    """
+    try:
+        return prompt.format(**variables)
+    except KeyError as e:
+        logging.warning(f"Переменная {e} не найдена в промпте, используем исходный промпт")
+        return prompt
 
 
 def generate_answer_by_augmentations(
@@ -107,6 +153,7 @@ def generate_answer_by_augmentations(
     """
     logging.debug(f"generate_answer_by_augmentations input: dynamic_augments={dynamic_augments}, model={model}, prompt={prompt}, variables={variables}")
     responses = []
+    
     for augment_technique in dynamic_augments:
         # Формируем промпт для модели-аугментатора
         augmenter_prompt = (
@@ -114,18 +161,25 @@ def generate_answer_by_augmentations(
             + f"""[Техника]:\n            {augment_technique}\n            [Исходный текст]:\n            {prompt}\n            [Ответ]:"""
         )
         logging.debug(f"Augmenter prompt: {augmenter_prompt}")
+        
         # 1) Запрашиваем аугментацию
-        augmented_resp = make_request(
-            AUGMENT_MODEL, augmenter_prompt, variables, session
-        )
-        # 2) Извлекаем именно текст аугментации
-        #    подставьте здесь ключ, который реально возвращает ваш API
+        augmented_resp = make_request(AUGMENT_MODEL, augmenter_prompt, session)
+        
+        # 2) Извлекаем аугментированный текст
+        augmented_text = extract_text_from_response(augmented_resp)
+        if augmented_text is None:
+            logging.error(f"Не удалось извлечь текст для аугментации {augment_technique}")
+            continue
+        
         logging.info(
-            f"Аугментированный prompt (technique={augment_technique}): {str(augmented_resp)[:100]}"
+            f"Аугментированный текст (technique={augment_technique}): {augmented_text[:100]}..."
         )
 
-        # 3) Передаём аугментированный текст в основную модель
-        final_resp = make_request(model, prompt, augmented_resp, session)
+        # 3) Подставляем переменные в аугментированный текст
+        augmented_prompt_with_vars = format_prompt_with_variables(augmented_text, variables)
+        
+        # 4) Отправляем аугментированный промпт в основную модель
+        final_resp = make_request(model, augmented_prompt_with_vars, session)
         responses.append(final_resp)
 
     return responses
@@ -149,7 +203,12 @@ def process_ordinary_task(
     variables = task.get("variables", {})
 
     try:
-        response = make_request(model, prompt, variables, session)
+        # Форматируем промпт с переменными
+        formatted_prompt = format_prompt_with_variables(prompt, variables)
+        
+        # Отправляем запрос
+        response = make_request(model, formatted_prompt, session)
+        
         collection.update_one(
             {"_id": task_id},
             {"$set": {"status": "completed", "response": response}},
@@ -169,7 +228,7 @@ def process_augment_task(
     task: Dict, collection: Collection, session: requests.Session
 ) -> None:
     """
-    Обрабатывает отдельную задачу, отправляя запрос к модели и обновляя статус задачи в базе данных.
+    Обрабатывает отдельную задачу с аугментацией, отправляя запрос к модели и обновляя статус задачи в базе данных.
 
     Args:
         task (Dict): Документ задачи из MongoDB.
@@ -182,10 +241,11 @@ def process_augment_task(
     model = task["model"]
     variables = task.get("variables", {})
     dynamic_augments = task.get("dynamic_augments", [])
+    
     try:
         responses = generate_answer_by_augmentations(
             dynamic_augments, model, prompt, variables, session
-        )  # []
+        )
 
         collection.update_one(
             {"_id": task_id},

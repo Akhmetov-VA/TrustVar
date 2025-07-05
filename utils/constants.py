@@ -58,7 +58,7 @@ MODELS = [
 ]
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
-AUGMENT_MODEL = RTA_MODEL  # Модель для динамической аугментации задач
+AUGMENT_MODEL = 'qwen2.5:32b-instruct-q4_0'  # Модель для динамической аугментации задач
 
 # Configuration
 
