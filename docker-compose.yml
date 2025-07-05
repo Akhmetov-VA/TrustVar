@@ -33,6 +33,8 @@ services:
           - "45321:45321"
       restart: on-failure  
       command: python langchain_back/main.py
+      depends_on:
+        - ollama
       extra_hosts:
       - "host.docker.internal:host-gateway"    
       volumes:
