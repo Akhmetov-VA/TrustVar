@@ -1,6 +1,7 @@
 import logging
 import time
 from typing import Any, Dict, List
+import string
 
 import requests
 from pymongo import MongoClient
@@ -51,26 +52,17 @@ def get_mongo_client() -> MongoClient:
 
 
 def make_request(
-    model: str, prompt: str, session: requests.Session
+    model: str, prompt: str, session: requests.Session, variables: dict = None
 ) -> Dict:
     """
-    Отправляет POST-запрос к API с указанной моделью и промптом.
-
-    Args:
-        model (str): Имя модели.
-        prompt (str): Текст запроса (уже с подставленными переменными).
-        session (requests.Session): Сессия requests для повторного использования соединений.
-
-    Returns:
-        Dict: JSON-ответ от API.
-
-    Raises:
-        Exception: Если запрос не удался или ответ некорректный.
+    Отправляет POST-запрос к API с указанной моделью, промптом и переменными.
     """
+    if variables is None:
+        variables = {}
     logging.info(
         f"Отправка запроса к API для модели '{model}' с промптом: {prompt[:100]}..."
     )
-    logging.debug(f"make_request input: model={model}, prompt={prompt}")
+    logging.debug(f"make_request input: model={model}, prompt={prompt}, variables={variables}")
     try:
         response = session.post(
             API_URL,
@@ -78,6 +70,7 @@ def make_request(
                 "model": model,
                 "stream": False,
                 "prompt": prompt,
+                "variables": variables,
             },
         )
         response.raise_for_status()
@@ -88,11 +81,6 @@ def make_request(
         return response.json()
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
-        logging.error(f"Тело запроса: model={model}, prompt={prompt}")
-        if hasattr(e, 'response') and e.response is not None:
-            logging.error(f"Ответ сервера: {e.response.text}")
-        elif 'response' in locals():
-            logging.error(f"Ответ сервера: {response.text}")
         raise e
 
 
@@ -128,14 +116,7 @@ def extract_text_from_response(response: Dict) -> str:
 
 def format_prompt_with_variables(prompt: str, variables: Dict[str, Any]) -> str:
     """
-    Форматирует промпт с переменными.
-    
-    Args:
-        prompt (str): Промпт с плейсхолдерами.
-        variables (Dict[str, Any]): Переменные для подстановки.
-        
-    Returns:
-        str: Промпт с подставленными переменными.
+    Форматирует промпт с переменными. Если переменная не найдена, возвращает исходный prompt.
     """
     try:
         return prompt.format(**variables)
@@ -168,7 +149,7 @@ def generate_answer_by_augmentations(
         logging.debug(f"Augmenter prompt: {augmenter_prompt}")
         
         # 1) Запрашиваем аугментацию
-        augmented_resp = make_request(AUGMENT_MODEL, augmenter_prompt, session)
+        augmented_resp = make_request(AUGMENT_MODEL, augmenter_prompt, session, variables)
         
         # 2) Извлекаем аугментированный текст
         augmented_text = extract_text_from_response(augmented_resp)
@@ -184,7 +165,7 @@ def generate_answer_by_augmentations(
         augmented_prompt_with_vars = format_prompt_with_variables(augmented_text, variables)
         
         # 4) Отправляем аугментированный промпт в основную модель
-        final_resp = make_request(model, augmented_prompt_with_vars, session)
+        final_resp = make_request(model, augmented_prompt_with_vars, session, variables)
         responses.append(final_resp)
 
     return responses
@@ -212,7 +193,7 @@ def process_ordinary_task(
         formatted_prompt = format_prompt_with_variables(prompt, variables)
         
         # Отправляем запрос
-        response = make_request(model, formatted_prompt, session)
+        response = make_request(model, formatted_prompt, session, variables)
         
         collection.update_one(
             {"_id": task_id},
