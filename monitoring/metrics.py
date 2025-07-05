@@ -48,15 +48,30 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
         st.info("Нет данных для задач типа 'Compare model behaviour'.")
         return
 
-    # Преобразуем списки dynamic_augments в строки для удобства отображения
-    compare_df["augments_str"] = compare_df["dynamic_augments"].apply(
-        lambda x: " + ".join(sorted(x)) if isinstance(x, list) else str(x)
-    )
+    # Разворачиваем списки dynamic_augments в отдельные строки
+    expanded_rows = []
+    for _, row in compare_df.iterrows():
+        dynamic_augments = row["dynamic_augments"]
+        if isinstance(dynamic_augments, list):
+            for augment in dynamic_augments:
+                new_row = row.copy()
+                new_row["augment"] = augment
+                expanded_rows.append(new_row)
+        else:
+            new_row = row.copy()
+            new_row["augment"] = str(dynamic_augments)
+            expanded_rows.append(new_row)
+    
+    expanded_df = pd.DataFrame(expanded_rows)
+    
+    if expanded_df.empty:
+        st.info("Нет данных для отображения после разворачивания аугментаций.")
+        return
 
-    # Выборка по задачам и моделям
-    tasks = compare_df["task_name"].unique()
-    models = compare_df["model"].unique()
-    augments = compare_df["augments_str"].unique()
+    # Выборка по задачам, моделям и аугментациям
+    tasks = expanded_df["task_name"].unique()
+    models = expanded_df["model"].unique()
+    augments = expanded_df["augment"].unique()
     
     selected_tasks = st.multiselect(
         "Выберите задачу(и):",
@@ -77,10 +92,10 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
         key=f"grouped_metrics_augments_{collection_name}",
     )
 
-    filtered_df = compare_df[
-        (compare_df["task_name"].isin(selected_tasks))
-        & (compare_df["model"].isin(selected_models))
-        & (compare_df["augments_str"].isin(selected_augments))
+    filtered_df = expanded_df[
+        (expanded_df["task_name"].isin(selected_tasks))
+        & (expanded_df["model"].isin(selected_models))
+        & (expanded_df["augment"].isin(selected_augments))
     ]
     
     if filtered_df.empty:
@@ -91,7 +106,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     st.subheader("Метрики по аугментациям")
     pivot_augments = filtered_df.pivot_table(
         index=["model", "task_name"], 
-        columns="augments_str", 
+        columns="augment", 
         values="value", 
         aggfunc="mean"
     )
@@ -101,23 +116,83 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     st.subheader("Сравнение влияния аугментаций на метрики")
     
     # Группируем по модели и задаче для построения графика
-    fig_data = filtered_df.groupby(["model", "task_name", "augments_str"])["value"].mean().reset_index()
+    fig_data = filtered_df.groupby(["model", "task_name", "augment"])["value"].mean().reset_index()
     
     if not fig_data.empty:
         fig = px.bar(
             fig_data,
-            x="augments_str",
+            x="augment",
             y="value",
             color="model",
             facet_col="task_name",
             title="Влияние аугментаций на производительность моделей",
-            labels={"value": f"Метрика ({collection_name})", "augments_str": "Аугментации"}
+            labels={"value": f"Метрика ({collection_name})", "augment": "Аугментация"}
         )
         fig.update_xaxes(tickangle=45)
         fig.update_layout(height=600)
         st.plotly_chart(fig, use_container_width=True)
 
-    # 3. Коэффициент вариации для оценки устойчивости
+    # 3. Паутинка (Radar Chart) для каждой модели
+    st.subheader("Паутинка (Radar Chart) - производительность по аугментациям")
+    
+    # Выбираем одну модель для паутинки
+    selected_model_for_radar = st.selectbox(
+        "Выберите модель для паутинки:",
+        options=selected_models,
+        key=f"radar_model_{collection_name}"
+    )
+    
+    radar_data = filtered_df[
+        (filtered_df["model"] == selected_model_for_radar) &
+        (filtered_df["task_name"].isin(selected_tasks))
+    ]
+    
+    if not radar_data.empty:
+        # Создаем паутинку для каждой задачи
+        for task in selected_tasks:
+            task_data = radar_data[radar_data["task_name"] == task]
+            if not task_data.empty:
+                # Группируем по аугментации
+                task_pivot = task_data.groupby("augment")["value"].mean().reset_index()
+                
+                if len(task_pivot) >= 3:  # Нужно минимум 3 точки для паутинки
+                    # Создаем углы для паутинки
+                    angles = np.linspace(0, 2 * np.pi, len(task_pivot), endpoint=False).tolist()
+                    angles += angles[:1]  # Замыкаем круг
+                    
+                    values = task_pivot["value"].tolist()
+                    values += values[:1]  # Замыкаем круг
+                    
+                    fig_radar = go.Figure()
+                    
+                    fig_radar.add_trace(go.Scatterpolar(
+                        r=values,
+                        theta=angles,
+                        fill='toself',
+                        name=f'{task}',
+                        line_color='blue'
+                    ))
+                    
+                    fig_radar.update_layout(
+                        polar=dict(
+                            radialaxis=dict(
+                                visible=True,
+                                range=[0, max(values) * 1.1]
+                            ),
+                            angularaxis=dict(
+                                ticktext=task_pivot["augment"].tolist(),
+                                tickvals=angles[:-1]
+                            )
+                        ),
+                        showlegend=True,
+                        title=f"Паутинка для модели {selected_model_for_radar} - задача {task}"
+                    )
+                    
+                    st.plotly_chart(fig_radar, use_container_width=True)
+                else:
+                    st.info(f"Недостаточно данных для паутинки для задачи {task}")
+
+    # 4. Коэффициент вариации для оценки устойчивости
     st.subheader("Коэффициент вариации (устойчивость к аугментациям)")
     
     # Вычисляем CV для каждой модели и задачи
@@ -190,11 +265,11 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
         )
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
-    # 4. Детальный анализ по каждой аугментации
+    # 5. Детальный анализ по каждой аугментации
     with st.expander("Детальный анализ по аугментациям"):
         for augment in selected_augments:
             st.write(f"**Аугментация: {augment}**")
-            augment_data = filtered_df[filtered_df["augments_str"] == augment]
+            augment_data = filtered_df[filtered_df["augment"] == augment]
             
             if not augment_data.empty:
                 # Сравнение моделей для данной аугментации
