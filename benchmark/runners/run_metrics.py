@@ -290,8 +290,7 @@ def clear_old_results(db: Database, collection_name: str, df: pd.DataFrame):
 def clear_old_grouped_results(db: Database, collection_name: str, df: pd.DataFrame):
     """
     Очищает старые результаты для группированных метрик.
-    Для корректной работы с pandas (drop_duplicates) dynamic_augments преобразуется в строку,
-    а для удаления из базы используется оригинальный список.
+    Удаляет все записи для данной комбинации (task_name, model, task_type).
     """
     if df.empty:
         return
@@ -301,25 +300,14 @@ def clear_old_grouped_results(db: Database, collection_name: str, df: pd.DataFra
         for task, model in df[["task_name", "model"]].drop_duplicates().values:
             coll.delete_many({"task_name": task, "model": model})
     else:
-        # Для группированных метрик: используем строку для drop_duplicates, но удаляем по оригинальному списку
-        df_temp = df.copy()
-        df_temp["dynamic_augments_str"] = df_temp["dynamic_augments"].apply(
-            lambda x: "|".join(sorted(x)) if isinstance(x, list) else str(x)
-        )
-        unique_combinations = df_temp[["task_name", "model", "task_type", "dynamic_augments_str"]].drop_duplicates()
+        # Для группированных метрик: удаляем все записи для каждой комбинации (task_name, model, task_type)
+        # Это удалит как старые записи с dynamic_augments как списком, так и новые с одной аугментацией
+        unique_combinations = df[["task_name", "model", "task_type"]].drop_duplicates()
         for _, row in unique_combinations.iterrows():
-            # Находим оригинальный список dynamic_augments для удаления
-            original_row = df_temp[
-                (df_temp["task_name"] == row["task_name"]) &
-                (df_temp["model"] == row["model"]) &
-                (df_temp["task_type"] == row["task_type"]) &
-                (df_temp["dynamic_augments_str"] == row["dynamic_augments_str"])
-            ].iloc[0]
             coll.delete_many({
                 "task_name": row["task_name"],
                 "model": row["model"],
-                "task_type": row["task_type"],
-                "dynamic_augments": original_row["dynamic_augments"]
+                "task_type": row["task_type"]
             })
 
 
