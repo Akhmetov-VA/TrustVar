@@ -160,54 +160,33 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             if not task_data.empty:
                 # Группируем по аугментации
                 task_pivot = task_data.groupby("augment")["value"].mean().reset_index()
-                
                 if len(task_pivot) >= 3:  # Нужно минимум 3 точки для паутинки
                     # Сортируем аугментации для консистентного отображения
                     task_pivot = task_pivot.sort_values("augment")
-                    
-                    # Создаем углы для паутинки (равномерно распределяем по кругу)
-                    angles = np.linspace(0, 2 * np.pi, len(task_pivot), endpoint=False).tolist()
-                    angles += angles[:1]  # Замыкаем круг
-                    
-                    values = task_pivot["value"].tolist()
-                    values += values[:1]  # Замыкаем круг
-                    
-                    # Получаем сокращенные имена аугментаций
                     augment_names = [short_augment_name(a) for a in task_pivot["augment"].tolist()]
-                    
+                    values = task_pivot["value"].tolist()
                     fig_radar = go.Figure()
-                    
                     fig_radar.add_trace(go.Scatterpolar(
                         r=values,
-                        theta=angles,
+                        theta=augment_names,
                         fill='toself',
                         name=f'{task}',
                         line_color='blue',
                         line_width=2
                     ))
-                    
-                    # Находим максимальное значение для масштабирования
                     max_value = max(values) if values else 1.0
-                    
                     fig_radar.update_layout(
                         polar=dict(
                             radialaxis=dict(
                                 visible=True,
                                 range=[0, max_value * 1.1],
                                 tickfont=dict(size=10)
-                            ),
-                            angularaxis=dict(
-                                ticktext=augment_names,
-                                tickvals=angles[:-1],
-                                tickfont=dict(size=10),
-                                tickangle=0
                             )
                         ),
                         showlegend=True,
                         title=f"Паутинка для модели {selected_model_for_radar} - задача {task}",
                         height=500
                     )
-                    
                     st.plotly_chart(fig_radar, use_container_width=True)
                 else:
                     st.info(f"Недостаточно данных для паутинки для задачи {task} (нужно минимум 3 аугментации)")
