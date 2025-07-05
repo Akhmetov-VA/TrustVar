@@ -42,13 +42,17 @@ def fetch_tasks(db: Database) -> List[Dict[str, Any]]:
     return tasks
 
 
-def get_dataset_head(db: Database, dataset_name: str) -> pd.DataFrame:
+def get_dataset_head(db: Database, dataset_name: str, limit: int = None) -> pd.DataFrame:
     """
-    Возвращаем датасет в формате DataFrame из коллекции dataset_<dataset_name>.
+    Возвращает датасет в формате DataFrame из коллекции dataset_<dataset_name>.
+    Можно ограничить количество строк (limit).
     """
     coll_name = f"dataset_{dataset_name}"
     coll = db[coll_name]
-    docs = list(coll.find({}))
+    cursor = coll.find({})
+    if limit:
+        cursor = cursor.limit(limit)
+    docs = list(cursor)
     if not docs:
         return pd.DataFrame()
     df = pd.DataFrame(docs)
@@ -88,16 +92,11 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     queue_coll_name = f"queue_{task_name}"
     queue_coll = db[queue_coll_name]
 
-    # Собираем ключи уже существующих записей (line_index, model)
+    # Оптимизированная выборка существующих ключей только по нужным моделям
     existing_keys = set()
-    try:
-        for entry in queue_coll.find({}, {"line_index": 1, "model": 1}):
-            existing_keys.add((entry.get("line_index"), entry.get("model")))
-    except Exception as e:
-        logger.error(
-            f"Ошибка при получении существующих записей из '{queue_coll_name}': {e}"
-        )
-        return
+    query = {"model": {"$in": models}}
+    for entry in queue_coll.find(query, {"line_index": 1, "model": 1}):
+        existing_keys.add((entry.get("line_index"), entry.get("model")))
 
     new_inserts = []
     rows = df.to_dict("records")
@@ -107,7 +106,6 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
             key = (i, model)
             if key in existing_keys:
                 continue  # запись уже существует – пропускаем
-            # Формируем новый документ
             doc = {
                 "task_type": task_type,
                 "task_name": task_name,
@@ -144,7 +142,6 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                     doc["target"] = row[target]
                 else:
                     doc["target"] = None
-
             new_inserts.append(doc)
 
     if new_inserts:

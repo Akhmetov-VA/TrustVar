@@ -102,6 +102,12 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
         st.info("Нет данных для отображения с выбранными фильтрами.")
         return
 
+    # После создания results_df (или filtered_df), добавим обработку augment
+    if "augment" not in filtered_df.columns and "dynamic_augments" in filtered_df.columns:
+        filtered_df["augment"] = filtered_df["dynamic_augments"].apply(
+            lambda x: x[0] if isinstance(x, list) and len(x) == 1 else str(x)
+        )
+
     # 1. Таблица метрик по аугментациям
     st.subheader("Метрики по аугментациям")
     pivot_augments = filtered_df.pivot_table(
@@ -166,8 +172,8 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                     values = task_pivot["value"].tolist()
                     values += values[:1]  # Замыкаем круг
                     
-                    # Получаем названия аугментаций для подписей
-                    augment_names = task_pivot["augment"].tolist()
+                    # Получаем сокращенные имена аугментаций
+                    augment_names = [short_augment_name(a) for a in task_pivot["augment"].tolist()]
                     
                     fig_radar = go.Figure()
                     
@@ -352,6 +358,12 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
         st.info("Нет данных для отображения с выбранными фильтрами.")
         return
 
+    # После создания results_df (или filtered_df), добавим обработку augment
+    if "augment" not in filtered_df.columns and "dynamic_augments" in filtered_df.columns:
+        filtered_df["augment"] = filtered_df["dynamic_augments"].apply(
+            lambda x: x[0] if isinstance(x, list) and len(x) == 1 else str(x)
+        )
+
     # табличное и графическое представление метрик
     pivot_table = filtered_df.pivot_table(
         index="model", columns="task_name", values="value", aggfunc="mean"
@@ -381,7 +393,16 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
                 st.dataframe(df_to_show)
 
 
-
+def short_augment_name(name):
+    mapping = {
+        "Synonymy": "Syn",
+        "Stylistic change": "Style",
+        "Reorder words/phrases": "Reorder",
+        "Shorten sentence length": "Shorten",
+        "Increase sentence length": "Length+",
+        "Paraphrasing": "Paraph"
+    }
+    return mapping.get(name, str(name)[:8])
 
 
 def render_metrics_tab():
