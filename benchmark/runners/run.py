@@ -144,7 +144,7 @@ def generate_answer_by_augmentations(
         # Creating a prompt for the augmentator model
         augmenter_prompt = (
             CURRENT_AUGMENT_PROMPT
-            + f"""[Technic]:\n            {augment_technique}\n            [The original text]:\n            {prompt}\n            [Answer]:"""
+            + f"""[Техника]:\n            {augment_technique}\n            [Исходный текст]:\n            {prompt}\n            [Ответ]:"""
         )
         logging.debug(f"Augmenter prompt: {augmenter_prompt}")
         
