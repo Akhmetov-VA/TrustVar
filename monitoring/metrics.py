@@ -121,10 +121,11 @@ def compute_dispersion_indices(values: List[float]) -> Dict[str, float]:
 
 def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collection_name: str):
     """Task-centric visualization of metrics for Compare model behaviour tasks."""
+    import logging
     results_df = pd.DataFrame(results_data)
     if "_id" in results_df.columns:
         results_df = results_df.drop(columns=["_id"])
-    
+
     required_cols = {"task_name", "model", "value", "task_type", "dynamic_augments"}
     if not required_cols.issubset(results_df.columns):
         st.error("The required fields for grouped metrics are missing in the data.")
@@ -132,33 +133,36 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
 
     # Filter only "Compare model behaviour" tasks
     compare_df = results_df[results_df["task_type"] == "Compare model behaviour"].copy()
-    
+
     if compare_df.empty:
         st.info("There is no data for tasks like 'Compare model behaviour'.")
         return
 
-    # Process dynamic_augments - each record already contains one augmentation
+    # Process dynamic_augments robustly
     expanded_rows = []
     for _, row in compare_df.iterrows():
-        dynamic_augments = row["dynamic_augments"]
-        # Handle both list and single string cases
+        dynamic_augments = row.get("dynamic_augments", None)
+        if not dynamic_augments:
+            continue  # skip if None or empty
         if isinstance(dynamic_augments, list):
             if len(dynamic_augments) == 1:
-                # Single augmentation in list
                 augment = dynamic_augments[0]
+            elif len(dynamic_augments) > 1:
+                # Take the first, but log warning
+                augment = dynamic_augments[0]
+                logging.warning(f"Row with multiple dynamic_augments: {dynamic_augments}, using first: {augment}")
             else:
-                # Multiple augmentations - this shouldn't happen in current data format
-                continue
+                continue  # skip empty list
         else:
-            # Single string augmentation
             augment = str(dynamic_augments)
-        
+        if not augment:
+            continue
         new_row = row.copy()
         new_row["augment"] = augment
         expanded_rows.append(new_row)
-    
+
     expanded_df = pd.DataFrame(expanded_rows)
-    
+
     if expanded_df.empty:
         st.info("There is no data to display after the augmentations are deployed.")
         return
@@ -879,7 +883,9 @@ def short_augment_name(name):
 
 def render_metrics_tab():
     st.header("Model metrics")
-    
+    from utils.db_client import MongoDBClient, MongoDBConfig
+    db_client = MongoDBClient(MongoDBConfig(database="TrustGen"))
+
     # Switch between metric types
     metric_type = st.radio(
         "Select the type of metric analysis:",
@@ -1002,8 +1008,7 @@ def render_metrics_tab():
                     st.warning("There is not enough data to build a correlation matrix.")
     
     elif metric_type == "Group analysis (Model-centric)":
-        # Logic for grouped metrics (model-centric view)
-        grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups"]
+        grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups", "TFNR_Groups"]
         available_collections = []
         
         for coll in grouped_collections:
@@ -1011,7 +1016,8 @@ def render_metrics_tab():
                 collection = db_client.get_collection(coll)
                 if collection.count_documents({}) > 0:
                     available_collections.append(coll)
-            except:
+            except Exception as e:
+                st.warning(f"Error accessing collection {coll}: {e}")
                 continue
         
         if not available_collections:
@@ -1033,8 +1039,7 @@ def render_metrics_tab():
             st.info(f"Data in the collection '{selected_collection}' missing.")
     
     else:  # Task-centric analysis
-        # Logic for task-centric analysis
-        grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups"]
+        grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups", "TFNR_Groups"]
         available_collections = []
         
         for coll in grouped_collections:
@@ -1042,7 +1047,8 @@ def render_metrics_tab():
                 collection = db_client.get_collection(coll)
                 if collection.count_documents({}) > 0:
                     available_collections.append(coll)
-            except:
+            except Exception as e:
+                st.warning(f"Error accessing collection {coll}: {e}")
                 continue
         
         if not available_collections:
