@@ -10,7 +10,6 @@ dependencies = [
     "pandas>=2.2.3",
     "pymongo>=4.13.0",
     "requests>=2.32.3, <3.0.0",
-    "scipy>=1.16.0",
 ]
 
 [project.optional-dependencies]
@@ -23,6 +22,7 @@ frontend = [
     "PyYAML>=6.0.2",
     "streamlit>=1.40.2",
     "streamlit_authenticator>=0.4.2",
+    "scipy>=1.16.0",
 ]
 
 backend = [
