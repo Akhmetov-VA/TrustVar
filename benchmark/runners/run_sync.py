@@ -17,75 +17,75 @@ logger = logging.getLogger(__name__)
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает подключение к MongoDB на основе переменных окружения.
+    Creates a connection to MongoDB based on environment variables.
     """
     mongo_uri = (
         f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
     )
     client = MongoClient(mongo_uri)
-    logger.info("Подключение к MongoDB успешно установлено.")
+    logger.info("The connection to MongoDB has been successfully established.")
     return client
 
 
 def get_db() -> Database:
     client = get_mongo_client()
     db = client[MONGO_DB]
-    logger.info(f"Используется база данных: {MONGO_DB}")
+    logger.info(f"The database is being used: {MONGO_DB}")
     return db
 
 
 def collection_exists(db: Database, coll_name: str) -> bool:
-    """Вспомогательная функция для проверки существования коллекции."""
+    """An auxiliary function for verifying the existence of a collection."""
     exists = coll_name in db.list_collection_names()
-    logger.debug(f"Проверка существования коллекции {coll_name}: {exists}")
+    logger.debug(f"Auxiliary function for checking the existence of a collection {coll_name}: {exists}")
     return exists
 
 
 def get_dataset_head(db: Database, dataset_name: str) -> pd.DataFrame:
     """
-    Возвращает датасет из коллекции dataset_<dataset_name> в виде DataFrame.
-    При этом идентификатор _id не удаляется – он используется для связывания с очередями.
+    Returns a dataset from the dataset_<dataset_name> collection as a DataFrame.
+    In this case, the _id identifier is not deleted – it is used to associate with queues.
     """
     coll_name = f"dataset_{dataset_name}"
-    logger.info(f"Загружаем датасет из коллекции {coll_name}.")
+    logger.info(f"Uploading a dataset from a collection {coll_name}.")
     coll = db[coll_name]
     docs = list(coll.find({}))
     if not docs:
-        logger.warning(f"Датасет {coll_name} пуст.")
+        logger.warning(f"Dataset {coll_name} empty.")
         return pd.DataFrame()
     df = pd.DataFrame(docs)
-    logger.info(f"Датасет {coll_name} загружен: {len(df)} записей.")
+    logger.info(f"Dataset {coll_name} uploaded: {len(df)} records.")
     return df
 
 
 def sync_task_name(db: Database, task: Dict[str, Any]) -> None:
     """
-    Синхронизирует поле task_name во всех очередях, связанных с задачей.
-    Обновление производится без изменения статуса документов.
+    Synchronizes the task_name field in all queues related to the task.
+    The update is performed without changing the status of the documents.
     """
     new_task_name = task.get("task_name")
-    logger.info(f"Синхронизация поля task_name: новое значение {new_task_name}.")
-    # Обновляем в основной очереди
+    logger.info(f"Synchronization of the task_name field: new value{new_task_name}.")
+    # Updating in the main queue
     main_queue = f"queue_{new_task_name}"
     if collection_exists(db, main_queue):
         db[main_queue].update_many({}, {"$set": {"task_name": new_task_name}})
-        logger.info(f"Поле task_name обновлено в коллекции {main_queue}.")
-    # Обновляем в rta-очереди, если она существует
+        logger.info(f"The task_name field has been updated in the collection {main_queue}.")
+    # We update it in the rta queue, if it exists.
     rta_queue = f"queue_rta_{new_task_name}"
     if collection_exists(db, rta_queue):
         db[rta_queue].update_many({}, {"$set": {"task_name": new_task_name}})
-        logger.info(f"Поле task_name обновлено в коллекции {rta_queue}.")
+        logger.info(f"The task_name field has been updated in the collection {rta_queue}.")
 
 
 def sync_models(db: Database, task: Dict[str, Any]) -> None:
     """
-    Синхронизирует модели для задачи:
-      - Удаляет из коллекций queue_{task_name} и (при RtA) queue_rta_{task_name} записи, для которых поле model отсутствует
-        в обновленном списке моделей.
-      - Для каждой строки датасета и для каждой модели из обновленного списка, если запись с комбинацией
-        (model, variables, prompt) отсутствует, создается новая запись со статусом pending.
+    Synchronizes models for a task:
+      - - Deletes from the collection queue_{task_name} and (if necessary) queue_rt_{task_name} entries for which the model field is missing
+        in the updated list of models.
+      - For each row of the dataset and for each model from the updated list, if an entry with a combination
+        (model, variables, prompt) is missing, a new record with the pending status is being created.
     """
-    logger.info(f"Начало синхронизации моделей для задачи: {task.get('task_name')}")
+    logger.info(f"Starting synchronization of models for a task: {task.get('task_name')}")
     task_name = task.get("task_name")
     dataset_name = task.get("dataset_name")
     metric = task.get("metric", "")
@@ -93,14 +93,14 @@ def sync_models(db: Database, task: Dict[str, Any]) -> None:
     queue_coll_name = f"queue_{task_name}"
     queue_coll = db[queue_coll_name]
 
-    # Удаляем записи, где model не входит в актуальный список
+    # Deleting entries where the model is not included in the current list
     delete_result = queue_coll.delete_many({"model": {"$nin": list(new_models)}})
     if delete_result.deleted_count:
         logger.info(
-            f"Удалено {delete_result.deleted_count} записей из {queue_coll_name} по удалённым моделям."
+            f"Deleted {delete_result.deleted_count} records from {queue_coll_name} by remote models."
         )
 
-    # Если метрика RtA — удаляем записи из соответствующей rta-коллекции
+    # If the metric is RtA, we delete the records from the corresponding rta collection.
     if metric == "RtA":
         rta_coll_name = f"queue_rta_{task_name}"
         if collection_exists(db, rta_coll_name):
@@ -110,10 +110,10 @@ def sync_models(db: Database, task: Dict[str, Any]) -> None:
             )
             if delete_rta.deleted_count:
                 logger.info(
-                    f"Удалено {delete_rta.deleted_count} записей из {rta_coll_name} по удалённым моделям."
+                    f"Deleted {delete_rta.deleted_count} records from {rta_coll_name} by remote models."
                 )
 
-    # Собираем существующие ключи: (model, variables, prompt)
+    # Collecting existing keys: (model, variables, prompt)
     existing_keys = set()
     for doc in queue_coll.find({}, {"model": 1, "variables": 1, "prompt": 1}):
         key = (
@@ -122,12 +122,12 @@ def sync_models(db: Database, task: Dict[str, Any]) -> None:
             doc.get("prompt"),
         )
         existing_keys.add(key)
-    logger.debug(f"Найдено существующих записей: {len(existing_keys)}")
+    logger.debug(f"Existing records found: {len(existing_keys)}")
 
     df = get_dataset_head(db, dataset_name)
     if df.empty:
         logger.warning(
-            f"Датасет '{dataset_name}' пуст. Пропускаем создание новых записей для моделей."
+            f"Dataset '{dataset_name}' empty. Skipping the creation of new records for models."
         )
         return
 
@@ -178,20 +178,20 @@ def sync_models(db: Database, task: Dict[str, Any]) -> None:
         try:
             result = queue_coll.insert_many(new_inserts, ordered=False)
             logger.info(
-                f"Вставлено {len(result.inserted_ids)} новых записей в {queue_coll_name} для моделей."
+                f"Inserted {len(result.inserted_ids)} new entries in {queue_coll_name} for models."
             )
         except Exception as e:
-            logger.error(f"Ошибка при вставке новых записей в {queue_coll_name}: {e}")
-    logger.info(f"Завершена синхронизация моделей для задачи: {task_name}")
+            logger.error(f"Error when inserting new records in {queue_coll_name}: {e}")
+    logger.info(f"Synchronization of models for the task is completed: {task_name}")
 
 
 def sync_prompt(db: Database, task: Dict[str, Any]) -> None:
     """
-    Обновляет поле prompt во всех документах основной очереди, переводя их в статус pending,
-    только если новое значение отличается от текущего.
-    Если метрика задачи RtA, то полностью удаляется коллекция queue_rta_{task_name}.
+    Updates the prompt field in all documents in the main queue, setting them to the pending status.,
+    only if the new value differs from the current one.
+    If the task metric is RtA, then the collection is completely deleted. queue_rta_{task_name}.
     """
-    logger.info(f"Начало синхронизации prompt для задачи: {task.get('task_name')}")
+    logger.info(f"Start syncing prompt for a task: {task.get('task_name')}")
     task_name = task.get("task_name")
     new_prompt = task.get("prompt", "")
     queue_coll_name = f"queue_{task_name}"
@@ -203,29 +203,29 @@ def sync_prompt(db: Database, task: Dict[str, Any]) -> None:
     )
     if update_result.modified_count:
         logger.info(
-            f"Обновлено {update_result.modified_count} записей в {queue_coll_name} с новым prompt."
+            f"Update {update_result.modified_count} entries in {queue_coll_name} with a new prompt."
         )
         if task.get("metric") == "RtA":
             rta_coll_name = f"queue_rta_{task_name}"
             if collection_exists(db, rta_coll_name):
                 db.drop_collection(rta_coll_name)
                 logger.info(
-                    f"Коллекция {rta_coll_name} удалена из-за изменения prompt для задачи RtA."
+                    f"Collection {rta_coll_name} deleted due to the prompt change for the RtA task."
                 )
-    logger.info(f"Завершена синхронизация prompt для задачи: {task_name}")
+    logger.info(f"Prompt synchronization for the task is completed: {task_name}")
 
 
 def sync_variables(db: Database, task: Dict[str, Any]) -> None:
     """
-    Если в задаче заданы variables_cols, функция сравнивает список переменных из task с ключами поля
-    variables в документах основной очереди (queue_{task_name}). Если они отличаются, удаляется коллекция.
-    Если задача имеет метрику RtA, дополнительно удаляется коллекция queue_rta_{task_name}.
+    If variables_cols are set in the task, the function compares the list of variables from the task with the keys of the field.
+    variables in the documents of the main queue (queue_{task_name}). If they differ, the collection is deleted.
+    If the task has the RtA metric, the queue_rta_{task_name} collection is additionally deleted.
     """
-    logger.info(f"Начало синхронизации variables для задачи: {task.get('task_name')}")
+    logger.info(f"Starting synchronization of variables for a task: {task.get('task_name')}")
     task_name = task.get("task_name")
     var_cols = task.get("variables_cols", [])
     if not var_cols:
-        logger.info("Нет variables_cols в задаче, пропускаем синхронизацию variables.")
+        logger.info("There are no variables_cols in the task, we skip synchronization variables.")
         return
 
     queue_coll_name = f"queue_{task_name}"
@@ -237,33 +237,33 @@ def sync_variables(db: Database, task: Dict[str, Any]) -> None:
             if current_keys != new_keys:
                 db.drop_collection(queue_coll_name)
                 logger.info(
-                    f"Коллекция {queue_coll_name} удалена из-за изменения variables_cols: {current_keys} -> {new_keys}."
+                    f"Collection {queue_coll_name} deleted due to a change variables_cols: {current_keys} -> {new_keys}."
                 )
                 if task.get("metric") == "RtA":
                     rta_coll_name = f"queue_rta_{task_name}"
                     if collection_exists(db, rta_coll_name):
                         db.drop_collection(rta_coll_name)
                         logger.info(
-                            f"Коллекция {rta_coll_name} удалена из-за изменения variables_cols для задачи."
+                            f"Collection {rta_coll_name} deleted due to a change variables_cols for the task."
                         )
         else:
             logger.info(
-                f"Коллекция {queue_coll_name} пуста. Пропускаем проверку variables_cols."
+                f"Collection {queue_coll_name} empty. Skipping the check variables_cols."
             )
     else:
-        logger.info(f"Коллекция {queue_coll_name} не существует, нечего удалять.")
-    logger.info(f"Завершена синхронизация variables для задачи: {task_name}")
+        logger.info(f"Collection {queue_coll_name} does not exist, there is nothing to delete.")
+    logger.info(f"Synchronization of variables for the task is completed: {task_name}")
 
 
 def sync_regexp_include_exclude(db: Database, task: Dict[str, Any]) -> None:
     """
-    Обновляет поля regexp, target, а также include_list и exclude_list в основной очереди,
-    только если новые значения отличаются от текущих.
-    Если документ имеет статус extracted и были произведены изменения, его статус переводится в completed.
-    Обновление в rta-очереди не производится, так как target для RtA всегда 1 или 0.
+    Updates the regexp, target, and include_list and exclude_list fields in the main queue.,
+    only if the new values differ from the current ones.
+    If a document has the extracted status and changes have been made, its status is converted to completed.
+    There is no update in the rta queue, since the target for the RtA is always 1 or 0.
     """
     logger.info(
-        f"Начало синхронизации regexp/include-exclude для задачи: {task.get('task_name')}"
+        f"Start of regexp/include-exclude synchronization for a task: {task.get('task_name')}"
     )
     task_name = task.get("task_name")
     new_regexp = task.get("regexp")
@@ -283,7 +283,7 @@ def sync_regexp_include_exclude(db: Database, task: Dict[str, Any]) -> None:
     if update_result.modified_count:
         total_modified += update_result.modified_count
         logger.info(
-            f"Обновлено {update_result.modified_count} записей в {queue_coll_name} с новым regexp и target."
+            f"Update {update_result.modified_count} entries in {queue_coll_name} with the new regexp and target."
         )
 
     if include_col or exclude_col:
@@ -328,7 +328,7 @@ def sync_regexp_include_exclude(db: Database, task: Dict[str, Any]) -> None:
                     if update_res.modified_count:
                         total_modified += update_res.modified_count
                         logger.info(
-                            f"Обновлены include/exclude поля для dataset_id {row.get('_id')} в {queue_coll_name}."
+                            f"Updated include/exclude fields for dataset_id {row.get('_id')} in {queue_coll_name}."
                         )
     if total_modified:
         status_update = queue_coll.update_many(
@@ -336,20 +336,20 @@ def sync_regexp_include_exclude(db: Database, task: Dict[str, Any]) -> None:
         )
         if status_update.modified_count:
             logger.info(
-                f"Изменено статус {status_update.modified_count} записей в {queue_coll_name} с extracted на completed."
+                f"Status changed {status_update.modified_count} entries in {queue_coll_name} with extracted on completed."
             )
     logger.info(
-        f"Завершена синхронизация regexp/target/include-exclude для задачи: {task_name}"
+        f"Synchronization of regexp/target/include-exclude for the task is completed: {task_name}"
     )
 
 
 def sync_rta_fields(db: Database, task: Dict[str, Any]) -> None:
     """
-    Обновляет поля rta_prompt и rta_model:
-      - В основной очереди (queue_{task_name}) обновляются записи, если новые значения отличаются, с установкой статуса "completed".
-      - Если коллекция rta-очереди (queue_rta_{task_name}) существует, она удаляется.
+    Updates the rta_prompt and rta_model fields:
+      - In the main queue (queue_{task_name}), entries are updated if the new values differ, with the "completed" status set.
+       If the collection of the rto queue (queue_rta_{task_name}) exists, it is deleted.
     """
-    logger.info(f"Начало синхронизации rta-полей для задачи: {task.get('task_name')}")
+    logger.info(f"The beginning of the synchronization of the rta fields for the task: {task.get('task_name')}")
     task_name = task.get("task_name")
     new_rta_prompt = task.get("rta_prompt")
     new_rta_model = task.get("rta_model")
@@ -374,53 +374,53 @@ def sync_rta_fields(db: Database, task: Dict[str, Any]) -> None:
     )
     if update_result.modified_count:
         logger.info(
-            f"Обновлено {update_result.modified_count} записей в {queue_coll_name} с новыми rta_prompt и rta_model, статус изменен на completed."
+            f"Update {update_result.modified_count} entries in {queue_coll_name} with the new rta_prompt and ru_model, the status has been changed to completed."
         )
 
     rta_coll_name = f"queue_rta_{task_name}"
     if collection_exists(db, rta_coll_name):
         db.drop_collection(rta_coll_name)
         logger.info(
-            f"Коллекция {rta_coll_name} удалена, так как rta поля были изменены."
+            f"Collection {rta_coll_name} deleted because the rta fields were changed."
         )
-    logger.info(f"Завершена синхронизация rta-полей для задачи: {task_name}")
+    logger.info(f"Synchronization of the rta fields for the task has been completed: {task_name}")
 
 
 def sync_task(db: Database, task: Dict[str, Any]) -> None:
     """
-    Синхронизирует очередь для одной задачи, последовательно обновляя task_name, модели, prompt, variables,
-    regexp/target/include-exclude и rta-поля.
+    Synchronizes the queue for a single task by sequentially updating task_name, models, prompt, variables,
+    regexp/target/include-exclude and rta-fields.
     """
-    logger.info(f"==== Начало синхронизации задачи: {task.get('task_name')} ====")
+    logger.info(f"==== Starting task synchronization: {task.get('task_name')} ====")
     sync_task_name(db, task)
     sync_models(db, task)
     sync_prompt(db, task)
     sync_variables(db, task)
     sync_regexp_include_exclude(db, task)
     sync_rta_fields(db, task)
-    logger.info(f"==== Завершена синхронизация задачи: {task.get('task_name')} ====")
+    logger.info(f"==== Task synchronization completed: {task.get('task_name')} ====")
 
 
 def sync_all_tasks(db: Database) -> None:
     """
-    Обходит все задачи из коллекции tasks и синхронизирует очереди для каждой.
+    Bypasses all tasks from the tasks collection and synchronizes queues for each one.
     """
-    logger.info("Начало синхронизации всех задач.")
+    logger.info("The beginning of synchronization of all tasks.")
     tasks_coll = db["tasks"]
     tasks = list(tasks_coll.find({}))
     if not tasks:
-        logger.info("Нет задач для синхронизации.")
+        logger.info("There are no tasks to synchronize.")
         return
-    logger.info(f"Найдено {len(tasks)} задач для синхронизации.")
+    logger.info(f"Found {len(tasks)} tasks to synchronize.")
     for task in tasks:
         sync_task(db, task)
-    logger.info("Синхронизация всех задач завершена.")
+    logger.info("Synchronization of all tasks is completed.")
 
 
 def main():
     db = get_db()
-    interval = 10  # интервал проверки в секундах
-    logger.info("Запуск цикла синхронизации задач.")
+    interval = 10  # verification interval in seconds
+    logger.info("Starting the task synchronization cycle.")
     while True:
         sync_all_tasks(db)
         time.sleep(interval)

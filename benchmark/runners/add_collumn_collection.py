@@ -8,22 +8,22 @@ from pymongo.database import Database
 
 def configure_logging() -> None:
     """
-    Настраивает логирование для отображения сообщений в консоли.
+    Configures logging for displaying messages in the console.
     """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()],
     )
-    logging.info("Логирование успешно настроено.")
+    logging.info("Logging has been successfully configured.")
 
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает и возвращает подключение к MongoDB на основе переменных окружения.
+    Creates and returns a connection to MongoDB based on environment variables.
 
     Returns:
-        MongoClient: Клиент для подключения к MongoDB.
+        MongoClient: A client for connecting to MongoDB.
     """
     load_dotenv()
     mongo_username = os.getenv("MONGO_INITDB_ROOT_USERNAME")
@@ -38,64 +38,64 @@ def get_mongo_client() -> MongoClient:
     try:
         client = MongoClient(mongo_uri)
         client.admin.command("ping")
-        logging.info("Успешное подключение к MongoDB.")
+        logging.info("Successfully connected to MongoDB.")
         return client
     except Exception as e:
-        logging.exception("Ошибка подключения к MongoDB.")
+        logging.exception("Connection error to MongoDB.")
         raise e
 
 
 def add_target_field_to_collection(db: Database, collection_name: str, value) -> None:
     """
-    Добавляет поле 'target' со значением 0 для всех документов в указанной коллекции.
+    Adds a 'target' field with a value of 0 for all documents in the specified collection.
 
     Args:
-        db (Database): Экземпляр базы данных MongoDB.
-        collection_name (str): Имя коллекции, в которую добавляется поле.
+        db (Database): MongoDB database instance.
+        collection_name (str): The name of the collection to which the field is being added.
     """
     collection = db[collection_name]
-    logging.info(f"Добавление поля 'target' в коллекцию '{collection_name}'.")
+    logging.info(f"Adding the 'target' field to the collection '{collection_name}'.")
 
     try:
-        # Обновляем все документы, добавляя поле target со значением 0
+        # We update all documents by adding the target field with the value 0
         result = collection.update_many(
-            {},  # Условие: все документы
+            {},  # Condition: all documents
             {
                 "$set": {"task_name": value}
-            },  # Действие: добавить поле target со значением 0
+            },  # Action: add the target field with the value 0
         )
         logging.info(
-            f"Добавлено поле 'target' со значением 0 для {result.modified_count} документов в коллекции '{collection_name}'."
+            f"Added the 'target' field with value 0 for {result.modified_count} documents in the '{collection_name}' collection."
         )
     except Exception as e:
         logging.error(
-            f"Ошибка при добавлении поля 'target' в коллекцию '{collection_name}': {e}"
+            f"Error when adding the 'target' field to the collection'{collection_name}': {e}"
         )
 
 
 def main() -> None:
     """
-    Основная функция для добавления поля 'target' в коллекцию.
+    The main function is to add the 'target' field to the collection.
     """
     try:
-        # Настройка логирования
+        # Configuring logging
         configure_logging()
 
-        # Имя базы данных и коллекции
+        # Database and collection name
         database_name = "TrustGen"
         collection_name = "queue_rta_Misuse_ru"
         value = "Misuse_ru"
 
-        # Подключение к MongoDB
+        # MongoDB Connection
         client = get_mongo_client()
         db = client[database_name]
 
-        # Добавление поля 'target'
+        # Addinf 'target' field
         add_target_field_to_collection(db, collection_name, value)
 
-        logging.info("Добавление поля 'target' завершено.")
+        logging.info("The addition of the 'target' field has been completed.")
     except Exception as e:
-        logging.exception(f"Произошла ошибка: {e}")
+        logging.exception(f"Error: {e}")
 
 
 if __name__ == "__main__":

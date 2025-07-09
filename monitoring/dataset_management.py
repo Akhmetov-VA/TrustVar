@@ -8,13 +8,13 @@ from monitoring.src import load_file_any_format
 from utils.constants import METRICS
 from utils.db_client import MongoDBClient, MongoDBConfig
 
-# Инициализация клиента БД
+# Initializing the database client
 config = MongoDBConfig(database="TrustGen")
 db_client = MongoDBClient(config)
 
 
 def render_dataset_registry_section():
-    st.subheader("Содержимое dataset_regestry")
+    st.subheader("Content dataset_regestry")
     coll = db_client.get_collection("dataset_regestry")
     docs = list(coll.find({}))
     if docs:
@@ -23,37 +23,37 @@ def render_dataset_registry_section():
             df.drop(columns=["_id"], inplace=True)
         st.dataframe(df)
     else:
-        st.write("dataset_regestry пуст.")
+        st.write("dataset_regestry empty.")
 
 
 def render_dataset_upload_section() -> Optional[str]:
-    with st.expander("Добавить новый датасет", expanded=False):
-        st.write("Вы можете загрузить CSV, Excel, JSON или Parquet файл.")
+    with st.expander("Add a new dataset", expanded=False):
+        st.write("You can upload a CSV, Excel, JSON, or Parquet file.")
         uploaded_file = st.file_uploader(
-            "Загрузите CSV, Excel, JSON или Parquet файл",
+            "Upload a CSV, Excel, JSON, or Parquet file",
             type=["csv", "xlsx", "json", "parquet"],
             key="file_uploader_experiments",
         )
         if uploaded_file is not None:
             dataset_name_input = st.text_input(
-                "Введите имя нового датасета (латиницей):",
+                "Enter the name of the new dataset (in Latin):",
                 value=uploaded_file.name.split(".")[0],
             )
         if uploaded_file is not None and dataset_name_input:
             df_uploaded = load_file_any_format(uploaded_file)
             if df_uploaded is not None and not df_uploaded.empty:
-                st.write("Некоторые строки загруженного датасета (случайные 10 строк):")
+                st.write("Some lines of the uploaded dataset (random 10 lines):")
                 st.dataframe(df_uploaded.sample(min(10, len(df_uploaded))))
                 chosen_metric = st.selectbox(
-                    "Выберите метрику для этого датасета:",
+                    "Select a metric for this dataset:",
                     METRICS,
                     key="dataset_upload_selectbox",
                 )
                 st.write(
-                    "Выберите колонки, которые будут использоваться как переменные для промпта:"
+                    "Select the columns that will be used as variables for prompta:"
                 )
                 var_cols = st.multiselect(
-                    "Переменные для промпта:", list(df_uploaded.columns)
+                    "Variables for prompta:", list(df_uploaded.columns)
                 )
 
                 target_column = None
@@ -62,20 +62,20 @@ def render_dataset_upload_section() -> Optional[str]:
 
                 if chosen_metric == "include_exclude":
                     st.write(
-                        "Для метрики 'include_exclude' необходимо указать:\n"
-                        "1) Колонку, где хранится список строк, которые должны присутствовать в ответе.\n"
-                        "2) Опционально — колонку, где хранится список строк, которые не должны присутствовать."
+                        "For the 'include_exclude' metric, you must specify:\n"
+                        "1) The column where the list of rows that should be present in the response is stored.\n"
+                        "2) Optionally, a column where a list of rows that should not be present is stored."
                     )
                     potential_cols = [
                         c for c in df_uploaded.columns if c not in var_cols
                     ]
                     include_col = st.selectbox(
-                        "Колонка со строками, которые должны присутствовать (include):",
+                        "A column with rows that should be present(include):",
                         potential_cols,
                         key="dataset_upload_include_selectbox",
                     )
                     exclude_col = st.selectbox(
-                        "Колонка со строками, которые не должны присутствовать (exclude) (необязательно):",
+                        "A column with rows that should not be present (exclude) (optional):",
                         [None] + potential_cols,
                         index=0,
                         key="dataset_upload_exclude_selectbox",
@@ -87,15 +87,15 @@ def render_dataset_upload_section() -> Optional[str]:
                         ]
                         if not potential_targets:
                             target_column = st.text_input(
-                                "Введите название колонки с таргетом:"
+                                "Enter the name of the target column:"
                             )
                         else:
                             target_column = st.selectbox(
-                                "Выберите колонку с таргетом:",
+                                "Select a column with a target:",
                                 potential_targets,
                                 key="dataset_upload_target_selectbox",
                             )
-                st.subheader("Предпросмотр записи для сохранения:")
+                st.subheader("Preview the recording to save:")
                 record_preview = {
                     "dataset_name": dataset_name_input,
                     "var_cols": var_cols,
@@ -105,20 +105,20 @@ def render_dataset_upload_section() -> Optional[str]:
                     "exclude_column": exclude_col,
                 }
                 st.json(record_preview)
-                if st.button("Сохранить датасет в БД"):
+                if st.button("Save the dataset to the database"):
                     db_client.insert_dataset_records(dataset_name_input, df_uploaded)
                     db_client.insert_dataset_into_registry(record_preview)
                     st.success(
-                        f"Датасет '{dataset_name_input}' загружен и зарегистрирован!"
+                        f"Dataset '{dataset_name_input}' uploaded and registered!"
                     )
                     return dataset_name_input
             else:
-                st.error("Загруженный файл пуст или не может быть прочитан.")
+                st.error("The uploaded file is empty or cannot be read.")
     return None
 
 
 def render_dataset_management_tab():
-    st.header("Управление датасетами")
+    st.header("Managing datasets")
     render_dataset_registry_section()
     render_dataset_upload_section()
 
@@ -130,7 +130,7 @@ def render_dataset_varcols_section(
 ]:
     registry_info = db_client.get_dataset_registry_info(dataset_name)
     if not registry_info:
-        st.write("Для этого датасета нет сохраненных var_cols, метрики или таргета.")
+        st.write("There are no saved var_cols, metrics, or target for this dataset.")
         return None, None, None, None, None
     else:
         var_cols = registry_info["var_cols"]
@@ -138,9 +138,9 @@ def render_dataset_varcols_section(
         target_column = registry_info.get("target_column", None)
         include_column = registry_info.get("include_column", None)
         exclude_column = registry_info.get("exclude_column", None)
-        st.write(f"**Переменные для промпта (var_cols):** {var_cols}")
-        st.write(f"**Метрика:** {chosen_metric}")
-        st.write(f"**Таргет колонка:** {target_column}")
-        st.write(f"**Колонка для include:** {include_column}")
-        st.write(f"**Колонка для exclude:** {exclude_column}")
+        st.write(f"**Variables for prompta (var_cols):** {var_cols}")
+        st.write(f"**Metric:** {chosen_metric}")
+        st.write(f"**Target column:** {target_column}")
+        st.write(f"**The column for include:** {include_column}")
+        st.write(f"**The column for exclude:** {exclude_column}")
         return var_cols, chosen_metric, target_column, include_column, exclude_column

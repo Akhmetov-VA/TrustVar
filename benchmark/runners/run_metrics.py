@@ -10,7 +10,7 @@ from pymongo.database import Database
 
 from utils.constants import MONGO_URI
 
-# Название БД можно задавать через переменные окружения, по умолчанию "TrustGen"
+# The name of the database can be set via environment variables, by default "TrustGen"
 MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -21,13 +21,13 @@ METRICS = ["accuracy", "correlation", "RtA", "include_exclude"]
 
 def get_mongo_client() -> MongoClient:
     client = MongoClient(MONGO_URI)
-    logger.info("Успешно подключились к MongoDB.")
+    logger.info("Successfully connected to MongoDB.")
     return client
 
 
 def get_db() -> Database:
     db = get_mongo_client()[MONGO_DB]
-    logger.info(f"Используем базу данных: {MONGO_DB}")
+    logger.info(f"We use the database: {MONGO_DB}")
     return db
 
 
@@ -35,8 +35,8 @@ def extract_errors(
     df: pd.DataFrame, condition: pd.Series, input_col: str = "input", k: int = 10
 ) -> List[Dict[str, Any]]:
     """
-    Берёт случайную выборку до k строк, где condition == True,
-    и возвращает их как dict с полями input, pred, target.
+    Takes a random sample of up to k rows, where condition == True,
+    and returns them as dict with fields input, pred, target.
     """
     df_err = df[condition]
     if df_err.empty:
@@ -50,7 +50,7 @@ def compute_tfnr(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
     if total == 0:
         return np.nan, []
     
-    # Обрабатываем случаи, когда pred может быть списком
+    # Handling cases where pred can be a list
     def is_tfn(pred):
         if isinstance(pred, list):
             return all(p == "TFN" for p in pred)
@@ -63,7 +63,7 @@ def compute_tfnr(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
 
 
 def compute_accuracy(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
-    # Фильтруем записи, где pred не содержит только TFN
+    # Filtering records where pred does not contain only TFN
     def has_valid_pred(pred):
         if isinstance(pred, list):
             return not all(p == "TFN" for p in pred)
@@ -73,16 +73,16 @@ def compute_accuracy(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
     if df_valid.empty:
         return np.nan, []
     
-    # Проверяем точность для каждой записи
+    # We check the accuracy for each record
     def check_accuracy(row):
         pred = row["pred"]
         target = row["target"]
         
         if isinstance(pred, list):
-            # Если pred - список, проверяем, есть ли хотя бы один правильный ответ
+            # If pred is a list, we check if there is at least one correct answer.
             return any(str(p) == str(target) for p in pred)
         else:
-            # Если pred - одно значение
+            # If pred is a single value
             return str(pred) == str(target)
     
     cond = ~df_valid.apply(check_accuracy, axis=1)
@@ -92,7 +92,7 @@ def compute_accuracy(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
 
 
 def compute_correlation(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
-    # Фильтруем записи, где pred не содержит только TFN
+    # Filtering records where pred does not contain only TFN
     def has_valid_pred(pred):
         if isinstance(pred, list):
             return not all(p == "TFN" for p in pred)
@@ -100,10 +100,10 @@ def compute_correlation(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
     
     df_valid = df[df["pred"].apply(has_valid_pred)].copy()
     
-    # Обрабатываем числовые значения
+    # Processing numeric values
     def extract_numeric_pred(pred):
         if isinstance(pred, list):
-            # Берем первое не-TFN значение
+            # We take the first non-TFN value
             for p in pred:
                 if p != "TFN":
                     try:
@@ -142,15 +142,15 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
         inc = row.get("include_list") or []
         exc = row.get("exclude_list") or []
         
-        # Обрабатываем случаи, когда pred может быть списком
+        # Handling cases where pred can be a list
         if isinstance(pred, list):
-            # Берем первое не-TFN значение
+            # We take the first non-TFN value
             pred_str = ""
             for p in pred:
                 if p != "TFN":
                     pred_str = str(p)
                     break
-            if not pred_str:  # Если все TFN
+            if not pred_str:  # If everything is TFN
                 pred_str = "TFN"
         else:
             pred_str = str(pred)
@@ -182,7 +182,7 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
         if prefix == "queue_":
             query["metric"] = {"$ne": "RtA"}
 
-        logging.info(f"Загружаем данные для метрик из коллекции {coll_name}")
+        logging.info(f"Uploading data for metrics from the collection {coll_name}")
         for doc in coll.find(query):
             prompt = doc.get("prompt", "")
             vars_ = doc.get("variables", {}) or {}
@@ -190,7 +190,7 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
             inc_list = doc.get("include_list", []) or []
             exc_list = doc.get("exclude_list", []) or []
 
-            # Гарантируем, что include_list и exclude_list имеют тип list
+            # We guarantee that include_list and exclude_list have a type list
             if isinstance(inc_list, str):
                 inc_list = [inc_list]
             if isinstance(exc_list, str):
@@ -214,13 +214,13 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
                 }
             )
     df = pd.DataFrame(rows)
-    logger.info(f"Извлечено {len(df)} записей из очереди '{prefix}'.")
+    logger.info(f"Extracted {len(df)} entries from the queue '{prefix}'.")
     return df
 
 
 def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame:
     """
-    Извлекает задачи с дополнительными полями для группировки по task_type и dynamic_augments.
+    Retrieves issues with additional fields for grouping by task_type and dynamic_augments.
     """
     cols = [c for c in db.list_collection_names() if c.startswith(prefix)]
     if prefix == "queue_":
@@ -232,7 +232,7 @@ def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame
         if prefix == "queue_":
             query["metric"] = {"$ne": "RtA"}
 
-        logging.info(f"Загружаем данные для метрик из коллекции {coll_name}")
+        logging.info(f"Uploading data for metrics from the collection {coll_name}")
         for doc in coll.find(query):
             prompt = doc.get("prompt", "")
             vars_ = doc.get("variables", {}) or {}
@@ -240,7 +240,7 @@ def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame
             inc_list = doc.get("include_list", []) or []
             exc_list = doc.get("exclude_list", []) or []
 
-            # Гарантируем, что include_list и exclude_list имеют тип list
+            # We guarantee that include_list and exclude_list are of type list
             if isinstance(inc_list, str):
                 inc_list = [inc_list]
             if isinstance(exc_list, str):
@@ -249,11 +249,11 @@ def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame
             metric = doc.get("metric")
             target_val = inc_list if metric == "include_exclude" else doc.get("target")
             
-            # Добавляем поля для группировки
+            # Adding fields for grouping
             task_type = doc.get("task_type", "")
             dynamic_augments = doc.get("dynamic_augments", [])
             
-            # Если dynamic_augments - строка, преобразуем в список
+            # If dynamic_augments is a string, convert it to a list
             if isinstance(dynamic_augments, str):
                 dynamic_augments = [dynamic_augments]
             
@@ -275,7 +275,7 @@ def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame
                 }
             )
     df = pd.DataFrame(rows)
-    logger.info(f"Извлечено {len(df)} записей из очереди '{prefix}' с группировкой.")
+    logger.info(f"Extracted {len(df)} entries from the queue '{prefix}' with grouping.")
     return df
 
 
@@ -289,19 +289,19 @@ def clear_old_results(db: Database, collection_name: str, df: pd.DataFrame):
 
 def clear_old_grouped_results(db: Database, collection_name: str, df: pd.DataFrame):
     """
-    Очищает старые результаты для группированных метрик.
-    Удаляет все записи для данной комбинации (task_name, model, task_type).
+    Clears old results for grouped metrics.
+    Deletes all entries for this combination (task_name, model, task_type).
     """
     if df.empty:
         return
     coll = db[collection_name]
-    # Для обычных метрик (без группировки)
+    # For regular metrics (without grouping)
     if "task_type" not in df.columns:
         for task, model in df[["task_name", "model"]].drop_duplicates().values:
             coll.delete_many({"task_name": task, "model": model})
     else:
-        # Для группированных метрик: удаляем все записи для каждой комбинации (task_name, model, task_type)
-        # Это удалит как старые записи с dynamic_augments как списком, так и новые с одной аугментацией
+        # For grouped metrics: delete all records for each combination(task_name, model, task_type)
+        # This will delete both the old entries from dynamic_augments both listed and new ones with a single augmentation
         unique_combinations = df[["task_name", "model", "task_type"]].drop_duplicates()
         for _, row in unique_combinations.iterrows():
             coll.delete_many({
@@ -321,7 +321,7 @@ def insert_results(db: Database, collection_name: str, results: List[Dict[str, A
 
 def insert_grouped_results(db: Database, collection_name: str, results: List[Dict[str, Any]]):
     """
-    Вставляет группированные результаты в базу данных.
+    Inserts the grouped results into the database.
     """
     if not results:
         return
@@ -335,10 +335,10 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
         df = fetch_extracted_tasks(db, prefix="queue_")
         df_rta = fetch_extracted_tasks(db, prefix="queue_rta_")
         
-        # Загружаем данные с группировкой для расчета метрик по группам
+        # Uploading data with a grouping for calculating metrics by groups
         df_groups = fetch_extracted_tasks_with_groups(db, prefix="queue_")
 
-        # обычные очереди
+        # regular queues
         if not df.empty:
             tfnr_res, acc_res, corr_res, ie_res = [], [], [], []
             for (task, ds, model, metric), g in df.groupby(
@@ -393,9 +393,9 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
             insert_results(db, "Correlation", corr_res)
             insert_results(db, "IncludeExclude", ie_res)
 
-        # Расчет метрик по группам task_type и dynamic_augments
+        # Calculation of metrics by task_type and dynamic_augments groups
         if not df_groups.empty:
-            # Фильтруем только записи с task_type и dynamic_augments
+            # Filtering only records with task_type and dynamic_augments
             df_with_groups = df_groups[
                 (df_groups["task_type"].notna()) & 
                 (df_groups["task_type"] != "") & 
@@ -403,12 +403,12 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
             ]
             
             if not df_with_groups.empty:
-                # 1. Разворачиваем по аугментациям
+                # 1. We expand it according to the augmentations
                 expanded_rows = []
                 for _, row in df_with_groups.iterrows():
                     dynamic_augments = row["dynamic_augments"]
                     pred = row["pred"]
-                    # Для accuracy: pred может быть списком, иначе просто копируем
+                    # For accuracy: pred can be a list, otherwise we just copy
                     if isinstance(pred, list) and len(pred) == len(dynamic_augments):
                         for i, augment in enumerate(dynamic_augments):
                             new_row = row.copy()
@@ -422,12 +422,12 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                             expanded_rows.append(new_row)
                 expanded_df = pd.DataFrame(expanded_rows)
                 
-                # 2. Группируем по (task_name, dataset_name, model, task_type, augment, metric)
+                # 2. Grouping by (task_name, dataset_name, model, task_type, augment, metric)
                 grouped_tfnr_res, grouped_acc_res, grouped_corr_res, grouped_ie_res = [], [], [], []
                 for (task, ds, model, task_type, augment, metric), g in expanded_df.groupby([
                     "task_name", "dataset_name", "model", "task_type", "augment", "metric"
                 ]):
-                    # Считаем метрики по группе
+                    # We count metrics by group
                     if metric == "accuracy":
                         val, errs = compute_accuracy(g)
                         grouped_acc_res.append({
@@ -461,7 +461,7 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                             "value": val,
                             "errors": errs,
                         })
-                    # TFNR считаем для всех
+                    # TFNR count for everyone
                     val_tfnr, errs_tfnr = compute_tfnr(g)
                     grouped_tfnr_res.append({
                         "task_name": task,
@@ -472,13 +472,13 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                         "value": val_tfnr,
                         "errors": errs_tfnr,
                     })
-                # Сохраняем группированные метрики в отдельные коллекции
+                # Saving the grouped metrics in separate collections
                 insert_grouped_results(db, "TFNR_Groups", grouped_tfnr_res)
                 insert_grouped_results(db, "Accuracy_Groups", grouped_acc_res)
                 insert_grouped_results(db, "Correlation_Groups", grouped_corr_res)
                 insert_grouped_results(db, "IncludeExclude_Groups", grouped_ie_res)
 
-        # RTA очереди
+        # RTA queues
         if not df_rta.empty:
             rta_res = []
             for (task, ds, model, _), g in df_rta.groupby(
@@ -496,7 +496,7 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                 )
             insert_results(db, "RtAR", rta_res)
 
-        logger.info("Метрики обновлены, ожидаем следующий цикл.")
+        logger.info("The metrics have been updated, and we are expecting the next cycle..")
         time.sleep(interval)
 
 

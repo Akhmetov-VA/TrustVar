@@ -10,7 +10,7 @@ from pymongo.database import Database
 
 from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
 
-# Предполагается, что переменные окружения для MONGO_USERNAME, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, MONGO_DB уже заданы
+# It is assumed that the environment variables for MONGO_USERNAME, MANGO_PASSWORD, MANGO_HOST, MANGO_SPORT, MONGO_DB are already set.
 MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -19,13 +19,13 @@ logger = logging.getLogger(__name__)
 
 def get_mongo_client() -> MongoClient:
     """
-    Создаем подключение к MongoDB.
+    Creating a connection to MongoDB.
     """
     mongo_uri = (
         f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
     )
     client = MongoClient(mongo_uri)
-    logger.info("Успешно подключились к MongoDB.")
+    logger.info("Successfully connected to MongoDB.")
     return client
 
 
@@ -36,9 +36,9 @@ def get_db() -> Database:
 
 def fetch_rta_tasks(db: Database):
     """
-    Функция-генератор: обходим все коллекции, имена которых начинаются с "queue_",
-    и выбираем задачи с метрикой 'RtA' и статусом 'completed'.
-    Возвращаем кортеж (coll_name, task).
+    Generator function: we go through all collections whose names start with "queue_"
+    and select tasks with the "RtA" metric and the "completed" status.
+    Returning the tuple (coll_name, task).
     """
     collections = [c for c in db.list_collection_names() if c.startswith("queue_")]
     for coll_name in collections:
@@ -50,73 +50,73 @@ def fetch_rta_tasks(db: Database):
 
 def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -> None:
     """
-    Переносим задачу из обычной очереди (queue_{task_name}) в целевую rta очередь (rta_queue_{task_name}).
-    Логика:
-      - Из исходного имени очереди получаем task_name и формируем rta_queue_{task_name}.
-      - В целевую запись копируются:
-          init_model = оригинальная model,
-          init_prompt = оригинальный prompt,
-          prompt = rta_prompt из задачи,
-          model = rta_model из задачи.
-      - Формируется новое поле variables, в котором:
-            "input"  = заполненный исходный prompt с подстановкой variables,
+    Transferring the task from the regular queue (queue_{task_name}) to the target rta queue (rta_queue_{task_name}).
+    Logic:
+      - We get task_name from the initial queue name and form rta_queue_{task_name}.
+      - The following are copied to the target record:
+    init_model = original model,
+          init_prompt = original prompt,
+          prompt = rta_prompt from the task,
+          model = ru_model from the task.
+      - A new variables field is formed, in which:
+    "input" = filled in the original prompt with the variables substitution,
             "answer" = response.
-      - Проверяются обязательные поля: rta_model, rta_prompt и response.
-      - Если обнаружен дубликат (на основе rta_model и уже заполненных полей variables),
-        запись не создается, а исходная помечается как ошибочная.
-      - После успешного переноса исходная задача обновляется – её статус меняется на 'transfered_to_rta'.
-      - В новую запись добавляется поле "source_id" для последующей синхронизации.
+       The required fields are checked: ru_model, rta_prompt and response.
+      - If a duplicate is found (based on rta_model and already filled in variables fields),
+        the record is not created, and the original one is marked as erroneous.
+      - After successful transfer, the original task is updated – its status changes to 'transfered_to_rta'.
+      - The "source_id" field is added to the new record for subsequent synchronization.
     """
-    # Извлекаем task_name из coll_name: coll_name = "queue_{task_name}"
+    # Extracting task_name from coll_name: coll_name = "queue_{task_name}"
     task_name = coll_name.replace("queue_", "")
     rta_coll_name = f"queue_rta_{task_name}"
     rta_coll = db[rta_coll_name]
 
-    # Достаем необходимые поля
-    original_model = task["model"]  # исходная модель (init_model)
+    # We get the necessary fields
+    original_model = task["model"]  # The original model (init_model)
     rta_model = task.get("rta_model")
     if not rta_model:
-        logger.warning("Задача RtA без rta_model? Пропускаем.")
+        logger.warning("An RtA task without rta_model? Skip it.")
         db[coll_name].update_one(
             {"_id": task["_id"]},
-            {"$set": {"status": "error", "error": "Задача RtA без rta_model"}},
+            {"$set": {"status": "error", "error": "The RtA task without rta_model"}},
         )
         return
 
-    original_prompt = task["prompt"]  # исходный prompt (init_prompt)
+    original_prompt = task["prompt"]  # the original prompt (init_prompt)
     rta_prompt = task.get("rta_prompt")
     if not rta_prompt:
-        logger.warning("Задача RtA без rta_prompt? Пропускаем.")
+        logger.warning("An RtA task without rta_model? Skip it.")
         db[coll_name].update_one(
             {"_id": task["_id"]},
-            {"$set": {"status": "error", "error": "Задача RtA без rta_prompt"}},
+            {"$set": {"status": "error", "error": "The RtA task without rta_prompt"}},
         )
         return
 
     variables = task.get("variables", {})
     response = task.get("response", "")
     if response is None:
-        logger.warning("Задача RtA без response? Пропускаем.")
+        logger.warning("An RtA task without a response? Skip it")
         db[coll_name].update_one(
             {"_id": task["_id"]},
-            {"$set": {"status": "error", "error": "Задача RtA без response"}},
+            {"$set": {"status": "error", "error": "RtA task without response"}},
         )
         return
 
-    # Формируем filled_input: подставляем variables в исходный prompt
+    # We form filled_input: we substitute variables in the original prompt
     try:
         filled_input = original_prompt.format(**variables)
     except Exception as e:
-        logger.error(f"Ошибка форматирования prompt: {e}")
+        logger.error(f"Formatting error prompt: {e}")
         db[coll_name].update_one(
             {"_id": task["_id"]},
-            {"$set": {"status": "error", "error": "Ошибка форматирования prompt"}},
+            {"$set": {"status": "error", "error": "Formatting error prompt"}},
         )
         return
 
     new_variables = {"input": filled_input, "answer": response}
 
-    # Проверяем наличие дубликата в rta очереди (по rta_model и заполненным полям)
+    # We check for a duplicate in the rta queue (by rta_model and filled in fields)
     existing = rta_coll.find_one(
         {
             "init_model": original_model,
@@ -124,14 +124,14 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
         }
     )
     if existing:
-        logger.info("Дубликат найден, не добавляем запись в rta_queue.")
+        logger.info("Duplicate found, do not add entry to rta_queue.")
         db[coll_name].update_one(
             {"_id": task["_id"]},
-            {"$set": {"status": "error", "error": "Дубликат в rta_queue"}},
+            {"$set": {"status": "error", "error": "Duplicate in rta_queue"}},
         )
         return
 
-    # Формируем новый документ для rta очереди, добавляя поле source_id для последующей синхронизации
+    # Creating a new document for the rta queue by adding the source_id field for subsequent synchronization
     doc = {
         "task_name": task.get("task_name"),
         "dataset_name": task.get("dataset_name"),
@@ -141,17 +141,17 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
         "prompt": rta_prompt,
         "model": rta_model,
         "variables": new_variables,
-        "status": "pending",  # новая запись ожидает обработки
-        "metric": "accuracy",  # согласно условию
+        "status": "pending",  # a new record is awaiting processing
+        "metric": "accuracy",  # according to the condition
         "target": task.get("target"),
-        "source_id": task["_id"],  # ссылка на исходную запись в обычной очереди
+        "source_id": task["_id"],  # link to the original entry in the regular queue
     }
 
-    # Вставляем в rta очередь
+    # We insert it into the rta queue
     rta_coll.insert_one(doc)
-    logger.info(f"Задача RtA добавлена в {rta_coll_name}.")
+    logger.info(f"The RtA task has been added to {rta_coll_name}.")
 
-    # Обновляем исходную задачу – меняем статус на 'transfered_to_rta'
+    # Oupdating the original task – changing the status to 'transfered_to_rta'
     db[coll_name].update_one(
         {"_id": task["_id"]}, {"$set": {"status": "transfered_to_rta"}}
     )
@@ -159,10 +159,10 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
 
 def run_rta_transfer_loop(db: Database, interval: int = 10):
     """
-    Бесконечный цикл:
-      - Ищем задачи RtA (metric=RtA, status=completed) в обычных очередях и переносим их в rta очереди.
-      - Затем выполняем синхронизацию: обновляем rta очереди на основании актуальных данных из обычных очередей.
-      - Если нет задач для переноса, ждем указанное время.
+    Endless loop:
+      - We are looking for RtA tasks (metric=Ru, status=completed) in regular queues and transfer them to the rta queue.
+      - Then we perform synchronization: we update the rta queues based on up-to-date data from regular queues.
+      - If there are no tasks to transfer, we wait for the specified time.
     """
     while True:
         found_any = False
@@ -171,7 +171,7 @@ def run_rta_transfer_loop(db: Database, interval: int = 10):
             create_rta_queue_entry(db, coll_name, task)
 
         if not found_any:
-            logger.info("Нет задач RtA для переноса. Ожидание...")
+            logger.info("There are no RtA tasks to transfer. Expectation...")
 
         time.sleep(interval)
 

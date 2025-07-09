@@ -9,61 +9,61 @@ from pymongo.database import Database
 
 def configure_logging() -> None:
     """
-    Настраивает логирование для отображения сообщений в консоли.
+    Configures logging for displaying messages in the console.
     """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()],
     )
-    logging.info("Логирование успешно настроено.")
+    logging.info("Logging has been successfully configured.")
 
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает и возвращает подключение к MongoDB на основе переменных окружения.
+    Creates and returns a connection to MongoDB based on environment variables.
 
     Returns:
-        MongoClient: Клиент для подключения к MongoDB.
+        MongoClient: A client for connecting to MongoDB.
     """
-    # Загрузка переменных окружения из файла .env
+    # Loading environment variables from a file .env
     load_dotenv()
 
-    # Получение деталей подключения из переменных окружения
+    # Getting connection details from environment variables
     mongo_username = os.getenv("MONGO_INITDB_ROOT_USERNAME")
     mongo_password = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
     mongo_host = os.getenv("MONGO_HOST")
     mongo_port = os.getenv("MONGO_INITDB_ROOT_PORT")
 
-    # Формирование URI для подключения
+    # Creating a connection URI
     mongo_uri = (
         f"mongodb://{mongo_username}:{mongo_password}@{mongo_host}:{mongo_port}/"
     )
 
     try:
         client = MongoClient(mongo_uri)
-        # Проверка подключения
+        # Checking the connection
         client.admin.command("ping")
-        logging.info("Успешное подключение к MongoDB.")
+        logging.info("Successful connection to MongoDB.")
         return client
     except Exception as e:
-        logging.exception("Ошибка подключения к MongoDB.")
+        logging.exception("Connection error toMongoDB.")
         raise e
 
 
 def revert_task_status(collection: collection.Collection) -> None:
     """
-    Отменяет статус задач в коллекции с 'transferred' и 'measured' на 'completed'
-    и удаляет поля 'pred' и 'metric'.
+    Reverses the status of tasks in the collection from 'transferred' and 'measured' to 'completed'
+    and deletes the 'pred' and 'metric' fields.
 
     Args:
-        collection (Collection): Коллекция MongoDB, в которой выполняется операция.
+        collection (Collection): The MongoDB collection where the operation is performed.
 
     Returns:
         None
     """
     try:
-        # Определяем статусы для отката
+        # Defining the rollback statuses
         statuses_to_revert = ["transferred", "measured"]
 
         result = collection.update_many(
@@ -71,49 +71,49 @@ def revert_task_status(collection: collection.Collection) -> None:
             {"$set": {"status": "completed"}, "$unset": {"pred": "", "metric": ""}},
         )
         logging.info(
-            f"Отменено {result.modified_count} задач из {statuses_to_revert} в 'completed' в коллекции '{collection.name}'."
+            f"Cancelled {result.modified_count} issues from{statuses_to_revert} in 'completed' in the collection '{collection.name}'."
         )
     except Exception as e:
-        logging.error(f"Ошибка при обработке коллекции '{collection.name}': {e}")
+        logging.error(f"Error processing the collection '{collection.name}': {e}")
 
 
 def process_collections(db: Database) -> None:
     """
-    Обрабатывает все коллекции в базе данных, выполняя обновление статусов задач.
+    Processes all collections in the database by updating task statuses.
 
     Args:
-        db (Database): Экземпляр базы данных MongoDB.
+        db (Database): Database Instance MongoDB.
 
     Returns:
         None
     """
     for collection_name in db.list_collection_names():
         collection = db[collection_name]
-        logging.info(f"Обработка коллекции '{collection_name}'")
+        logging.info(f"Collection Processing '{collection_name}'")
         revert_task_status(collection)
 
 
 def main() -> None:
     """
-    Основная функция для выполнения обработки задач в коллекциях базы данных.
+    The main function for performing task processing in database collections.
     """
     try:
-        # Настройка логирования
+        # Configuring logging
         configure_logging()
 
-        # Имя базы данных
+        # Database Name
         database_name = "TrustLLM_ru"
 
-        # Подключение к MongoDB
+        # Connecting to MongoDB
         client = get_mongo_client()
         db = client[database_name]
 
-        # Обработка коллекций
+        # Processing collections
         process_collections(db)
 
-        logging.info("Все указанные коллекции обработаны.")
+        logging.info("All specified collections have been processed.")
     except Exception as e:
-        logging.exception(f"Произошла ошибка: {e}")
+        logging.exception(f"An error has occurred: {e}")
 
 
 if __name__ == "__main__":

@@ -6,14 +6,10 @@ build:
   stage: build
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
-      # changes:
-      #   - Dockerfile
-      #   - docker-compose.yml
-      #   - .gitlab-ci.yml
   tags:
     - trust_llm_61
   script:
-    - echo "Сборка образов"
+    - echo "Building images"
     - docker compose -f docker-compose.yml build
 
 deploy:
@@ -23,7 +19,7 @@ deploy:
   tags:
     - trust_llm_61
   script:
-    - echo "Запуск контейнеров ..."
+    - echo "Running containers ..."
     - export CURRENT_UID=$(id -u)
     - export CURRENT_GID=$(id -g)
     - docker compose -f docker-compose.yml down --remove-orphans

@@ -11,20 +11,20 @@ from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNA
 
 MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
 
-# Настройка логирования
+# Configuring logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает подключение к MongoDB на основе переменных окружения.
+    Creates a connection to MongoDB based on environment variables.
     """
     mongo_uri = (
         f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
     )
     client = MongoClient(mongo_uri)
-    logger.info("Успешно подключились к MongoDB.")
+    logger.info("Successfully connected to MongoDB.")
     return client
 
 
@@ -35,7 +35,7 @@ def get_db() -> Database:
 
 def fetch_tasks(db: Database) -> List[Dict[str, Any]]:
     """
-    Получаем все задачи из коллекции tasks.
+    Getting all the tasks from the tasks collection.
     """
     tasks_coll = db["tasks"]
     tasks = list(tasks_coll.find({}))
@@ -44,8 +44,8 @@ def fetch_tasks(db: Database) -> List[Dict[str, Any]]:
 
 def get_dataset_head(db: Database, dataset_name: str, limit: int = None) -> pd.DataFrame:
     """
-    Возвращает датасет в формате DataFrame из коллекции dataset_<dataset_name>.
-    Можно ограничить количество строк (limit).
+    Returns a dataset in DataFrame format from the dataset_<dataset_name> collection.
+    You can limit the number of rows (limit).
     """
     coll_name = f"dataset_{dataset_name}"
     coll = db[coll_name]
@@ -63,13 +63,13 @@ def get_dataset_head(db: Database, dataset_name: str, limit: int = None) -> pd.D
 
 def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     """
-    Для задачи из коллекции tasks:
-      - Создаем записи в очереди (коллекция queue_<task_name>) для каждой строки датасета и для каждой модели.
-      - Если запись уже существует (определяется по паре (line_index, model)), она пропускается.
+   For a task from the tasks collection:
+      - Create entries in the queue (collection queue_<task_name>) for each row of the dataset and for each model.
+      - If the record already exists (determined by the pair (line_index, model)), it is skipped.
     """
     task_type = task.get("task_type", "unknown")
     if task_type == "unknown":
-        logger.warning(f"Задача без task_type: {task}")
+        logger.warning(f"Task without task_type: {task}")
     task_name = task["task_name"]
     dataset_name = task["dataset_name"]
     prompt_text = task["prompt"]
@@ -86,13 +86,13 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
 
     df = get_dataset_head(db, dataset_name)
     if df.empty:
-        logger.warning(f"Датасет для '{dataset_name}' пуст. Нечего обрабатывать.")
+        logger.warning(f"The dataset for '{dataset_name}' is empty. There is nothing to process.")
         return
 
     queue_coll_name = f"queue_{task_name}"
     queue_coll = db[queue_coll_name]
 
-    # Оптимизированная выборка существующих ключей только по нужным моделям
+    # Optimized selection of existing keys based only on the necessary models
     existing_keys = set()
     query = {"model": {"$in": models}}
     for entry in queue_coll.find(query, {"line_index": 1, "model": 1}):
@@ -105,7 +105,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
         for model in models:
             key = (i, model)
             if key in existing_keys:
-                continue  # запись уже существует – пропускаем
+                continue  # the entry already exists – skip it.
             doc = {
                 "task_type": task_type,
                 "task_name": task_name,
@@ -148,35 +148,35 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
         try:
             result = queue_coll.insert_many(new_inserts, ordered=False)
             logger.info(
-                f"Вставлено {len(result.inserted_ids)} новых документов в '{queue_coll_name}'."
+                f"Inserted {len(result.inserted_ids)}  new documents in '{queue_coll_name}'."
             )
         except Exception as e:
-            logger.error(f"Ошибка при вставке документов в '{queue_coll_name}': {e}")
+            logger.error(f"Error when inserting documents into '{queue_coll_name}': {e}")
     else:
-        logger.info(f"Нет новых документов для вставки в '{queue_coll_name}'.")
+        logger.info(f"There are no new documents to insert into '{queue_coll_name}'.")
 
 
 def main():
     """
-    Основной цикл:
-      - Подключаемся к БД.
-      - Каждые N секунд перебираем задачи из коллекции tasks и для каждой вызываем функцию создания записей очереди.
+    Main cycle:
+- Connect to the database.
+      - Every N seconds, we go through the tasks from the tasks collection and call the queue record creation function for each one.
     """
     db = get_db()
-    interval = 10  # интервал в секундах
+    interval = 10  # interval in seconds
 
     try:
         while True:
             tasks = fetch_tasks(db)
             if tasks:
                 for task in tasks:
-                    logger.info(f"Обработка задачи: {task['task_name']}")
+                    logger.info(f"Task processing: {task['task_name']}")
                     insert_queue_entries_for_task(db, task)
             else:
-                logger.info("Нет задач для обработки.")
+                logger.info("There are no tasks to process.")
             time.sleep(interval)
     except KeyboardInterrupt:
-        logger.info("Остановка процесса по KeyboardInterrupt")
+        logger.info("Stopping the software process KeyboardInterrupt")
 
 
 if __name__ == "__main__":

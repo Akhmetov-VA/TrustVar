@@ -7,17 +7,17 @@ from dataset_management import render_dataset_varcols_section
 from utils.constants import MODELS, RTA_MODEL, AUGMENTATIONS, TASKS
 from utils.db_client import MongoDBClient, MongoDBConfig
 
-# Инициализация клиента БД
+# Initializing the DB client
 config = MongoDBConfig(database="TrustGen")
 db_client = MongoDBClient(config)
 
 DEFAULT_REGEX = r"(?:^\W*([01]).*)|(?:.*([01])\W*$)"
 
 def show_all_prompts() -> None:
-    """Показать все промпты из базы."""
+    """Show all prompta from the database."""
     coll_name = "prompt_storage"
     if coll_name not in db_client.list_collections():
-        st.write("Нет промптов в хранилище.")
+        st.write("There are no promptos in the storage.")
         return
     coll = db_client.get_collection(coll_name)
     prompts = list(coll.find({}))
@@ -25,10 +25,10 @@ def show_all_prompts() -> None:
         df = pd.DataFrame(prompts)
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
-        st.write("Существующие промпты (name, prompt):")
+        st.write("Existing prompta (name, prompt):")
         st.dataframe(df)
     else:
-        st.write("Нет промптов в хранилище.")
+        st.write("There are no promptos in the storage.")
 
 def get_all_prompts() -> List[Dict[str, Any]]:
     coll_name = "prompt_storage"
@@ -53,40 +53,40 @@ def show_all_rta_prompts() -> None:
     show_all_prompts()
 
 def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
-    """UI для создания нового промпта."""
-    hint = f"Вы можете использовать любые выбранные колонки: {', '.join('{' + c + '}' for c in var_cols)}."
+    """UI to create a new fragrance."""
+    hint = f"You can use any selected speakers: {', '.join('{' + c + '}' for c in var_cols)}."
     st.write(hint)
-    prompt_name = st.text_input("Введите имя нового промпта:")
-    user_prompt = st.text_area("Введите свой промпт:", value=hint)
+    prompt_name = st.text_input("Enter the name of the new prompt:")
+    user_prompt = st.text_area("Enter your prompt:", value=hint)
     if user_prompt and prompt_name:
         missing_cols = [c for c in var_cols if f"{{{c}}}" not in user_prompt]
         if missing_cols:
-            st.error("Отсутствуют плейсхолдеры: " + ", ".join(missing_cols))
+            st.error("Placeholders are missing: " + ", ".join(missing_cols))
         else:
             if prompt_exists(prompt_name):
-                st.warning(f"Промпт с именем '{prompt_name}' уже существует. Вы можете использовать его.")
-                if st.button("Использовать существующий промпт"):
+                st.warning(f"A prompt named '{prompt_name}' already exists. You can use it.")
+                if st.button("Use an existing prompt"):
                     for p in get_all_prompts():
                         if p["name"] == prompt_name:
                             return p["prompt"]
             else:
-                if st.button("Добавить промпт в базу"):
+                if st.button("Add prompt to the database"):
                     insert_prompt_global(prompt_name, user_prompt)
-                    st.success("Промпт добавлен!")
+                    st.success("Prompt added!")
                     return user_prompt
     return None
 
 def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
-    """UI для выбора или создания промпта."""
+    """UI for selecting or creating a product."""
     selected_prompt = None
-    with st.expander("Выбор или создание промпта", expanded=False):
+    with st.expander("Selecting or creating a product", expanded=False):
         show_all_prompts()
-        use_existing_prompt = st.radio("Промпт:", ("Выбрать из базы", "Ввести свой"))
+        use_existing_prompt = st.radio("Promt:", ("Select from the database", "Enter your own"))
         all_prompt_docs = get_all_prompts()
-        if use_existing_prompt == "Выбрать из базы":
+        if use_existing_prompt == "Select from the database":
             if all_prompt_docs:
                 names = [p["name"] for p in all_prompt_docs]
-                selected_name = st.selectbox("Выберите промпт по имени:", names, key="prompt_selectbox")
+                selected_name = st.selectbox("Select the prompt by name:", names, key="prompt_selectbox")
                 for p in all_prompt_docs:
                     if p["name"] == selected_name:
                         selected_prompt = p["prompt"]
@@ -94,9 +94,9 @@ def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
                 if selected_prompt:
                     for c in var_cols:
                         if f"{{{c}}}" not in selected_prompt:
-                            st.warning(f"В промпте не найден плейсхолдер для колонки {c}")
+                            st.warning(f"The placeholder for the column was not found in the product. {c}")
             else:
-                st.write("Нет доступных промптов. Введите свой.")
+                st.write("There are no prompta available. Enter your own.")
         else:
             selected_prompt = render_prompt_creation_section(var_cols)
     return selected_prompt
@@ -104,7 +104,7 @@ def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
 def show_existing_regexp(metric: str) -> None:
     coll_name = f"regexp_{metric}"
     if coll_name not in db_client.list_collections():
-        st.write("Нет регулярок для данной метрики.")
+        st.write("There are no adjustments for this metric.")
         return
     coll = db_client.get_collection(coll_name)
     docs = list(coll.find({}))
@@ -112,10 +112,10 @@ def show_existing_regexp(metric: str) -> None:
         df = pd.DataFrame(docs)
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
-        st.write("Существующие регулярки (name, pattern, metric):")
+        st.write("Existing regular schedules (name, pattern, metric):")
         st.dataframe(df)
     else:
-        st.write("Нет регулярок для данной метрики.")
+        st.write("There are no adjustments for this metric.")
 
 def get_all_regexps_for_metric(metric: str) -> List[Dict[str, Any]]:
     coll_name = f"regexp_{metric}"
@@ -131,58 +131,58 @@ def insert_regexp_global(name: str, pattern: str, metric: str) -> None:
 
 def render_regexp_section(metric: str) -> Optional[str]:
     selected_regexp = None
-    with st.expander("Выбор или создание регулярки для метрики", expanded=False):
+    with st.expander("Selecting or creating a regular schedule for yandex.metrica", expanded=False):
         show_existing_regexp(metric)
-        use_existing_regexp = st.radio("Регулярка:", ("Существующая", "Своя"))
-        if use_existing_regexp == "Существующая":
+        use_existing_regexp = st.radio("Regular schedule:", ("Existing", "Own"))
+        if use_existing_regexp == "Existing":
             regexps = get_all_regexps_for_metric(metric)
             if regexps:
                 names = [r["name"] for r in regexps]
-                selected_name = st.selectbox("Выберите регулярку по имени:", names, key="regexp_selectbox")
+                selected_name = st.selectbox("Select a regular by name:", names, key="regexp_selectbox")
                 for r in regexps:
                     if r["name"] == selected_name:
                         selected_regexp = r["pattern"]
                         break
             else:
-                st.write("Нет доступных регулярок для этой метрики.")
+                st.write("There are no adjustments available for this metric..")
         else:
-            st.write(f"По умолчанию предлагаем: {DEFAULT_REGEX}")
-            custom_regexp = st.text_input("Введите свою регулярку:", value=DEFAULT_REGEX)
+            st.write(f"By default, we offer: {DEFAULT_REGEX}")
+            custom_regexp = st.text_input("Enter your regular schedule:", value=DEFAULT_REGEX)
             if custom_regexp:
                 if db_client.validate_regex(custom_regexp):
-                    regexp_name = st.text_input("Введите имя для этой регулярки:")
-                    if regexp_name and st.button("Добавить регулярку в базу"):
+                    regexp_name = st.text_input("Enter a name for this regular:")
+                    if regexp_name and st.button("Add regular season tickets to the database"):
                         insert_regexp_global(regexp_name, custom_regexp, metric)
-                        st.success("Регулярка добавлена!")
+                        st.success("Regular season added!")
                         selected_regexp = custom_regexp
                 else:
-                    st.error("Неверное регулярное выражение!")
+                    st.error("Invalid regular expression!")
     return selected_regexp
 
 def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
     rta_prompt_selected = None
     rta_model = None
     rta_target = None
-    with st.expander("Выбор или создание RTA промпта", expanded=False):
+    with st.expander("Selecting or creating an RTA prompt", expanded=False):
         show_all_rta_prompts()
-        st.write("Метрика RtA выбрана. Необходим RTA промпт.")
-        use_rta_existing = st.radio("RTA промпт:", ("Выбрать из базы", "Ввести свой"))
+        st.write("The RtA metric is selected. An RTA prompt is required.")
+        use_rta_existing = st.radio("RTA promt:", ("Select from the database", "Enter your"))
         all_prompt_docs = get_all_prompts()
-        if use_rta_existing == "Выбрать из базы":
+        if use_rta_existing == "Select from the database":
             if all_prompt_docs:
                 names = [p["name"] for p in all_prompt_docs]
-                selected_name = st.selectbox("Выберите RTA промпт по имени:", names, key="rta_prompt_selectbox")
+                selected_name = st.selectbox("Select RTA prompt by name:", names, key="rta_prompt_selectbox")
                 for rp in all_prompt_docs:
                     if rp["name"] == selected_name:
                         rta_prompt_selected = rp["prompt"]
                         break
             else:
-                st.write("Нет доступных RTA промптов. Введите свой.")
+                st.write("There are no RTA prompta available. Enter your.")
         else:
             rta_prompt_selected = render_prompt_creation_section(var_cols=[])
-        rta_target = st.text_input("Целевое значение для RtA:", value="1")
+        rta_target = st.text_input("The target value for RtA:", value="1")
         rta_model = st.selectbox(
-            "Модель для RTA:",
+            "The model for RTA:",
             MODELS,
             index=MODELS.index(RTA_MODEL) if RTA_MODEL in MODELS else 0,
             key="rta_model_selectbox",
@@ -190,12 +190,12 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
     return rta_prompt_selected, rta_model, rta_target
 
 def render_models_section() -> List[str]:
-    with st.expander("Выбор моделей для задачи", expanded=False):
-        return st.multiselect("Выберите модели:", MODELS)
+    with st.expander("Selecting models for the task", expanded=False):
+        return st.multiselect("Select models:", MODELS)
 
 def render_dynamic_variations() -> List[str]:
-    with st.expander("Динамическая аугментация датасета [AUG]", expanded=False):
-        return st.multiselect("Выберите метод аугментации:", AUGMENTATIONS)
+    with st.expander("Dynamic dataset augmentation [AUG]", expanded=False):
+        return st.multiselect("Choose the augmentation method:", AUGMENTATIONS)
 
 def build_task_data(
     task_type: str,
@@ -252,7 +252,7 @@ def render_preview_and_save_task(
     include_column: Optional[str],
     exclude_column: Optional[str],
 ):
-    with st.expander("Предпросмотр и сохранение задачи", expanded=False):
+    with st.expander("Previewing and saving an issue", expanded=False):
         if (
             selected_prompt
             and selected_regexp
@@ -274,7 +274,7 @@ def render_preview_and_save_task(
                         filled_prompt = filled_prompt.replace(f"{{{k}}}", str(v))
                     st.write(f"**Example {i + 1}:** {filled_prompt}")
             if selected_variations:
-                st.write(f"**Методы динамической аугментации:** {' | '.join(selected_variations)}")
+                st.write(f"**Dynamic augmentation methods:** {' | '.join(selected_variations)}")
             st.write("**DB Record Structure:**")
             task_data = build_task_data(
                 task_type=task_type,
@@ -313,7 +313,7 @@ def render_create_task_tab():
                 if metric != "include_exclude":
                     selected_regexp = render_regexp_section(metric)
                 else:
-                    selected_regexp = "Метрика include_exclude не использует regexp."
+                    selected_regexp = "The include_exclude metric does not use regexp."
                 if selected_regexp:
                     rta_prompt_selected = None
                     rta_model = None
@@ -322,7 +322,7 @@ def render_create_task_tab():
                         rta_prompt_selected, rta_model, rta_target_value = render_rta_prompt_section()
                     selected_models = render_models_section()
                     final_target = rta_target_value if metric == "RtA" else target_column
-                    # Экспандер аугментации только для Compare model behaviour
+                    # The augmentation expander is only for Compare model behaviour
                     if task_type == "Compare model behaviour":
                         selected_variations = render_dynamic_variations()
                     else:

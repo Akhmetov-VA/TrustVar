@@ -9,22 +9,22 @@ from pymongo.database import Database
 
 def configure_logging() -> None:
     """
-    Настраивает логирование для отображения сообщений в консоли.
+    Configures logging for displaying messages in the console.
     """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[logging.StreamHandler()],
     )
-    logging.info("Логирование успешно настроено.")
+    logging.info("Logging has been successfully configured.")
 
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает и возвращает подключение к MongoDB на основе переменных окружения.
+    Creates and returns a connection to MongoDB based on environment variables.
 
     Returns:
-        MongoClient: Клиент для подключения к MongoDB.
+        MongoClient: A client for connecting to MongoDB.
     """
     load_dotenv()
     mongo_username = os.getenv("MONGO_INITDB_ROOT_USERNAME")
@@ -39,76 +39,76 @@ def get_mongo_client() -> MongoClient:
     try:
         client = MongoClient(mongo_uri)
         client.admin.command("ping")
-        logging.info("Успешное подключение к MongoDB.")
+        logging.info("Successfully connected to MongoDB.")
         return client
     except Exception as e:
-        logging.exception("Ошибка подключения к MongoDB.")
+        logging.exception("Connection error to MongoDB.")
         raise e
 
 
 def add_source_collection_to_rta(db: Database, rta_collection_name: str) -> None:
     """
-    Проходит по всем коллекциям базы данных и добавляет имя исходной коллекции
-    в записи коллекции `RtA` на основе совпадения идентификаторов задач.
+    It goes through all the collections in the database and adds the name of the source collection
+    to the `RtA` collection entries based on the matching of the task IDs.
 
     Args:
-        db (Database): Экземпляр базы данных MongoDB.
-        rta_collection_name (str): Имя коллекции `RtA`.
+        db (Database): An instance of the MongoDB database.
+        rta_collection_name (str): The name of the collection is `Rto'.
     """
     rta_collection = db[rta_collection_name]
 
     for collection_name in db.list_collection_names():
-        # Пропускаем коллекцию `RtA` (целевая коллекция)
+        # Skipping the 'RtA` collection (target collection)
         if collection_name == rta_collection_name:
             continue
 
         source_collection = db[collection_name]
         logging.info(
-            f"Обработка коллекции '{collection_name}' для сопоставления с 'RtA'."
+            f"Processing the collection '{collection_name}' for matching with 'RtA'."
         )
 
-        # Собираем все идентификаторы из текущей коллекции
+        # Collecting all IDs from the current collection
         task_ids = list(source_collection.find({}, {"_id": 1}))
         task_ids = [doc["_id"] for doc in task_ids]
 
         if not task_ids:
-            logging.info(f"В коллекции '{collection_name}' нет записей для обработки.")
+            logging.info(f"There are no records to process in the collection '{collection_name}'.")
             continue
 
-        # Обновляем все записи в RtA, соответствующие этим идентификаторам
+        # We update all entries in the RtA corresponding to these identifiers.
         result = rta_collection.update_many(
-            {"init_id": {"$in": task_ids}},  # Условие: init_id входит в список task_ids
-            {"$set": {"dataset": collection_name}},  # Добавляем поле dataset
+            {"init_id": {"$in": task_ids}},  # Condition: init_id is included in the list of task_ids
+            {"$set": {"dataset": collection_name}},  # Adding the dataset field
         )
 
         logging.info(
-            f"Добавлено поле 'dataset' для {result.modified_count} задач "
-            f"в коллекции 'RtA' из коллекции '{collection_name}'."
+            f"Added the 'dataset' field for {result.modifier_count} tasks"
+            f"in the 'RtA' collection from the '{collection_name}' collection."
         )
 
 
 def main() -> None:
     """
-    Основная функция для выполнения обработки задач в коллекциях базы данных.
+    The main function for performing task processing in database collections.
     """
     try:
-        # Настройка логирования
+        # Configuring logging
         configure_logging()
 
-        # Имя базы данных и коллекции `RtA`
+        # DB name and `RtA` collection
         database_name = "TrustLLM_ru"
         rta_collection_name = "RtA"
 
-        # Подключение к MongoDB
+        # Connetion to MongoDB
         client = get_mongo_client()
         db = client[database_name]
 
-        # Добавление поля 'source_collection' в коллекцию `RtA`
+        # Adding the 'source_collection' field to the `RtA` collection
         add_source_collection_to_rta(db, rta_collection_name)
 
-        logging.info("Обработка завершена, все коллекции сопоставлены с 'RtA'.")
+        logging.info("Processing is completed, all collections are mapped to 'RtA'.")
     except Exception as e:
-        logging.exception(f"Произошла ошибка: {e}")
+        logging.exception(f"Error: {e}")
 
 
 if __name__ == "__main__":

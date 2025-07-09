@@ -3,24 +3,24 @@ from typing import Any, Dict, List
 
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go  # 🔹 Для интерактивной heatmap
+import plotly.graph_objects as go  # 🔹 For an interactive heatmap
 import streamlit as st
 import numpy as np
 # import logging
 from utils.db_client import MongoDBClient, MongoDBConfig
 
 
-# Настройка логирования
+# Configuring logging
 # logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 # logger = logging.getLogger(__name__)
 
-# Инициализация клиента БД
+# Initializing the database client
 config = MongoDBConfig(database="TrustGen")
 db_client = MongoDBClient(config)
 
 
 def calculate_coefficient_of_variation(values: List[float]) -> float:
-    """Вычисляет коэффициент вариации (CV = std/mean * 100%)."""
+    """Calculates the coefficient of variation (CV = std/mean * 100%)."""
     if not values or len(values) < 2:
         return np.nan
     mean_val = np.mean(values)
@@ -31,24 +31,24 @@ def calculate_coefficient_of_variation(values: List[float]) -> float:
 
 
 def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_name: str):
-    """Визуализация метрик по группам task_type и dynamic_augments."""
+    """Visualization of metrics by groups task_type and dynamic_augments."""
     results_df = pd.DataFrame(results_data)
     if "_id" in results_df.columns:
         results_df = results_df.drop(columns=["_id"])
     
     required_cols = {"task_name", "model", "value", "task_type", "dynamic_augments"}
     if not required_cols.issubset(results_df.columns):
-        st.error("В данных отсутствуют необходимые поля для группированных метрик.")
+        st.error("The required fields for grouped metrics are missing in the data.")
         return
 
-    # Фильтруем только задачи типа "Compare model behaviour"
+    # We only filter tasks like "Compare model behaviour"
     compare_df = results_df[results_df["task_type"] == "Compare model behaviour"].copy()
     
     if compare_df.empty:
-        st.info("Нет данных для задач типа 'Compare model behaviour'.")
+        st.info("There is no data for tasks like 'Compare model behaviour'.")
         return
 
-    # Разворачиваем списки dynamic_augments в отдельные строки
+    # Expanding the dynamic_augments lists into separate lines
     expanded_rows = []
     for _, row in compare_df.iterrows():
         dynamic_augments = row["dynamic_augments"]
@@ -65,28 +65,28 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     expanded_df = pd.DataFrame(expanded_rows)
     
     if expanded_df.empty:
-        st.info("Нет данных для отображения после разворачивания аугментаций.")
+        st.info("There is no data to display after the augmentations are deployed.")
         return
 
-    # Выборка по задачам, моделям и аугментациям
+    # Selection by tasks, models, and augmentations
     tasks = expanded_df["task_name"].unique()
     models = expanded_df["model"].unique()
     augments = expanded_df["augment"].unique()
     
     selected_tasks = st.multiselect(
-        "Выберите задачу(и):",
+        "Select the task(s):",
         options=tasks,
         default=list(tasks),
         key=f"grouped_metrics_tasks_{collection_name}",
     )
     selected_models = st.multiselect(
-        "Выберите модели:",
+        "Select models:",
         options=models,
         default=list(models),
         key=f"grouped_metrics_models_{collection_name}",
     )
     selected_augments = st.multiselect(
-        "Выберите аугментации:",
+        "Choose Augmentation:",
         options=augments,
         default=list(augments),
         key=f"grouped_metrics_augments_{collection_name}",
@@ -99,17 +99,17 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     ]
     
     if filtered_df.empty:
-        st.info("Нет данных для отображения с выбранными фильтрами.")
+        st.info("There is no data to display with the selected filters..")
         return
 
-    # После создания results_df (или filtered_df), добавим обработку augment
+    # After creating results_df (or filtered_df), add augment processing
     if "augment" not in filtered_df.columns and "dynamic_augments" in filtered_df.columns:
         filtered_df["augment"] = filtered_df["dynamic_augments"].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) == 1 else str(x)
         )
 
-    # 1. Таблица метрик по аугментациям
-    st.subheader("Метрики по аугментациям")
+    # 1. The table of metrics for augmentations
+    st.subheader("Augmentation metrics")
     pivot_augments = filtered_df.pivot_table(
         index=["model", "task_name"], 
         columns="augment", 
@@ -118,10 +118,10 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     )
     st.dataframe(pivot_augments.round(3))
 
-    # 2. График сравнения аугментаций
-    st.subheader("Сравнение влияния аугментаций на метрики")
+    # 2. Augmentation comparison chart
+    st.subheader("Comparing the impact of augmentation on metrics")
     
-    # Группируем по модели и задаче для построения графика
+    # Grouping by model and tasks for plotting
     fig_data = filtered_df.groupby(["model", "task_name", "augment"])["value"].mean().reset_index()
     
     if not fig_data.empty:
@@ -131,19 +131,19 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             y="value",
             color="model",
             facet_col="task_name",
-            title="Влияние аугментаций на производительность моделей",
-            labels={"value": f"Метрика ({collection_name})", "augment": "Аугментация"}
+            title="The impact of augmentation on model performance",
+            labels={"value": f"Metric ({collection_name})", "augment": "Augmentation"}
         )
         fig.update_xaxes(tickangle=45)
         fig.update_layout(height=600)
         st.plotly_chart(fig, use_container_width=True)
 
-    # 3. Паутинка (Radar Chart) для каждой модели
-    st.subheader("Паутинка (Radar Chart) - производительность по аугментациям")
+    # 3. Gossamer (Radar Chart) for each model
+    st.subheader("Cobweb (Radar Chart) - augmentation performance")
     
-    # Выбираем одну модель для паутинки
+    # Choosing one model for a spider web
     selected_model_for_radar = st.selectbox(
-        "Выберите модель для паутинки:",
+        "Choose a model for a spider web:",
         options=selected_models,
         key=f"radar_model_{collection_name}"
     )
@@ -154,14 +154,14 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     ]
     
     if not radar_data.empty:
-        # Создаем паутинку для каждой задачи
+        # Creating a web for each task
         for task in selected_tasks:
             task_data = radar_data[radar_data["task_name"] == task]
             if not task_data.empty:
-                # Группируем по аугментации
+                # Grouping by augmentation
                 task_pivot = task_data.groupby("augment")["value"].mean().reset_index()
-                if len(task_pivot) >= 3:  # Нужно минимум 3 точки для паутинки
-                    # Сортируем аугментации для консистентного отображения
+                if len(task_pivot) >= 3:  # You need at least 3 points for a spider web
+                    # Sorting augmentations for consistent display
                     task_pivot = task_pivot.sort_values("augment")
                     augment_names = [short_augment_name(a) for a in task_pivot["augment"].tolist()]
                     values = task_pivot["value"].tolist()
@@ -184,17 +184,17 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                             )
                         ),
                         showlegend=True,
-                        title=f"Паутинка для модели {selected_model_for_radar} - задача {task}",
+                        title=f"Gossamer for modeling {selected_model_for_radar} - task {task}",
                         height=500
                     )
                     st.plotly_chart(fig_radar, use_container_width=True)
                 else:
-                    st.info(f"Недостаточно данных для паутинки для задачи {task} (нужно минимум 3 аугментации)")
+                    st.info(f"Not enough data for a spider web for the task {task} (You need at least 3 augmentations)")
 
-    # 4. Коэффициент вариации для оценки устойчивости
-    st.subheader("Коэффициент вариации (устойчивость к аугментациям)")
+    # 4. Coefficient of variation for stability assessment
+    st.subheader("Coefficient of variation (resistance to augmentation)")
     
-    # Вычисляем CV для каждой модели и задачи
+    # We calculate the CV for each model and task
     cv_data = []
     for (model, task), group in filtered_df.groupby(["model", "task_name"]):
         values = group["value"].tolist()
@@ -213,25 +213,25 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     cv_df = pd.DataFrame(cv_data)
     
     if not cv_df.empty:
-        # Сортируем по CV (меньше CV = более устойчивая модель)
+        # We sort by CM (less CM = more stable model)
         cv_df = cv_df.sort_values("cv")
         
-        st.write("**Интерпретация CV:**")
-        st.write("- CV < 10%: очень устойчивая модель")
-        st.write("- CV 10-20%: устойчивая модель") 
-        st.write("- CV 20-30%: умеренно устойчивая модель")
-        st.write("- CV > 30%: неустойчивая модель")
+        st.write("**Interpretation CV:**")
+        st.write("- CV < 10%: a very stable model")
+        st.write("- CV 10-20%: a sustainable model") 
+        st.write("- CV 20-30%: a moderately stable model")
+        st.write("- CV > 30%: an unstable model")
         
         st.dataframe(cv_df.round(3))
         
-        # График CV
+        # Chart CV
         fig_cv = px.bar(
             cv_df,
             x="model",
             y="cv",
             color="task_name",
-            title="Коэффициент вариации по моделям и задачам (меньше = устойчивее)",
-            labels={"cv": "Коэффициент вариации (%)", "model": "Модель"}
+            title="Coefficient of variation for models and tasks (less = more stable)",
+            labels={"cv": "Coefficient of variation (%)", "model": "Model"}
         )
         fig_cv.update_layout(height=500)
         st.plotly_chart(fig_cv, use_container_width=True)
@@ -244,52 +244,52 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             aggfunc="mean"
         )
         
-        # Проверяем, что массив не пустой перед вызовом max()
+        # We check that the array is not empty before calling max()
         if cv_pivot.size > 0 and not cv_pivot.isna().all().all():
             max_cv = cv_pivot.values.max()
         else:
-            max_cv = 100  # Значение по умолчанию
+            max_cv = 100  # Default value
         
         fig_heatmap = go.Figure(
             data=go.Heatmap(
                 z=cv_pivot.values,
                 x=cv_pivot.columns,
                 y=cv_pivot.index,
-                colorscale="RdYlGn_r",  # Зеленый = устойчивая, красный = неустойчивая
+                colorscale="RdYlGn_r",  # Green = steady, red = unstable
                 zmin=0,
                 zmax=max_cv,
                 colorbar=dict(title="CV (%)"),
-                hovertemplate="Модель: %{y}<br>Задача: %{x}<br>CV: %{z:.1f}%<extra></extra>",
+                hovertemplate="Model: %{y}<br>Task: %{x}<br>CV: %{z:.1f}%<extra></extra>",
             )
         )
         fig_heatmap.update_layout(
-            title="Тепловая карта коэффициента вариации (устойчивость к аугментациям)",
-            xaxis=dict(title="Задача"),
-            yaxis=dict(title="Модель"),
+            title="Heat map of the coefficient of variation (resistance to augmentation)",
+            xaxis=dict(title="Task"),
+            yaxis=dict(title="Model"),
             height=500,
         )
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
-    # 5. Детальный анализ по каждой аугментации
-    with st.expander("Детальный анализ по аугментациям"):
+    # 5. Detailed analysis for each augmentation
+    with st.expander("Detailed augmentation analysis"):
         for augment in selected_augments:
-            st.write(f"**Аугментация: {augment}**")
+            st.write(f"**Augmentation: {augment}**")
             augment_data = filtered_df[filtered_df["augment"] == augment]
             
             if not augment_data.empty:
-                # Сравнение моделей для данной аугментации
+                # Comparison of models for this augmentation
                 fig_augment = px.bar(
                     augment_data,
                     x="model",
                     y="value",
                     color="task_name",
-                    title=f"Производительность моделей при аугментации: {augment}",
-                    labels={"value": f"Метрика ({collection_name})"}
+                    title=f"Model performance during augmentation: {augment}",
+                    labels={"value": f"Metric ({collection_name})"}
                 )
                 fig_augment.update_layout(height=400)
                 st.plotly_chart(fig_augment, use_container_width=True)
                 
-                # Таблица значений
+                # Table of values
                 pivot_augment = augment_data.pivot_table(
                     index="model", 
                     columns="task_name", 
@@ -305,7 +305,7 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
         results_df = results_df.drop(columns=["_id"])
     required_cols = {"task_name", "model", "value"}
     if not required_cols.issubset(results_df.columns):
-        st.error("В данных отсутствуют необходимые поля (task_name, model, value).")
+        st.error("The required fields are missing in the data (task_name, model, value).")
         return
 
     # logger.info(results_df.columns)
@@ -314,17 +314,17 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
     # logger.info(f' Tsks {len(results_df["task_name"].unique())}')
     # logger.info(f' Models {len(results_df["model"].unique())}')
 
-    # выборка по задачам и моделям
+    # selection by tasks and models
     tasks = results_df["task_name"].unique()
     models = results_df["model"].unique()
     selected_tasks = st.multiselect(
-        "Выберите задачу(и):",
+        "Select the task(s):",
         options=tasks,
         default=list(tasks),
         key=f"metrics_tasks_{collection_name}",
     )
     selected_models = st.multiselect(
-        "Выберите модели:",
+        "Select models:",
         options=models,
         default=list(models),
         key=f"metrics_models_{collection_name}",
@@ -334,28 +334,28 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
         & (results_df["model"].isin(selected_models))
     ]
     if filtered_df.empty:
-        st.info("Нет данных для отображения с выбранными фильтрами.")
+        st.info("There is no data to display with the selected filters..")
         return
 
-    # После создания results_df (или filtered_df), добавим обработку augment
+    # After creating results_df (or filtered_df), add processing augment
     if "augment" not in filtered_df.columns and "dynamic_augments" in filtered_df.columns:
         filtered_df["augment"] = filtered_df["dynamic_augments"].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) == 1 else str(x)
         )
 
-    # табличное и графическое представление метрик
+    # tabular and graphical representation of metrics
     pivot_table = filtered_df.pivot_table(
         index="model", columns="task_name", values="value", aggfunc="mean"
     )
-    st.subheader("Таблица метрик по задачам и моделям")
+    st.subheader("The metric table by tasks and models")
     st.dataframe(pivot_table)
-    st.subheader("Визуализация метрик")
+    st.subheader("Visualization of metrics")
     st.bar_chart(pivot_table)
 
-    # 🔽 Новый expander: показать ошибки в виде DataFrame
-    with st.expander("Просмотр топ-10 ошибок по выбранным задачам и моделям"):
+    # 🔽 New expander: show errors as a DataFrame
+    with st.expander("View the top 10 errors for selected tasks and models"):
         if "errors" not in filtered_df.columns:
-            st.info("Для этой метрики нет сохранённых ошибок.")
+            st.info("There are no saved errors for this metric.")
         else:
             df_err = (
                 filtered_df[["task_name", "model", "errors"]]
@@ -363,7 +363,7 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
                 .drop_duplicates(subset=["task_name", "model"])
             )
             if df_err.empty:
-                st.info("Ошибок не найдено.")
+                st.info("No errors found.")
             else:
                 df_err["errors"] = df_err["errors"].apply(
                     lambda errs: json.dumps(errs, ensure_ascii=False, indent=2)
@@ -385,21 +385,21 @@ def short_augment_name(name):
 
 
 def render_metrics_tab():
-    st.header("Метрики моделей")
+    st.header("Model metrics")
     
-    # Переключатель между типами метрик
+    # Switch between metric types
     metric_type = st.radio(
-        "Выберите тип анализа метрик:",
-        ["Обычные метрики", "Анализ по группам (Compare model behaviour)"],
+        "Select the type of metric analysis:",
+        ["Common metrics", "Group analysis(Compare model behaviour)"],
         key="metrics_type_selection"
     )
     
-    if metric_type == "Обычные метрики":
-        # Оригинальная логика для обычных метрик
+    if metric_type == "Common metrics":
+        # Original logic for common metrics
         results_collections = ["RtAR", "TFNR", "Accuracy", "Correlation", "IncludeExclude"]
         if results_collections:
             selected_results_collection = st.selectbox(
-                "Выберите коллекцию с метриками",
+                "Select a collection with metrics",
                 options=results_collections,
                 key="metrics_collection_selection",
             )
@@ -408,12 +408,12 @@ def render_metrics_tab():
             if results_data:
                 visualize_metrics(results_data, selected_results_collection)
             else:
-                st.info(f"Данные в коллекции '{selected_results_collection}' отсутствуют.")
+                st.info(f"Data in the collection '{selected_results_collection}' missing.")
         else:
-            st.info("Нет доступных коллекций с метриками.")
+            st.info("There are no available collections with metrics.")
 
-        # 🔽 Интерактивное сравнение и корреляция
-        with st.expander("Сравнение метрик и корреляция между задачами"):
+        # 🔽 Interactive comparison and correlation
+        with st.expander("Comparison of metrics and correlation between tasks"):
             task_options = set()
             data_per_collection: Dict[str, pd.DataFrame] = {}
             for coll in results_collections:
@@ -430,9 +430,9 @@ def render_metrics_tab():
                     data_per_collection[coll] = df
             task_options = sorted(task_options)
 
-            # --- scatter plot для двух задач ---
+            # --- scatter plot for two tasks ---
             sel = st.multiselect(
-                "Выберите две задачи для scatter-графика:",
+                "Select two tasks for the scatter chart:",
                 task_options,
                 max_selections=3,
                 key="compare_task_names",
@@ -448,7 +448,7 @@ def render_metrics_tab():
                     index="model", columns="task_name", values="value"
                 ).dropna()
                 if pivot.shape[1] == 2:
-                    st.subheader("Интерактивный график: сравнение метрик")
+                    st.subheader("Interactive graph: comparison of metrics")
                     st.dataframe(pivot)
                     fig = px.scatter(
                         pivot,
@@ -456,17 +456,17 @@ def render_metrics_tab():
                         y=sel[1],
                         text=pivot.index,
                         labels={sel[0]: sel[0], sel[1]: sel[1]},
-                        title="Сравнение моделей по выбранным метрикам",
+                        title="Comparison of models by selected metrics",
                     )
                     fig.update_traces(textposition="top center")
                     fig.update_layout(height=600)
                     st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.warning("Недостаточно данных для scatter-графика.")
+                    st.warning("Insufficient data for the scatter chart.")
 
-            # --- интерактивная корреляция для списка задач ---
+            # --- interactive correlation for the task list ---
             corr_sel = st.multiselect(
-                "Выберите задачи для анализа корреляции:",
+                "Select tasks for correlation analysis:",
                 task_options,
                 key="correlation_tasks",
             )
@@ -481,7 +481,7 @@ def render_metrics_tab():
                     index="model", columns="task_name", values="value"
                 ).dropna()
                 if not pivot_corr.empty:
-                    st.subheader("Корреляционная матрица задач")
+                    st.subheader("Correlation matrix of tasks")
                     st.dataframe(pivot_corr.corr().round(2))
                     corr_matrix = pivot_corr.corr()
                     fig = go.Figure(
@@ -492,23 +492,23 @@ def render_metrics_tab():
                             colorscale="RdBu",
                             zmin=-1,
                             zmax=1,
-                            colorbar=dict(title="Корреляция"),
-                            hovertemplate="Задачи: %{y} и %{x}<br>Значение: %{z:.2f}<extra></extra>",
+                            colorbar=dict(title="Correlation "),
+                            hovertemplate="Tasks: %{y} and %{x}<br>Meaning: %{z:.2f}<extra></extra>",
                         )
                     )
                     fig.update_layout(
-                        title="Интерактивная корреляционная матрица задач",
+                        title="Interactive correlation matrix of tasks",
                         xaxis=dict(title=""),
                         yaxis=dict(title="", autorange="reversed"),
                         height=600,
                     )
                     st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.warning("Недостаточно данных для построения корреляционной матрицы.")
+                    st.warning("There is not enough data to build a correlation matrix.")
     
     else:
-        # Логика для группированных метрик
-        # Коллекции с группированными метриками
+        # Logic for grouped metrics
+        # # Collections with grouped metrics
         grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups"]
         available_collections = []
         
@@ -521,11 +521,11 @@ def render_metrics_tab():
                 continue
         
         if not available_collections:
-            st.info("Нет доступных коллекций с группированными метриками.")
+            st.info("There are no collections available with grouped metrics.")
             return
         
         selected_collection = st.selectbox(
-            "Выберите коллекцию с группированными метриками:",
+            "Select a collection with grouped metrics:",
             options=available_collections,
             key="grouped_metrics_collection_selection",
         )
@@ -536,4 +536,4 @@ def render_metrics_tab():
         if results_data:
             visualize_grouped_metrics(results_data, selected_collection)
         else:
-            st.info(f"Данные в коллекции '{selected_collection}' отсутствуют.")
+            st.info(f"Data in the collection '{selected_collection}' missing.")

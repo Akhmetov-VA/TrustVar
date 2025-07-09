@@ -11,10 +11,10 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import PyMongoError
 
-# Загрузка переменных окружения из .env файла
+# Loading environment variables from an .env file
 load_dotenv()
 
-# Настройка логирования
+# Configuring logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def convert_numpy_objects(data):
         return data
 
 class MongoDBConfig:
-    """Класс для управления конфигурациями MongoDB."""
+    """A class for managing MongoDB configurations."""
 
     def __init__(
         self,
@@ -44,8 +44,8 @@ class MongoDBConfig:
         database: str = "TrustLLM_ru",
     ):
         """
-        При создании экземпляра MongoDBConfig можно переопределить параметры или
-        они будут взяты из переменных окружения.
+       When creating an instance of MongoDB Config, you can redefine the parameters or
+       they will be taken from the environment variables.
         """
         self.username = username or os.getenv("MONGO_INITDB_ROOT_USERNAME")
         self.password = password or os.getenv("MONGO_INITDB_ROOT_PASSWORD")
@@ -55,101 +55,101 @@ class MongoDBConfig:
 
     def get_uri(self) -> str:
         """
-        Формирование URI для подключения к MongoDB.
+        Creating a URI for connecting to MongoDB.
         """
         return f"mongodb://{self.username}:{self.password}@{self.host}:{self.port}/"
 
 
 class MongoDBClient:
-    """Класс для высокоуровневой работы с MongoDB."""
+    """A class for high-level work with MongoDB."""
 
     def __init__(self, config: Optional[MongoDBConfig] = None):
         """
-        Инициализация клиента MongoDB с помощью заданного или дефолтного конфига.
+        Initializing a MongoDB client using a preset or default config.
         """
         self.config = config or MongoDBConfig()
         try:
             self.client = MongoClient(self.config.get_uri())
             self.db = self.client[self.config.database]
-            logger.info("Успешно подключились к MongoDB.")
+            logger.info("Successfully connected to MongoDB.")
         except PyMongoError as e:
-            logger.error(f"Ошибка подключения к MongoDB: {e}")
+            logger.error(f"Error connecting to MongoDB: {e}")
             raise
 
-    # ---------------- Основные методы для работы с коллекциями ----------------
+    # ---------------- Basic methods for working with collections ----------------
 
     def get_collection(self, collection_name: str) -> Collection:
-        """Получение коллекции по имени."""
+        """Getting a collection by name."""
         return self.db[collection_name]
 
     def list_collections(self) -> List[str]:
-        """Получение списка всех коллекций."""
+        """Getting a list of all collections."""
         return self.db.list_collection_names()
 
     def list_collections_starting_with(self, prefix: str) -> List[str]:
-        """Получение списка коллекций, начинающихся с заданного префикса."""
+        """Getting a list of collections starting with a specified prefix."""
         return [col for col in self.list_collections() if col.startswith(prefix)]
 
     def delete_collection(self, collection_name: str) -> None:
-        """Удаление коллекции по имени."""
+        """Deleting a collection by name."""
         try:
             self.db.drop_collection(collection_name)
-            logger.info(f"Коллекция '{collection_name}' успешно удалена.")
+            logger.info(f"Collection '{collection_name}' successfully deleted.")
         except PyMongoError as e:
-            logger.error(f"Ошибка удаления коллекции '{collection_name}': {e}")
+            logger.error(f"Collection deletion error '{collection_name}': {e}")
             raise
 
-    # ---------------- Методы для вставки и обновления документов ----------------
+    # ---------------- Methods for inserting and updating documents ----------------
 
     def insert_data(self, collection_name: str, data: List[Dict[str, Any]]) -> None:
         """
-        Вставка нескольких документов в указанную коллекцию.
-        Используется, например, для загрузки датасета.
+        Inserting multiple documents into the specified collection.
+        It is used, for example, to download a dataset.
         """
         if not data:
-            logger.warning("Нет данных для вставки.")
+            logger.warning("There is no data to insert.")
             return
         try:
             collection = self.get_collection(collection_name)
             collection.insert_many(data, ordered=False)
             logger.info(
-                f"Вставлено {len(data)} документов в коллекцию '{collection_name}'."
+                f"Inserted {len(data)} documents in the collection '{collection_name}'."
             )
         except PyMongoError as e:
-            logger.error(f"Ошибка вставки данных в MongoDB: {e}")
+            logger.error(f"Data insertion error in MongoDB: {e}")
             raise
 
     def insert_task(self, task_data: Dict[str, Any]):
         """
-        Вставить новую задачу в коллекцию tasks.
+        Add a new task to the tasks collection.
         """
         coll = self.get_collection("tasks")
         coll.insert_one(task_data)
 
     def insert_prompt_for_dataset(self, dataset_name: str, prompt: str, name: str):
         """
-        Вставить новый промпт (prompt, name) в коллекцию prompt_{dataset_name}.
+        Insert a new prompt (prompt, name) into the prompt_{dataset_name} collection.
         """
         coll = self.get_collection(f"prompt_{dataset_name}")
         coll.insert_one({"name": name, "prompt": prompt})
 
     def insert_rta_prompt(self, prompt: str, name: str):
         """
-        Вставить новый RTA-промпт в prompt_rta.
+        Insert a new RTA prompt in prompt_rta.
         """
         coll = self.get_collection("prompt_rta")
         coll.insert_one({"name": name, "prompt": prompt})
 
     def insert_regexp_for_metric(self, metric: str, pattern: str, name: str):
         """
-        Вставить новую регулярку (name, pattern) в коллекцию regexp_{metric}.
+        Insert a new regular expression (name, pattern) into the regexp_{metric} collection.
         """
         coll = self.get_collection(f"regexp_{metric}")
         coll.insert_one({"name": name, "pattern": pattern})
 
     def insert_dataset_records(self, dataset_name: str, df: pd.DataFrame):
         """
-        Загрузить датасет в коллекцию dataset_{dataset_name}.
+        Upload a dataset to the dataset_{dataset_name} collection.
         """
         coll_name = f"dataset_{dataset_name}"
         
@@ -166,8 +166,8 @@ class MongoDBClient:
 
     def insert_dataset_into_registry(self, doc: Dict[str, Any]):
         """
-        Добавить информацию о датасете в dataset_regestry.
-        Ожидается, что doc уже содержит поля:
+        Add information about the dataset to dataset_registry.
+        It is expected that the doc already contains the fields:
             dataset_name, var_cols, metric, target_column, include_column, exclude_column ...
         """
         coll_name = "dataset_regestry"
@@ -176,21 +176,21 @@ class MongoDBClient:
 
     def update_task(self, task_id: Any, update_data: Dict[str, Any]):
         """
-        Обновить существующую задачу в коллекции tasks по _id.
+        Update an existing task in the tasks collection by _id.
         """
         coll = self.get_collection("tasks")
         if not isinstance(task_id, ObjectId):
             try:
                 task_id = ObjectId(task_id)
             except Exception as e:
-                logger.error(f"Некорректный ID задачи: {e}")
+                logger.error(f"Invalid issue ID: {e}")
                 raise
         coll.update_one({"_id": task_id}, {"$set": update_data})
 
     def update_tasks_status(self, collection_name: str, current_status: str, new_status: str) -> int:
         """
-        Обновление статуса задач в collection_name: current_status -> new_status.
-        Возвращает количество обновлённых документов.
+        Updating the status of issues in collection_name: current_status -> new_status.
+        Returns the number of updated documents.
         """
         try:
             collection = self.get_collection(collection_name)
@@ -198,62 +198,62 @@ class MongoDBClient:
                 {"status": current_status}, {"$set": {"status": new_status}}
             )
             logger.info(
-                f"Обновлено {result.modified_count} документов из статуса '{current_status}' на '{new_status}'."
+                f"Updated {result.modified_count} documents from the status '{current_status}' on '{new_status}'."
             )
             return result.modified_count
         except PyMongoError as e:
-            logger.error(f"Ошибка обновления статуса задач: {e}")
+            logger.error(f"Issue status update error: {e}")
             raise
 
-    # ---------------- Методы для подсчётов и получения документов ----------------
+    # ---------------- Methods for calculating and obtaining documents ----------------
 
     def get_tasks_by_status(self, collection_name: str, status: str) -> List[Dict[str, Any]]:
         """
-        Получение всех задач из collection_name, у которых status == status.
+        Getting all tasks from collection_name that have status == status.
         """
         try:
             collection = self.get_collection(collection_name)
             tasks = list(collection.find({"status": status}))
-            logger.info(f"Найдено {len(tasks)} задач со статусом '{status}' в '{collection_name}'.")
+            logger.info(f"Found {len(tasks)} issues with the status '{status}' in '{collection_name}'.")
             return tasks
         except PyMongoError as e:
-            logger.error(f"Ошибка получения задач по статусу: {e}")
+            logger.error(f"Error receiving tasks by status: {e}")
             raise
 
     def count_tasks_by_status(self, collection_name: str, status: str) -> int:
         """
-        Подсчёт количества задач со статусом status в collection_name.
+        Counting the number of tasks with the status status in collection_name.
         """
         try:
             collection = self.get_collection(collection_name)
             count = collection.count_documents({"status": status})
-            logger.info(f"Количество задач со статусом '{status}' в '{collection_name}': {count}.")
+            logger.info(f"Number of issues with the status '{status}' in '{collection_name}': {count}.")
             return count
         except PyMongoError as e:
-            logger.error(f"Ошибка подсчёта задач по статусу: {e}")
+            logger.error(f"Error in calculating tasks by status: {e}")
             raise
 
     def count_total_tasks(self, collection_name: str) -> int:
         """
-        Подсчёт общего количества документов (задач) в collection_name.
+        Counting the total number of documents (tasks) in collection_name.
         """
         try:
             collection = self.get_collection(collection_name)
             count = collection.count_documents({})
             logger.info(
-                f"Общее количество задач в коллекции '{collection_name}': {count}."
+                f"Total number of issues in the collection '{collection_name}': {count}."
             )
             return count
         except PyMongoError as e:
-            logger.error(f"Ошибка подсчёта общего количества задач: {e}")
+            logger.error(f"Error in calculating the total number of tasks: {e}")
             raise
 
-    # ---------------- Методы для чтения данных (tasks, datasets, prompts, regexp) ----------------
+    # ---------------- Methods for reading data (tasks, datasets, prompts, regexp) ----------------
 
     def get_all_tasks(self) -> pd.DataFrame:
         """
-        Возвращает все задачи из коллекции tasks в виде DataFrame.
-        Если задач нет, возвращает пустой DataFrame.
+        Returns all tasks from the tasks collection as a DataFrame.
+        If there are no tasks, returns an empty Data Frame.
         """
         tasks_collection = self.get_collection("tasks")
         tasks = list(tasks_collection.find({}))
@@ -263,8 +263,8 @@ class MongoDBClient:
 
     def get_all_datasets(self) -> List[str]:
         """
-        Возвращает список всех датасетов (названия),
-        основываясь на коллекциях, начинающихся с 'dataset_'.
+        Retrieves a list of all datasets (names),
+        based on collections starting with 'dataset_'.
         """
         collections = self.list_collections()
         dataset_colls = [col for col in collections if col.startswith("dataset_")]
@@ -273,7 +273,7 @@ class MongoDBClient:
 
     def get_dataset_head(self, dataset_name: str, limit: int = 10) -> pd.DataFrame:
         """
-        Возвращает первые 'limit' строк датасета dataset_{dataset_name} в виде DataFrame.
+        Returns the first 'limit' rows of the dataset dataset_{dataset_name} as a DataFrame.
         """
         coll = self.get_collection(f"dataset_{dataset_name}")
         docs = list(coll.find({}).limit(limit))
@@ -286,8 +286,8 @@ class MongoDBClient:
 
     def get_dataset_registry_info(self, dataset_name: str) -> Optional[Dict[str, Any]]:
         """
-        Получить информацию о датасете (из 'dataset_regestry')
-        по его имени dataset_name.
+        Get information about a dataset (from the 'dataset_registry')
+        by its dataset_name.
         """
         coll = self.get_collection("dataset_regestry")
         doc = coll.find_one({"dataset_name": dataset_name})
@@ -295,8 +295,8 @@ class MongoDBClient:
 
     def get_prompt_docs_for_dataset(self, dataset_name: str) -> List[Dict[str, Any]]:
         """
-        Получить полный список (documents) промптов для dataset_{dataset_name},
-        т.е. коллекция prompt_{dataset_name}.
+        Get the full list (documents) of promptes for dataset_{dataset_name},
+        in other words, the prompt_{dataset_name} collection.
         """
         coll_name = f"prompt_{dataset_name}"
         if coll_name not in self.list_collections():
@@ -306,7 +306,7 @@ class MongoDBClient:
 
     def get_rta_prompt_docs(self) -> List[Dict[str, Any]]:
         """
-        Получить полный список RTA-промптов (documents) из коллекции prompt_rta (если есть).
+        Get the full list of RTA promptes (documents) from the prompt_rta collection (if available).
         """
         if "prompt_rta" not in self.list_collections():
             return []
@@ -315,21 +315,21 @@ class MongoDBClient:
 
     def get_prompts_for_dataset(self, dataset_name: str) -> List[str]:
         """
-        Вернуть список имён промптов (name) для указанного датасета.
+        Return a list of product names for the specified dataset.
         """
         prompts = self.get_prompt_docs_for_dataset(dataset_name)
         return [p["name"] for p in prompts if "name" in p]
 
     def get_rta_prompts(self) -> List[str]:
         """
-        Вернуть список имен RTA-промптов (name) из prompt_rta.
+        Return the list of RTA prompt names from prompt_rta.
         """
         rta_prompts = self.get_rta_prompt_docs()
         return [rp["name"] for rp in rta_prompts if "name" in rp]
 
     def get_regexp_docs_for_metric(self, metric: str) -> List[Dict[str, Any]]:
         """
-        Получить полный список документов (name, pattern) из regexp_{metric}.
+        Get the full list of documents (name, pattern) from regexp_{metric}.
         """
         coll_name = f"regexp_{metric}"
         if coll_name not in self.list_collections():
@@ -339,14 +339,14 @@ class MongoDBClient:
 
     def get_regexp_for_metric(self, metric: str) -> List[str]:
         """
-        Получить список имён регулярок (name) для заданной метрики (regexp_{metric}).
+        Get a list of the names of the controls (name) for a given metric (regexp_{metric}).
         """
         docs = self.get_regexp_docs_for_metric(metric)
         return [d["name"] for d in docs if "name" in d]
 
     def validate_regex(self, pattern: str) -> bool:
         """
-        Проверить корректность регулярного выражения.
+        Check the correctness of the regular expression.
         """
         try:
             re.compile(pattern)
@@ -356,7 +356,7 @@ class MongoDBClient:
 
     def list_metrics(self) -> List[str]:
         """
-        Получить список метрик, основываясь на коллекциях, начинающихся с regexp_ или results_.
+        Get a list of metrics based on collections starting with regexp_ or results_.
         """
         regexp_cols = self.list_collections_starting_with("regexp_")
         result_cols = self.list_collections_starting_with("results_")
