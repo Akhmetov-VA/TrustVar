@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import streamlit as st
 from dataset_management import render_dataset_varcols_section
-from utils.constants import MODELS, RTA_MODEL, AUGMENTATIONS, TASKS
+from utils.constants import MODELS, RTA_MODEL, AUGMENTATIONS, TASKS, AUGMENT_PROMPT, CURRENT_AUGMENT_PROMPT
 from utils.db_client import MongoDBClient, MongoDBConfig
 
 # Initializing the DB client
@@ -131,7 +131,7 @@ def insert_regexp_global(name: str, pattern: str, metric: str) -> None:
 
 def render_regexp_section(metric: str) -> Optional[str]:
     selected_regexp = None
-    with st.expander("Selecting or creating a regular schedule for yandex.metrica", expanded=False):
+    with st.expander("Selecting or creating a regular schedule for metrics", expanded=False):
         show_existing_regexp(metric)
         use_existing_regexp = st.radio("Regular schedule:", ("Existing", "Own"))
         if use_existing_regexp == "Existing":
@@ -193,10 +193,59 @@ def render_models_section() -> List[str]:
     with st.expander("Selecting models for the task", expanded=False):
         return st.multiselect("Select models:", MODELS)
 
-def render_dynamic_variations() -> List[str]:
-    with st.expander("Dynamic dataset augmentation [AUG]", expanded=False):
-        return st.multiselect("Choose the augmentation method:", AUGMENTATIONS)
+# def render_dynamic_variations() -> List[str]:
+#     with st.expander("Dynamic dataset augmentation [AUG]", expanded=False):
+#         return st.multiselect("Choose the augmentation method:", AUGMENTATIONS)
 
+# 🔑 session_state keys
+PROMPT_KEY = "user_prompt_temp"
+MODE_KEY = "augmentation_mode"
+
+def render_dynamic_variations() -> Optional[List[str]]:
+    global CURRENT_AUGMENT_PROMPT
+    # Инициализируем состояние
+    if PROMPT_KEY not in st.session_state:
+        st.session_state[PROMPT_KEY] = AUGMENT_PROMPT
+
+    if MODE_KEY not in st.session_state:
+        st.session_state[MODE_KEY] = "Use predefined augmentations"
+
+    with st.expander("Dynamic dataset augmentation", expanded=False):
+        # Выбор режима: внутренний или пользовательский
+        st.session_state[MODE_KEY] = st.radio(
+            "Select input method:",
+            ("Use predefined augmentations", "Write your own augmentation prompt"),
+            index=0 if st.session_state[MODE_KEY] == "Use predefined augmentations" else 1,
+            key="radio_mode"
+        )
+
+        selected = None
+        if st.session_state[MODE_KEY] == "Use predefined augmentations":
+            selected = st.multiselect("Choose the augmentation method:", AUGMENTATIONS)
+
+        elif st.session_state[MODE_KEY] == "Write your own augmentation prompt":
+            st.session_state[PROMPT_KEY] = st.text_area(
+                "Write your augmentation prompt here:",
+                value=st.session_state[PROMPT_KEY],
+                key="prompt_area"
+            )
+
+        st.markdown("---")
+        st.subheader("📝 Current prompt in use:")
+        current_prompt = (
+            st.session_state[PROMPT_KEY]
+            if st.session_state[MODE_KEY] == "Write your own augmentation prompt"
+            else AUGMENT_PROMPT
+        )
+        st.code(current_prompt, language="markdown")
+
+        if st.session_state[MODE_KEY] == "Write your own augmentation prompt":
+            CURRENT_AUGMENT_PROMPT = st.session_state[PROMPT_KEY]
+        else:
+            CURRENT_AUGMENT_PROMPT = AUGMENT_PROMPT
+
+        return selected if st.session_state[MODE_KEY] == "Use predefined augmentations" else None
+            
 def build_task_data(
     task_type: str,
     task_name: str,

@@ -11,7 +11,7 @@ from pymongo.database import Database
 from utils.constants import (
     API_URL,
     AUGMENT_MODEL,
-    AUGMENT_PROMPT,
+    CURRENT_AUGMENT_PROMPT,
     MONGO_HOST,
     MONGO_PASSWORD,
     MONGO_PORT,
@@ -143,8 +143,8 @@ def generate_answer_by_augmentations(
     for augment_technique in dynamic_augments:
         # Creating a prompt for the augmentator model
         augmenter_prompt = (
-            AUGMENT_PROMPT
-            + f"""[Technic]:\n            {augment_technique}\n            [The original text]:\n            {prompt}\n            [Answer]:"""
+            CURRENT_AUGMENT_PROMPT
+            + f"""[Техника]:\n            {augment_technique}\n            [Исходный текст]:\n            {prompt}\n            [Ответ]:"""
         )
         logging.debug(f"Augmenter prompt: {augmenter_prompt}")
         

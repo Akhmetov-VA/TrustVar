@@ -103,6 +103,8 @@ AUGMENT_PROMPT = """
 
 """
 
+CURRENT_AUGMENT_PROMPT = AUGMENT_PROMPT
+
 COLLECTIONS_TO_PROCESS = [
     "rubia_pro",
     "rubia_anti",
@@ -140,6 +142,12 @@ AUGMENTATIONS = [
     "Paraphrasing",
     "Reorder words/phrases",
     "Stylistic change",
+    "Convert to passive/active voice",
+    "Translate to another language and back",
+    "Change tone from formal to informal or vice versa",
+    "Make text more descriptive",
+    "Convert to passive or active voice",
+    "Add emotional tone"
 ]
 
 TASKS = ["Evaluate truthworthy problems", "Compare model behaviour"]
