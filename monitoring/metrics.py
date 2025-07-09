@@ -137,22 +137,25 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
         st.info("There is no data for tasks like 'Compare model behaviour'.")
         return
 
-    # Expand dynamic_augments lists into separate rows
+    # Process dynamic_augments - each record already contains one augmentation
     expanded_rows = []
     for _, row in compare_df.iterrows():
         dynamic_augments = row["dynamic_augments"]
-        pred = row["pred"]
-        if isinstance(pred, list) and len(pred) == len(dynamic_augments):
-            for i, augment in enumerate(dynamic_augments):
-                new_row = row.copy()
-                new_row["augment"] = augment
-                new_row["pred"] = pred[i]
-                expanded_rows.append(new_row)
+        # Handle both list and single string cases
+        if isinstance(dynamic_augments, list):
+            if len(dynamic_augments) == 1:
+                # Single augmentation in list
+                augment = dynamic_augments[0]
+            else:
+                # Multiple augmentations - this shouldn't happen in current data format
+                continue
         else:
-            for augment in dynamic_augments:
-                new_row = row.copy()
-                new_row["augment"] = augment
-                expanded_rows.append(new_row)
+            # Single string augmentation
+            augment = str(dynamic_augments)
+        
+        new_row = row.copy()
+        new_row["augment"] = augment
+        expanded_rows.append(new_row)
     
     expanded_df = pd.DataFrame(expanded_rows)
     
@@ -537,22 +540,25 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
         st.info("There is no data for tasks like 'Compare model behaviour'.")
         return
 
-    # Expanding the dynamic_augments lists into separate lines
+    # Process dynamic_augments - each record already contains one augmentation
     expanded_rows = []
     for _, row in compare_df.iterrows():
         dynamic_augments = row["dynamic_augments"]
-        pred = row["pred"]
-        if isinstance(pred, list) and len(pred) == len(dynamic_augments):
-            for i, augment in enumerate(dynamic_augments):
-                new_row = row.copy()
-                new_row["augment"] = augment
-                new_row["pred"] = pred[i]
-                expanded_rows.append(new_row)
+        # Handle both list and single string cases
+        if isinstance(dynamic_augments, list):
+            if len(dynamic_augments) == 1:
+                # Single augmentation in list
+                augment = dynamic_augments[0]
+            else:
+                # Multiple augmentations - this shouldn't happen in current data format
+                continue
         else:
-            for augment in dynamic_augments:
-                new_row = row.copy()
-                new_row["augment"] = augment
-                expanded_rows.append(new_row)
+            # Single string augmentation
+            augment = str(dynamic_augments)
+        
+        new_row = row.copy()
+        new_row["augment"] = augment
+        expanded_rows.append(new_row)
     
     expanded_df = pd.DataFrame(expanded_rows)
     
