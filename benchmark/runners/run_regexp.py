@@ -11,7 +11,7 @@ from pymongo.database import Database
 
 from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
 
-# Предполагается, что переменные окружения для MONGO_USERNAME, MONGO_PASSWORD, MONGO_HOST, MONGO_PORT, MONGO_DB уже заданы
+# It is assumed that the environment variables for MONGO_USERNAME, MANGO_PASSWORD, MANGO_HOST, MANGO_SPORT, MONGO_DB are already set.
 MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -20,28 +20,28 @@ logger = logging.getLogger(__name__)
 
 def get_mongo_client() -> MongoClient:
     """
-    Создаем подключение к MongoDB.
+    Creating a connection to MongoDB.
     """
     mongo_uri = (
         f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
     )
     client = MongoClient(mongo_uri)
-    logger.info("Успешно подключились к MongoDB.")
+    logger.info("Successfully connected to MongoDB.")
     return client
 
 
 def get_db() -> Database:
-    """Возвращает объект базы данных MongoDB."""
+    """Returns a database objectMongoDB."""
     client = get_mongo_client()
     return client[MONGO_DB]
 
 
 def fetch_completed_tasks(db: Database):
     """
-    Находим все задачи в очередях queue_* со статусом 'completed' и наличием поля response.
-    Исключаем метрику RtA, т.к. она обрабатывается другим скриптом.
+    We find all the tasks in the queue queues_* with the status 'completed' and the presence of the response field.
+    We exclude the RtA metric, because it is processed by another script.
 
-    Возвращаем итератор (coll_name, task).
+    Returns an iterator (coll_name, task).
     """
     collections = [c for c in db.list_collection_names() if c.startswith("queue_")]
     for coll_name in collections:
@@ -62,21 +62,21 @@ def fetch_completed_tasks(db: Database):
 
 def apply_regexp_to_response(response: Union[str, List[str]], regexp: str) -> Union[str, List[str]]:
     """
-    Применяем регулярку к response.
-    Если response - список строк, применяем регулярку к каждому элементу.
-    Если находит совпадение — берем найденное значение.
-    Если нет — 'TFN'.
-    Возвращает строку или список строк в зависимости от типа response.
+    Applying the regular schedule to the response.
+    If the response is a list of strings, we apply a regular pattern to each element.
+    If there is a match, we take the found value.
+    If not, 'TFN'.
+    Returns a string or a list of strings, depending on the type of response.
     """
     pattern = re.compile(regexp, re.DOTALL)
     
     if isinstance(response, list):
-        # Обрабатываем список ответов
+        # Processing the list of responses
         results = []
         for resp_item in response:
             match = pattern.search(resp_item)
             if match:
-                # Предполагается, что берем первую подходящую группу.
+                # It is assumed that we take the first suitable group.
                 if match.groups():
                     for g in match.groups():
                         if g is not None:
@@ -90,10 +90,10 @@ def apply_regexp_to_response(response: Union[str, List[str]], regexp: str) -> Un
                 results.append("TFN")
         return results
     else:
-        # Обрабатываем одну строку (старая логика)
+        # Processing one line (old logic)
         match = pattern.search(response)
         if match:
-            # Предполагается, что берем первую подходящую группу.
+            # It is assumed that we take the first suitable group.
             if match.groups():
                 for g in match.groups():
                     if g is not None:
@@ -107,14 +107,14 @@ def apply_regexp_to_response(response: Union[str, List[str]], regexp: str) -> Un
 
 def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
     """
-    Для метрики exact_match:
-    Если target - список строк, проверяем каждую.
-    Если хоть одна найдена в response, она включается в pred.
-    Если target - одна строка (не список), делаем её списком из одного элемента.
-    Если ничего не найдено - pred='TFN'.
+    For the exact_match metric:
+    If the target is a list of rows, we check each one.
+    If at least one is found in response, it is included in pred.
+    If the target is a single row (not a list), we make it a list of one element.
+    If nothing is found, pred='TFN'.
     """
     if isinstance(target, str):
-        target = [target]  # Превращаем строку в список
+        target = [target]  # Turning a row into a list
 
     found = []
     for t in target:
@@ -123,41 +123,41 @@ def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
     if not found:
         return "TFN"
     else:
-        # Вернем список найденных строк (или, например, через запятую).
-        # Для удобства пусть будет просто список в виде string.
+        # We will return the list of found strings (or, for example, separated by commas).
+        # For convenience, let's just have a list in the form of a string.
         return str(found)
 
 
 def update_task_with_pred(db: Database, coll_name: str, task_id: Any, pred: Union[str, List[str]]):
     """
-    Обновляем в задаче поле pred и статус на extracted.
+    We update the pred field in the issue and the status on extracted.
     """
     coll = db[coll_name]
     coll.update_one({"_id": task_id}, {"$set": {"pred": pred, "status": "extracted"}})
     
-    # Логируем информацию о pred в зависимости от его типа
+    # Logging information about the pred, depending on its type
     if isinstance(pred, list):
         pred_info = f"pred=[{', '.join(map(str, pred))}]"
     else:
         pred_info = f"pred={pred}"
     
     logger.info(
-        f"Обновлен документ {task_id} в {coll_name}: {pred_info}, status=extracted"
+        f"Updated document {task_id} in {coll_name}: {pred_info}, status=extracted"
     )
 
 
 def run_extraction_loop(db: Database, interval: int = 10):
     """
-    Запускаем бесконечный цикл опроса очередей:
-    - Находим все задачи в статусе completed (response != None) и metric != RtA
-    - В зависимости от metric:
-       1) exact_match: используем apply_exact_match
-       2) include_exclude: просто берем response в pred
-       3) accuracy: применяем regexp к каждому элементу списка response
-       4) любые другие: используем regexp (если есть) -> apply_regexp_to_response
-         если нет - TFN
-    - Меняем статус на extracted
-    - Ждем interval секунд и повторяем
+    Starting an endless queue polling cycle:
+    - We find all the issues in the status completed (response != None) and metric != RtA
+    - In relation to metric:
+       1) exact_match: we use apply_exact_match
+       2) include_exclude: just take the response in pred
+       3) accuracy: we apply regexp to each element of the list response
+       4) any others: use regexp (if available) -> apply_regexp_to_response
+         if not, TFN
+    - Change the status to extracted
+    - Wait for interval seconds and repeat
     """
     while True:
         found_any = False
@@ -169,40 +169,40 @@ def run_extraction_loop(db: Database, interval: int = 10):
             target = task.get("target", [])
 
             if metric == "exact_match":
-                # exact_match логика
+                # exact_match logic
                 pred = apply_exact_match(response, target)
 
             elif metric == "include_exclude":
-                # По условию "просто берем response и переносим в pred"
-                # Логику проверки include/exclude выполняет следующий ранер.
+                # By the condition "we just take the response and transfer it to pred"
+                # The logic of the include/exclude check is performed by the following runner.
                 pred = response
 
             elif metric == "accuracy":
                 regexp = task.get("regexp", None)
                 if not regexp:
-                    logger.error(f"Для метрики accuracy не предоставлена regexp в задаче {task_id} ({coll_name}) — задача пропущена")
+                    logger.error(f"For the accuracy metric, regexp is not provided in the task {task_id} ({coll_name}) — the task was skipped")
                     continue
                 pred = apply_regexp_to_response(response, regexp)
 
             else:
                 regexp = task.get("regexp", None)
                 if not regexp:
-                    logger.error(f"Для метрики {metric} не предоставлена regexp в задаче {task_id} ({coll_name}) — задача пропущена")
+                    logger.error(f"For metrica {metric} regexp is not provided in the task {task_id} ({coll_name}) — the task was skipped")
                     continue
                 pred = apply_regexp_to_response(response, regexp)
 
             update_task_with_pred(db, coll_name, task_id, pred)
 
         if not found_any:
-            logger.info("Нет задач для извлечения pred. Ожидание...")
+            logger.info("There are no tasks to extract pred. Expectation...")
         time.sleep(interval)
 
 
 def main():
     """
-    Точка входа:
-    1) Подключаемся к базе
-    2) Запускаем цикл обработки
+   Entry point:
+    1) Connect to the database
+    2) Start the processing cycle
     """
     db = get_db()
     run_extraction_loop(db, interval=60)

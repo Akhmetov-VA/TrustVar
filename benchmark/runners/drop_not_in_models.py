@@ -11,21 +11,21 @@ from utils.constants import COLLECTIONS_TO_PROCESS, MODELS
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает и возвращает подключение к MongoDB на основе переменных окружения.
+    Creates and returns a connection to MongoDB based on environment variables.
 
     Returns:
-        MongoClient: Клиент для подключения к MongoDB.
+        MongoClient: A client for connecting to MongoDB.
     """
-    # Загрузка переменных окружения из файла .env
+    # Loading environment variables from a file .env
     load_dotenv()
 
-    # Получение деталей подключения из переменных окружения
+    # Getting connection details from environment variables
     mongo_username = os.getenv("MONGO_INITDB_ROOT_USERNAME")
     mongo_password = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
     mongo_host = os.getenv("MONGO_HOST")
     mongo_port = os.getenv("MONGO_INITDB_ROOT_PORT")
 
-    # Формирование URI для подключения к MongoDB
+    # Creating a URI for connecting to MongoDB
     mongo_uri = f"mongodb://{mongo_username}:{mongo_password}@{mongo_host}:{mongo_port}"
 
     return MongoClient(mongo_uri)
@@ -35,41 +35,41 @@ def delete_pending_tasks(
     db: Database, collections_to_process: List[str], allowed_models: List[str]
 ) -> None:
     """
-    Удаляет записи со статусом 'pending' и моделями, не входящими в allowed_models,
-    из указанных коллекций.
+    Deletes entries with the 'pending' status and models that are not included in allowed_models,
+    from the specified collections.
 
     Args:
-        db (Database): Экземпляр базы данных MongoDB.
-        collections_to_process (List[str]): Список коллекций для обработки.
-        allowed_models (List[str]): Список допустимых моделей.
+        db (Database): An instance of the MongoDB database.
+        collections_to_process (List[str]): A list of collections to process.
+        allowed_models (List[str]): A list of acceptable models.
 
     Returns:
         None
     """
-    # Создание фильтра для удаления: статус 'pending' и модель не в allowed_models
+    # Creating a filter for deletion: the status is 'pending' and the model is not in allowed_models
     query = {"model": {"$nin": allowed_models}}
 
     for collection_name in collections_to_process:
         collection: Collection = db[collection_name]
 
-        # Удаление всех документов, соответствующих запросу
+        # Deleting all documents matching the request
         result = collection.delete_many(query)
 
-        # Вывод количества удаленных документов
+        # Output of the number of deleted documents
         print(
-            f"Из коллекции '{collection_name}' удалено {result.deleted_count} документов со статусом 'pending' и недопустимыми моделями."
+            f"From the collection '{collection_name}' deleted {result.deleted_count} documents with the 'pending' status and invalid models."
         )
 
 
 def main() -> None:
     """
-    Основная функция для удаления определенных записей из указанных коллекций.
+    The main function is to delete certain records from specified collections.
     """
-    # Подключение к MongoDB
+    # Connecting to MongoDB
     client = get_mongo_client()
     db = client["TrustLLM_ru"]
 
-    # Удаление записей
+    # Deleting records
     delete_pending_tasks(db, COLLECTIONS_TO_PROCESS, MODELS)
 
 

@@ -6,13 +6,13 @@ from pymongo.collection import Collection
 
 
 def replace_curl(data: str) -> str:
-    """Экранирует фигурные скобки в строке для корректной подстановки переменных.
+    """Escapes curly braces in a string for correct substitution of variables.
 
     Args:
-        data: Строка, в которой необходимо заменить фигурные скобки.
+        data: The line in which curly braces need to be replaced.
 
     Returns:
-        Строка с экранированными фигурными скобками.
+        A string with escaped curly braces.
     """
     return data.replace("{", "{{").replace("}", "}}")
 
@@ -26,19 +26,19 @@ def add_task(
     variables: Dict[str, Any],
     target: Optional[Any] = None,
 ) -> Any:
-    """Добавляет задачу в коллекцию MongoDB.
+    """Adds a task to the MongoDB collection.
 
     Args:
-        collection: Коллекция MongoDB для вставки задачи.
-        row: Словарь с данными из DataFrame.
-        job_id: Уникальный идентификатор задачи.
-        model: Название модели.
-        prompt: Шаблон запроса.
-        variables: Переменные для подстановки в шаблон.
-        target: Целевое значение для задачи (если есть).
+        collection: A MongoDB collection for inserting a task.
+        row: A dictionary with data from the Data Frame.
+        job_id: The unique identifier of the task.
+        model: The name of the model.
+        prompt: Request template.
+        variables: Variables to be substituted into the template.
+        target: The target value for the task (if any).
 
     Returns:
-        Идентификатор вставленной задачи.
+        ID of the inserted task.
     """
     task = {
         "job_id": job_id,
@@ -48,7 +48,7 @@ def add_task(
         "model": model,
         "response": None,
         "target": target,
-        **row,  # Добавляем данные из row
+        **row,  # Adding data from row
     }
     result = collection.insert_one(task)
     print(f"Added task with id: {result.inserted_id} and job_id: {job_id}")
@@ -64,16 +64,16 @@ def load_task_mongo(
     var_col: str = "prompt",
     target: Optional[Any] = None,
 ) -> None:
-    """Загружает задачи в MongoDB из DataFrame.
+    """Loads tasks to MongoDB from the DataFrame.
 
     Args:
-        models: Список названий моделей.
-        collection: Коллекция MongoDB для вставки задач.
-        prompts_data: Словарь с шаблонами запросов.
-        df_for_llm: DataFrame с данными.
-        placeholder: Название плейсхолдера в шаблоне.
-        var_col: Название столбца в DataFrame для подстановки переменных.
-        target: Целевое значение для задач (если есть).
+        models: A list of model names.
+        collection: A MongoDB collection for inserting tasks.
+        prompt_data: A dictionary with query patterns.
+        df_for_lm: DataFrame with data.
+        placeholder: The name of the placeholder in the template.
+        var_col: The name of the column in the DataFrame for variable substitution.
+        target: The target value for the tasks (if any).
     """
     job_id = str(uuid.uuid4())
     for model in models:
@@ -94,14 +94,14 @@ def load_task_mongo(
 
 
 def filter_models(models: List[str], collection: Collection) -> List[str]:
-    """Фильтрует список моделей, исключая те, которые уже присутствуют в коллекции.
+    """Filters the list of models, excluding those that are already present in the collection..
 
     Args:
-        models (List[str]): Список названий моделей.
-        collection (Collection): Коллекция MongoDB для проверки.
+        models (List[str]): A list of model names.
+        collection (Collection): The MongoDB collection to check.
 
     Returns:
-        List[str]: Список моделей, которых нет в коллекции.
+        List[str]: A list of models that are not in the collection.
     """
     existing_models = set(collection.distinct("model"))
     models_to_add = [m for m in models if m not in existing_models]

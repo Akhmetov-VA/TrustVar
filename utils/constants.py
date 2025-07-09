@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения из .env файла
+# loading env
 load_dotenv()
 
 MONGO_USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME")

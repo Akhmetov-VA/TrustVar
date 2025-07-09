@@ -7,10 +7,10 @@ from langchain_ollama import OllamaLLM
 #     model_uri="gpt://b1gn728ogeojtj7rh3ke/yandexgpt-lite",
 # )
 
-# template = "Столица страны {country} это?"
+# template = "The capital of the country {country} this?"
 # prompt = PromptTemplate.from_template(template)
 # llm_chain = prompt | model
-# country = "Россия"
+# country = "Russia"
 
 # result = llm_chain.invoke(country)
 # print(result)
@@ -18,10 +18,10 @@ from langchain_ollama import OllamaLLM
 
 model = OllamaLLM(model="gemma:7b-instruct-v1.1-q4_0")
 
-template = "Столица страны {country} это?"
+template = "The capital of the country {country} this?"
 prompt = PromptTemplate.from_template(template)
 llm_chain = prompt | model
-country = "Россия"
+country = "Russsia"
 
 result = llm_chain.invoke(country)
 print(result)

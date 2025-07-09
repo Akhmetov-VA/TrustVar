@@ -11,7 +11,7 @@ from utils.constants import (
     MONGO_USERNAME,
 )
 
-# Настройка логирования
+# Configuring logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ def get_mongo_client():
         f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
     )
     client = MongoClient(mongo_uri)
-    logger.info("Подключение к MongoDB установлено.")
+    logger.info("Connection to MongoDB is established.")
     return client
 
 
@@ -34,12 +34,12 @@ def update_task_name_in_rta_queue(task_name: str):
     coll_names = db.list_collection_names()
 
     if collection_name not in coll_names:
-        logger.error(f"Коллекция {collection_name} не найдена в базе {MONGO_DB}.")
+        logger.error(f"Collection {collection_name} not found in the database {MONGO_DB}.")
         return
 
     result = db[collection_name].update_many({}, {"$set": {"task_name": task_name}})
     logger.info(
-        f"Обновлено {result.modified_count} документов в коллекции {collection_name}."
+        f"Updated {result.modified_count} documents in the collection {collection_name}."
     )
 
 

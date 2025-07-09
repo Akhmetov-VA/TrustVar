@@ -6,12 +6,12 @@ import streamlit as st
 
 
 # -------------------------------------
-# Вспомогательные функции
+# Auxiliary functions
 # -------------------------------------
 def load_file(uploaded_file) -> Optional[pd.DataFrame]:
     """
-    Универсальная функция для чтения загруженного файла (CSV или Excel).
-    Возвращает DataFrame или None в случае ошибки.
+    A universal function for reading the uploaded file (CSV or Excel).
+    Returns Data Frame or None in case of an error.
     """
     if uploaded_file is None:
         return None
@@ -22,11 +22,11 @@ def load_file(uploaded_file) -> Optional[pd.DataFrame]:
             df = pd.read_excel(uploaded_file)
             return df
         except Exception as e:
-            st.error(f"Ошибка при чтении Excel файла: {e}")
+            st.error(f"Error when reading an Excel file: {e}")
             return None
     else:
-        # Считаем, что это CSV
-        # Пробуем utf-8, затем latin-1
+        # We believe that this is a CSV
+        # We try utf-8, then latin-1
         try:
             df = pd.read_csv(uploaded_file, encoding="utf-8")
             return df
@@ -35,17 +35,17 @@ def load_file(uploaded_file) -> Optional[pd.DataFrame]:
                 df = pd.read_csv(uploaded_file, encoding="latin-1")
                 return df
             except Exception as e:
-                st.error(f"Не удалось прочесть CSV файл: {e}")
+                st.error(f"Couldn't read the CSV file: {e}")
                 return None
         except Exception as e:
-            st.error(f"Ошибка при чтении CSV файла: {e}")
+            st.error(f"Error when reading the CSV file: {e}")
             return None
 
 
 def sanitize_df(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Преобразовать все значения df так, чтобы они были сериализуемы в MongoDB.
-    В частности, конвертировать numpy.ndarray в list, иначе вызовет InvalidDocument.
+    Convert all df values so that they are serializable in MongoDB.
+    In particular, convert numpy.ndarray to a list, otherwise it will cause Invalid Document.
     """
 
     def convert_value(x: Any) -> Any:
@@ -57,36 +57,36 @@ def sanitize_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
-    """Загрузка файла в любом формате: CSV, XLSX, JSON или Parquet."""
+    """Upload a file in any format: CSV, XLSX, JSON or Parquet."""
     if uploaded_file is None:
         return None
     try:
         if uploaded_file.name.lower().endswith(".json"):
-            # Загрузка JSON
+            # Loading JSON
             try:
                 df = pd.read_json(uploaded_file)
                 return sanitize_df(df)
             except ValueError as e:
-                st.error(f"Ошибка при чтении JSON файла: {e}")
+                st.error(f"Error when reading a JSON file: {e}")
                 return None
         elif uploaded_file.name.lower().endswith(".xlsx"):
-            # Загрузка Excel
+            # Loading Excel
             try:
                 df = pd.read_excel(uploaded_file)
                 return sanitize_df(df)
             except Exception as e:
-                st.error(f"Ошибка при чтении Excel файла: {e}")
+                st.error(f"Error when reading a Excel file: {e}")
                 return None
         elif uploaded_file.name.lower().endswith(".parquet"):
-            # Загрузка Parquet
+            # Loading Parquet
             try:
                 df = pd.read_parquet(uploaded_file)
                 return sanitize_df(df)
             except Exception as e:
-                st.error(f"Ошибка при чтении Parquet файла: {e}")
+                st.error(f"Error when reading a Parquet file: {e}")
                 return None
         else:
-            # Пытаемся как CSV
+            # We're trying it as a CSV
             try:
                 df = pd.read_csv(uploaded_file, encoding="utf-8")
                 return sanitize_df(df)
@@ -95,11 +95,11 @@ def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
                     df = pd.read_csv(uploaded_file, encoding="latin-1")
                     return sanitize_df(df)
                 except Exception as e:
-                    st.error(f"Не удалось прочитать CSV файл: {e}")
+                    st.error(f"Couldn't read the CSV file: {e}")
                     return None
             except Exception as e:
-                st.error(f"Ошибка при чтении CSV файла: {e}")
+                st.error(f"Error when reading the CSV file: {e}")
                 return None
     except Exception as e:
-        st.error(f"Не удалось загрузить файл: {e}")
+        st.error(f"Failed to upload file: {e}")
         return None

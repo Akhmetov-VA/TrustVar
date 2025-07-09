@@ -7,21 +7,21 @@ from pymongo import MongoClient
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает и возвращает подключение к MongoDB на основе переменных окружения.
+    Creates and returns a connection to MongoDB based on environment variables.
 
     Returns:
-        MongoClient: Клиент для подключения к MongoDB.
+        MongoClient: A client for connecting to MongoDB.
     """
-    # Загрузка переменных окружения из файла .env
+    # Loading environment variables from a file .env
     load_dotenv()
 
-    # Получение деталей подключения из переменных окружения
+    # Getting connection details from environment variables
     mongo_username = os.getenv("MONGO_INITDB_ROOT_USERNAME")
     mongo_password = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
     mongo_host = os.getenv("MONGO_HOST")
     mongo_port = os.getenv("MONGO_INITDB_ROOT_PORT")
 
-    # Формирование URI для подключения к MongoDB
+    # Creating a URI for connecting to MongoDB
     mongo_uri = (
         f"mongodb://{mongo_username}:{mongo_password}@{mongo_host}:{mongo_port}/"
     )
@@ -31,41 +31,40 @@ def get_mongo_client() -> MongoClient:
 
 def delete_collections_by_pattern(db, pattern: str) -> None:
     """
-    Удаляет коллекции из базы данных MongoDB, названия которых начинаются с заданного паттерна.
+    Deletes collections from the MongoDB database whose names begin with the specified pattern.
 
     Args:
-        db: Экземпляр базы данных MongoDB.
-        pattern (str): Паттерн, с которого начинаются названия коллекций.
+        db: An instance of the MongoDB database.
+        pattern (str): The pattern that the names of the collections begin with.
 
     Returns:
         None
     """
-    # Получение списка всех коллекций в базе данных
+    # Getting a list of all collections in the database
     collections = db.list_collection_names()
 
-    # Фильтрация коллекций, начинающихся с заданного паттерна
+    # Filtering collections starting from a given pattern
     collections_to_delete = [col for col in collections if col.startswith(pattern)]
 
-    # Удаление найденных коллекций
+    # Deleting found collections
     for collection_name in collections_to_delete:
         db.drop_collection(collection_name)
-        print(f"Коллекция '{collection_name}' успешно удалена.")
-
-    print(f"Все коллекции, начинающиеся с '{pattern}', были удалены.")
+        print(f"The collection '{collection_name}' has been successfully deleted.")
+    print(f"All collections starting with '{pattern}' have been deleted.")
 
 
 def main() -> None:
     """
-    Основная функция для удаления коллекций, начинающихся с определенного паттерна.
+    The main function is to delete collections starting from a specific pattern.
     """
-    # Паттерн для фильтрации коллекций
+    # A pattern for filtering collections
     pattern = "rubia_"
 
-    # Подключение к MongoDB
+    # Connecting to MongoDB
     client = get_mongo_client()
     db = client["TrustLLM_ru"]
 
-    # Удаление коллекций по паттерну
+    # Deleting collections by pattern
     delete_collections_by_pattern(db, pattern)
 
 

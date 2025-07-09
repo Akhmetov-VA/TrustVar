@@ -9,21 +9,21 @@ from pymongo.database import Database
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает и возвращает подключение к MongoDB на основе переменных окружения.
+    Creates and returns a connection to MongoDB based on environment variables.
 
     Returns:
-        MongoClient: Клиент для подключения к MongoDB.
+        MongoClient: A client for connecting to MongoDB.
     """
-    # Загрузка переменных окружения из файла .env
+    # Loading environment variables from a file .env
     load_dotenv()
 
-    # Получение деталей подключения из переменных окружения
+    # Getting connection details from environment variables
     mongo_username = os.getenv("MONGO_INITDB_ROOT_USERNAME")
     mongo_password = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
     mongo_host = os.getenv("MONGO_HOST")
     mongo_port = os.getenv("MONGO_INITDB_ROOT_PORT")
 
-    # Формирование URI для подключения к MongoDB
+    # Creating a URI for connecting to MongoDB
     mongo_uri = (
         f"mongodb://{mongo_username}:{mongo_password}@{mongo_host}:{mongo_port}/"
     )
@@ -35,49 +35,49 @@ def delete_pending_tasks(
     db: Database, excluded_collections: List[str], query: dict
 ) -> None:
     """
-    Удаляет задачи со статусом 'pending' из всех коллекций базы данных,
-    кроме указанных в списке исключений.
+    Deletes tasks with the 'pending' status from all database collections,
+    except for the exceptions listed in the list.
 
     Args:
-        db (Database): Экземпляр базы данных MongoDB.
-        excluded_collections (List[str]): Список коллекций, которые не нужно очищать.
-        query (dict): Условие для поиска задач (например, {"status": "pending"}).
+        db (Database): Database Instance MongoDB.
+        excluded_collections (List[str]): A list of collections that do not need to be cleaned.
+        query (dict): A condition for searching for issues (for example, {"status": "pending"}).
 
     Returns:
         None
     """
-    # Перебор всех коллекций в базе данных
+    # Going through all the collections in the database
     for collection_name in db.list_collection_names():
         if collection_name in excluded_collections:
-            continue  # Пропускаем коллекции из списка исключений
+            continue  # Skipping collections from the exclusion list
 
         collection: Collection = db[collection_name]
 
-        # Удаление всех задач, соответствующих запросу
+        # Deleting all tasks matching a query
         result = collection.delete_many(query)
 
-        # Вывод количества удаленных задач
+        # Output of the number of deleted tasks
         print(
-            f"Из коллекции '{collection_name}' удалено {result.deleted_count} задач со статусом 'pending'."
+            f"From the collection '{collection_name}' deleted {result.deleted_count} issues with the status'pending'."
         )
 
 
 def main() -> None:
     """
-    Основная функция для удаления задач со статусом 'pending' из всех коллекций,
-    кроме исключенных.
+    The main function is to remove issues with the 'pending' status from all collections.,
+    except for the excluded ones.
     """
-    # Подключение к MongoDB
+    # Connecting to MongoDB
     client = get_mongo_client()
     db = client["TrustLLM_ru"]
 
-    # Список исключаемых коллекций
+    # List of excluded collections
     excluded_collections = ["delete_me", "test"]
 
-    # Условие для поиска задач со статусом 'pending'
+    # A condition for searching for issues with the status 'pending'
     query = {"status": "pending"}
 
-    # Удаление задач
+    # Deleting issues
     delete_pending_tasks(db, excluded_collections, query)
 
 

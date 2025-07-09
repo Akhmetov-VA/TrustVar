@@ -21,33 +21,33 @@ from utils.constants import (
 
 def configure_logging() -> None:
     """
-    Настраивает логирование для отображения сообщений в консоли.
+    Configures logging for displaying messages in the console.
     """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s: %(message)s",
         handlers=[logging.StreamHandler()],
     )
-    logging.info("Логирование успешно настроено.")
+    logging.info("Logging has been successfully configured.")
 
 
 def get_mongo_client() -> MongoClient:
     """
-    Создает подключение к MongoDB на основе переменных окружения.
+    Creates a connection to MongoDB based on environment variables.
 
     Returns:
-        MongoClient: Экземпляр MongoDB клиента.
+        MongoClient: An instance of the MongoDB client.
     """
-    logging.info("Попытка подключения к MongoDB...")
+    logging.info("Trying to connect to MongoDB...")
     mongo_uri = (
         f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
     )
     try:
         client = MongoClient(mongo_uri)
-        logging.info("Успешно подключились к MongoDB.")
+        logging.info("Successfully connected to MongoDB.")
         return client
     except Exception as e:
-        logging.exception("Ошибка подключения к MongoDB.")
+        logging.exception("Error connecting to MongoDB.")
         raise e
 
 
@@ -55,12 +55,12 @@ def make_request(
     model: str, prompt: str, session: requests.Session, variables: dict = None
 ) -> Dict:
     """
-    Отправляет POST-запрос к API с указанной моделью, промптом и переменными.
+    Sends a POST request to the API with the specified model, prompt, and variables.
     """
     if variables is None:
         variables = {}
     logging.info(
-        f"Отправка запроса к API для модели '{model}' с промптом: {prompt[:100]}..."
+        f"Sending an API request for a model '{model}' with promptness: {prompt[:100]}..."
     )
     logging.debug(f"make_request input: model={model}, prompt={prompt}, variables={variables}")
     try:
@@ -75,53 +75,53 @@ def make_request(
         )
         response.raise_for_status()
         logging.info(f"API raw response: {response.text}")
-        logging.info(f"Успешный ответ от API для модели '{model}'.")
+        logging.info(f"Successful response from the API for the model '{model}'.")
         if response.json() is None:
             raise Exception("null response")
         return response.json()
     except requests.exceptions.RequestException as e:
-        logging.error(f"Ошибка при выполнении запроса к API для модели '{model}': {e}")
+        logging.error(f"Error when making an API request for the model '{model}': {e}")
         raise e
 
 
 def extract_text_from_response(response: Dict) -> str:
     """
-    Извлекает текст из ответа API.
+    Extracts the text from the response API.
     
     Args:
-        response (Dict): Ответ от API.
+        response (Dict): API response.
         
     Returns:
-        str: Извлеченный текст или None, если не удалось извлечь.
+        str: Extracted text or None if it was not possible to extract.
     """
     if isinstance(response, dict):
-        # Ищем стандартные ключи с текстом
+        # Looking for standard keys with text
         for key in ["response", "text", "content", "result", "output"]:
             if key in response and isinstance(response[key], str):
                 return response[key]
         
-        # Если не нашли стандартные ключи, берем первый строковый ключ
+        # If the standard keys are not found, we take the first string key.
         for key, value in response.items():
             if isinstance(value, str):
                 return value
         
-        logging.error(f"Не удалось извлечь текст из ответа: {response}")
+        logging.error(f"Couldn't extract text from the response: {response}")
         return None
     elif isinstance(response, str):
         return response
     else:
-        logging.error(f"Неожиданный формат ответа: {type(response)}")
+        logging.error(f"Unexpected response format: {type(response)}")
         return None
 
 
 def format_prompt_with_variables(prompt: str, variables: Dict[str, Any]) -> str:
     """
-    Форматирует промпт с переменными. Если переменная не найдена, возвращает исходный prompt.
+    Formats prompta with variables. If the variable is not found, returns the original prompt..
     """
     try:
         return prompt.format(**variables)
     except KeyError as e:
-        logging.warning(f"Переменная {e} не найдена в промпте, используем исходный промпт")
+        logging.warning(f"The variable {e} was not found in the prompt, we use the original prompt")
         return prompt
 
 
@@ -133,38 +133,38 @@ def generate_answer_by_augmentations(
     session: requests.Session,
 ) -> List[Dict]:
     """
-    Генерирует ответы по техникам аугментации:
-    для каждой техники сначала получаем аугментированный текст,
-    а затем подставляем его как новый prompt в основную модель.
+    Generates responses based on augmentation techniques:
+    for each technique, we first get a reasoned text.,
+    and then we insert it as a new prompt into the main model.
     """
     logging.debug(f"generate_answer_by_augmentations input: dynamic_augments={dynamic_augments}, model={model}, prompt={prompt}, variables={variables}")
     responses = []
     
     for augment_technique in dynamic_augments:
-        # Формируем промпт для модели-аугментатора
+        # Creating a prompt for the augmentator model
         augmenter_prompt = (
             AUGMENT_PROMPT
-            + f"""[Техника]:\n            {augment_technique}\n            [Исходный текст]:\n            {prompt}\n            [Ответ]:"""
+            + f"""[Technic]:\n            {augment_technique}\n            [The original text]:\n            {prompt}\n            [Answer]:"""
         )
         logging.debug(f"Augmenter prompt: {augmenter_prompt}")
         
-        # 1) Запрашиваем аугментацию
+        # 1) Requesting an augmentation
         augmented_resp = make_request(AUGMENT_MODEL, augmenter_prompt, session, variables)
         
-        # 2) Извлекаем аугментированный текст
+        # 2) Extracting the augmented text
         augmented_text = extract_text_from_response(augmented_resp)
         if augmented_text is None:
-            logging.error(f"Не удалось извлечь текст для аугментации {augment_technique}")
+            logging.error(f"Couldn't extract text for augmentation {augment_technique}")
             continue
         
         logging.info(
-            f"Аугментированный текст (technique={augment_technique}): {augmented_text[:100]}..."
+            f"Augmented text (technique={augment_technique}): {augmented_text[:100]}..."
         )
 
-        # 3) Подставляем переменные в аугментированный текст
+        # 3) Substituting variables into the augmented text
         augmented_prompt_with_vars = format_prompt_with_variables(augmented_text, variables)
         
-        # 4) Отправляем аугментированный промпт в основную модель
+        # 4) We are sending the augmented prompt to the main model
         final_resp = make_request(model, augmented_prompt_with_vars, session, variables)
         responses.append(final_resp)
 
@@ -175,24 +175,24 @@ def process_ordinary_task(
     task: Dict, collection: Collection, session: requests.Session
 ) -> None:
     """
-    Обрабатывает отдельную задачу, отправляя запрос к модели и обновляя статус задачи в базе данных.
+    Processes a separate task by sending a request to the model and updating the task status in the database.
 
     Args:
-        task (Dict): Документ задачи из MongoDB.
-        collection (Collection): Коллекция MongoDB, содержащая задачи.
-        session (requests.Session): Сессия requests для повторного использования соединений.
+        task (Dict): The task document is from MongoDB.
+        collection (Collection): A MongoDB collection containing tasks.
+        session (request.Session): The requests session is for connection reuse.
     """
     task_id = task["_id"]
-    logging.info(f"Начало обработки задачи с id: {task_id}")
+    logging.info(f"Starting task processing with id: {task_id}")
     prompt = task["prompt"]
     model = task["model"]
     variables = task.get("variables", {})
 
     try:
-        # Форматируем промпт с переменными
+        # Formatting the prompt with variables
         formatted_prompt = format_prompt_with_variables(prompt, variables)
         
-        # Отправляем запрос
+        # Sending a request
         response = make_request(model, formatted_prompt, session, variables)
         
         collection.update_one(
@@ -200,29 +200,29 @@ def process_ordinary_task(
             {"$set": {"status": "completed", "response": response}},
         )
         logging.info(
-            f"Задача с id: {task_id} успешно завершена и обновлена в базе данных."
+            f"The task with id: {task_id} has been successfully completed and updated in the database."
         )
     except Exception as e:
         collection.update_one(
             {"_id": task_id},
             {"$set": {"status": "error", "error": str(e)}},
         )
-        logging.error(f"Ошибка обработки задачи с id: {task_id}: {e}")
+        logging.error(f"Error processing an issue with an id: {task_id}: {e}")
 
 
 def process_augment_task(
     task: Dict, collection: Collection, session: requests.Session
 ) -> None:
     """
-    Обрабатывает отдельную задачу с аугментацией, отправляя запрос к модели и обновляя статус задачи в базе данных.
+    Processes a separate augmentation task by sending a request to the model and updating the task status in the database.
 
     Args:
-        task (Dict): Документ задачи из MongoDB.
-        collection (Collection): Коллекция MongoDB, содержащая задачи.
-        session (requests.Session): Сессия requests для повторного использования соединений.
+        task (Dict): The task document is from MongoDB.
+        collection: A MongoDB collection containing tasks.
+        session (request.Session): The requests session is for connection reuse.
     """
     task_id = task["_id"]
-    logging.info(f"Начало обработки задачи с id: {task_id}")
+    logging.info(f"Starting task processing with id: {task_id}")
     prompt = task["prompt"]
     model = task["model"]
     variables = task.get("variables", {})
@@ -244,36 +244,36 @@ def process_augment_task(
             {"_id": task_id},
             {"$set": {"status": "error", "error": str(e)}},
         )
-        logging.error(f"Ошибка обработки задачи с id: {task_id}: {e}")
+        logging.error(f"Error processing an issue with an id: {task_id}: {e}")
 
 
 def process_collection(
     db: Database, collection_name: str, session: requests.Session
 ) -> None:
     """
-    Обрабатывает задачи в указанной коллекции.
+    Processes tasks in the specified collection.
 
     Args:
-        db (Database): Экземпляр базы данных MongoDB.
-        collection_name (str): Название коллекции.
-        session (requests.Session): Сессия requests для повторного использования соединений.
+        db (Database): An instance of the MongoDB database.
+        collection_name (str): The name of the collection.
+        session (request.Session): The requests session is for connection reuse.
     """
-    logging.info(f"Начало обработки коллекции '{collection_name}'.")
+    logging.info(f"Start of collection processing'{collection_name}'.")
     collection = db[collection_name]
     unique_models = collection.distinct("model")
 
     if not unique_models:
         logging.warning(
-            f"В коллекции '{collection_name}' отсутствуют модели для обработки."
+            f"In the collection'{collection_name}' there are no models for processing."
         )
         return
 
     logging.info(
-        f"Найдено {len(unique_models)} уникальных моделей в коллекции '{collection_name}'."
+        f"Found {len(unique_models)} unique models in the collection '{collection_name}'."
     )
     for model in unique_models:
         logging.info(
-            f"Обработка задач для модели '{model}' в коллекции '{collection_name}'."
+            f"Processing tasks for the model '{model}' in the collection '{collection_name}'."
         )
         while True:
             ordinary_task = collection.find_one_and_update(
@@ -284,7 +284,7 @@ def process_collection(
 
             if ordinary_task:
                 logging.info(
-                    f"Найдена задача с id: {ordinary_task['_id']} для обработки."
+                    f"An issue with the id was found: {ordinary_task['_id']} for processing."
                 )
                 process_ordinary_task(ordinary_task, collection, session)
                 continue
@@ -297,26 +297,26 @@ def process_collection(
 
             if augment_task:
                 logging.info(
-                    f"Найдена задача с id: {augment_task['_id']} для обработки."
+                    f"An issue with the id was found: {augment_task['_id']} for processing."
                 )
                 process_augment_task(augment_task, collection, session)
                 continue
 
             else:
                 logging.info(
-                    f"Нет ожидающих задач для модели '{model}' в коллекции '{collection_name}'."
+                    f"There are no pending tasks for the model '{model}' in the collection '{collection_name}'."
                 )
                 break
 
 
 def run_processing_loop(db: Database) -> None:
     """
-    Запускает цикл обработки задач во всех коллекциях.
+    Starts the task processing cycle in all collections.
 
     Args:
-        db (Database): Экземпляр базы данных MongoDB.
+        db (Database): MongoDB Database Instance.
     """
-    logging.info("Запуск основного цикла обработки задач.")
+    logging.info("Starting the main task processing cycle.")
     session = requests.Session()
 
     try:
@@ -326,22 +326,22 @@ def run_processing_loop(db: Database) -> None:
             if col not in ["delete_me", "test"]
         ]
 
-        logging.info(f"Найдено {len(collections_to_process)} коллекций для обработки.")
+        logging.info(f"Found {len(collections_to_process)} collections to process.")
         for collection_name in collections_to_process:
             process_collection(db, collection_name, session)
 
-        logging.info("Все коллекции обработаны. Ожидание новых задач...")
+        logging.info("All collections have been processed. Waiting for new tasks...")
         time.sleep(5)
     except Exception as e:
-        logging.exception(f"Ошибка в процессе обработки: {e}")
+        logging.exception(f"Error in the processing process: {e}")
 
 
 def main() -> None:
     """
-    Основная функция для запуска обработки задач в MongoDB.
+    The main function for starting task processing in MongoDB.
     """
     configure_logging()
-    logging.info("Загрузка переменных окружения и инициализация подключения...")
+    logging.info("Loading environment variables and initializing the connection...")
     client = get_mongo_client()
     DB_NAME = "TrustGen"
     while True:

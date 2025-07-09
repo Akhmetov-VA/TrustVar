@@ -18,7 +18,7 @@ def load_config():
 
 config = load_config()
 
-# Инициализация аутентификатора
+# Initializing the authenticator
 authenticator = stauth.Authenticate(
     config["credentials"],
     config["cookie"]["name"],
@@ -32,15 +32,15 @@ except Exception as e:
     st.error(e)
 
 if st.session_state["authentication_status"]:
-    st.write(f"Добро пожаловать, {st.session_state['name']}!")
+    st.write(f"Welcome, {st.session_state['name']}!")
 
-    # Если пользователь авторизовался, показываем вкладки приложения
+    # If the user is logged in, we show the application tabs
     tabs = st.tabs(
         [
-            "Визуализация по задачам",
-            "Управление датасетами",
-            "Создать задачу",
-            "Метрики моделей",
+            "Visualization by tasks",
+            "Dataset Management",
+            "Create a task",
+            "Model metrics",
         ]
     )
 
@@ -57,6 +57,6 @@ if st.session_state["authentication_status"]:
         render_metrics_tab()
 
 elif st.session_state["authentication_status"] is False:
-    st.error("Неверный логин/пароль")
+    st.error("Invalid username/password")
 elif st.session_state["authentication_status"] is None:
-    st.warning("Введите ваш логин и пароль")
+    st.warning("Enter your username and password")

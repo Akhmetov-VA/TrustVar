@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 def sync_task_once(db: Database, task_id: Any, new_models: List[str]) -> Dict[str, Any]:
     """
-    Обновляет список моделей у задачи с заданным task_id в коллекции 'tasks'.
-    :param db: объект базы данных (MongoDB Database)
-    :param task_id: идентификатор задачи (_id)
-    :param new_models: новый список моделей для записи
-    :return: обновлённый документ задачи или None, если задача не найдена
+   Updates the list of models for a task with the specified task_id in the 'tasks' collection.
+    :param db: database object (MongoDB Database)
+    :param task_id: task id (_id)
+    :param new_models: new list of models to write
+    :return: updated task document or None if task is not found
     """
     collection = db["tasks"]
     updated_task = collection.find_one_and_update(
@@ -22,7 +22,7 @@ def sync_task_once(db: Database, task_id: Any, new_models: List[str]) -> Dict[st
         return_document=ReturnDocument.AFTER,
     )
     if updated_task:
-        logger.info(f"Задача {task_id} успешно обновлена: models = {new_models}")
+        logger.info(f"Task {task_id} successfully updated: models = {new_models}")
     else:
-        logger.warning(f"Задача {task_id} не найдена или не обновлена.")
+        logger.warning(f"Task {task_id} not found or updated.")
     return updated_task

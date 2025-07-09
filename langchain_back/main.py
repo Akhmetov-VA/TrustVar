@@ -18,7 +18,7 @@ async def generate_locally(request: Request):
     data = await request.json()
     try:
         model_name = data["model"]
-        # Модели с API
+        # Models with API
         if model_name.startswith('api'):
             MODEL_NAME = model_name.split('/')[-1]
             OPENAI_KEY = os.getenv("OPENAI_KEY")
@@ -44,7 +44,7 @@ async def generate_locally(request: Request):
         #         model=model_name
         #     )
         #     model = HuggingFacePipeline(pipeline=pipe)
-        # Модели локальные
+        # The models are local
         else:
             model = OllamaLLM(model=model_name, base_url=os.getenv("OLLAMA_BASE_URL"))
         
