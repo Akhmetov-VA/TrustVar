@@ -1,7 +1,6 @@
 import logging
 import time
 from typing import Any, Dict, List
-import string
 
 import requests
 from pymongo import MongoClient
@@ -116,7 +115,7 @@ def extract_text_from_response(response: Dict) -> str:
 
 def format_prompt_with_variables(prompt: str, variables: Dict[str, Any]) -> str:
     """
-    Formats prompta with variables. If the variable is not found, returns the original prompt..
+    Formats prompt with variables. If the variable is not found, returns the original prompt..
     """
     try:
         return prompt.format(**variables)

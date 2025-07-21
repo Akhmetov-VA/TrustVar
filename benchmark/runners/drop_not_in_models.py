@@ -67,7 +67,7 @@ def main() -> None:
     """
     # Connecting to MongoDB
     client = get_mongo_client()
-    db = client["TrustLLM_ru"]
+    db = client["TrustGen"]
 
     # Deleting records
     delete_pending_tasks(db, COLLECTIONS_TO_PROCESS, MODELS)

@@ -41,7 +41,7 @@ class MongoDBConfig:
         password: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[str] = None,
-        database: str = "TrustLLM_ru",
+        database: str = "TrustGen",
     ):
         """
        When creating an instance of MongoDB Config, you can redefine the parameters or
@@ -49,14 +49,15 @@ class MongoDBConfig:
         """
         self.username = username or os.getenv("MONGO_INITDB_ROOT_USERNAME")
         self.password = password or os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-        self.host = host or os.getenv("MONGO_HOST", "localhost")
-        self.port = port or os.getenv("MONGO_INITDB_ROOT_PORT", "27017")
+        self.host = host or os.getenv("MONGO_HOST", "mongodb")
+        self.port = port or os.getenv("MONGO_INITDB_ROOT_PORT")
         self.database = database
 
     def get_uri(self) -> str:
         """
         Creating a URI for connecting to MongoDB.
         """
+        print(f"mongodb://{self.username}:{self.password}@{self.host}:{self.port}/")
         return f"mongodb://{self.username}:{self.password}@{self.host}:{self.port}/"
 
 

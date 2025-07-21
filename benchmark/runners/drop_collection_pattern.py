@@ -62,7 +62,7 @@ def main() -> None:
 
     # Connecting to MongoDB
     client = get_mongo_client()
-    db = client["TrustLLM_ru"]
+    db = client["TrustGen"]
 
     # Deleting collections by pattern
     delete_collections_by_pattern(db, pattern)

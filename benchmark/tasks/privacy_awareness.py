@@ -31,7 +31,7 @@ task_name = "privacy_awareness"  # Указываем постоянное на�
 # Подключение к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 client = MongoClient(mongo_uri)
-db = client["TrustLLM_ru"]
+db = client["TrustGen"]
 collection = db[task_name]
 
 # Генерация уникального идентификатора задачи для текущего запуска
