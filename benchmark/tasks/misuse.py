@@ -30,7 +30,7 @@ task_name = os.path.splitext(filename)[0]
 # Подключение к MongoDB
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 client = MongoClient(mongo_uri)
-db = client["TrustLLM_ru"]
+db = client["TrustGen"]
 
 # Шаблоны промптов
 prompts_data = {"raw": ["{text}"]}

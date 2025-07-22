@@ -274,7 +274,7 @@ def render_progressbar():
             df_style = df.style.applymap(highlight_status, subset=["Status"])
             st.write(df_style)
 
-            pending_queues = df.loc[df["Waiting"] > 0, "Colliction"].tolist()
+            pending_queues = df.loc[df["Waiting"] > 0, "Collection"].tolist()
             if pending_queues:
                 selected_queue = st.selectbox(
                     "Select a queue to stop in:",

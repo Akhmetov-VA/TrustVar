@@ -69,7 +69,7 @@ def main() -> None:
     """
     # Connecting to MongoDB
     client = get_mongo_client()
-    db = client["TrustLLM_ru"]
+    db = client["TrustGen"]
 
     # List of excluded collections
     excluded_collections = ["delete_me", "test"]

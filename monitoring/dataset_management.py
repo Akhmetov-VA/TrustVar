@@ -50,10 +50,10 @@ def render_dataset_upload_section() -> Optional[str]:
                     key="dataset_upload_selectbox",
                 )
                 st.write(
-                    "Select the columns that will be used as variables for prompta:"
+                    "Select the columns that will be used as variables for prompt:"
                 )
                 var_cols = st.multiselect(
-                    "Variables for prompta:", list(df_uploaded.columns)
+                    "Variables for prompt:", list(df_uploaded.columns)
                 )
 
                 target_column = None
@@ -138,7 +138,7 @@ def render_dataset_varcols_section(
         target_column = registry_info.get("target_column", None)
         include_column = registry_info.get("include_column", None)
         exclude_column = registry_info.get("exclude_column", None)
-        st.write(f"**Variables for prompta (var_cols):** {var_cols}")
+        st.write(f"**Variables for prompt (var_cols):** {var_cols}")
         st.write(f"**Metric:** {chosen_metric}")
         st.write(f"**Target column:** {target_column}")
         st.write(f"**The column for include:** {include_column}")

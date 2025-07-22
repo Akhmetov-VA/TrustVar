@@ -14,10 +14,10 @@ db_client = MongoDBClient(config)
 DEFAULT_REGEX = r"(?:^\W*([01]).*)|(?:.*([01])\W*$)"
 
 def show_all_prompts() -> None:
-    """Show all prompta from the database."""
+    """Show all prompt from the database."""
     coll_name = "prompt_storage"
     if coll_name not in db_client.list_collections():
-        st.write("There are no promptos in the storage.")
+        st.write("There are no prompts in the storage.")
         return
     coll = db_client.get_collection(coll_name)
     prompts = list(coll.find({}))
@@ -25,10 +25,10 @@ def show_all_prompts() -> None:
         df = pd.DataFrame(prompts)
         if "_id" in df.columns:
             df = df.drop(columns=["_id"])
-        st.write("Existing prompta (name, prompt):")
+        st.write("Existing prompt (name, prompt):")
         st.dataframe(df)
     else:
-        st.write("There are no promptos in the storage.")
+        st.write("There are no prompts in the storage.")
 
 def get_all_prompts() -> List[Dict[str, Any]]:
     coll_name = "prompt_storage"
@@ -96,7 +96,7 @@ def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
                         if f"{{{c}}}" not in selected_prompt:
                             st.warning(f"The placeholder for the column was not found in the product. {c}")
             else:
-                st.write("There are no prompta available. Enter your own.")
+                st.write("There are no prompt available. Enter your own.")
         else:
             selected_prompt = render_prompt_creation_section(var_cols)
     return selected_prompt
@@ -177,7 +177,7 @@ def render_rta_prompt_section() -> Tuple[Optional[str], Optional[str], Any]:
                         rta_prompt_selected = rp["prompt"]
                         break
             else:
-                st.write("There are no RTA prompta available. Enter your.")
+                st.write("There are no RTA prompt available. Enter your.")
         else:
             rta_prompt_selected = render_prompt_creation_section(var_cols=[])
         rta_target = st.text_input("The target value for RtA:", value="1")

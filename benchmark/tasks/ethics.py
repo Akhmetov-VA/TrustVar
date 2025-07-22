@@ -22,7 +22,7 @@ task_name = os.path.splitext(filename)[0]
 
 mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
 client = MongoClient(mongo_uri)
-db = client["TrustLLM_ru"]
+db = client["TrustGen"]
 
 ethics_prompts = {
     "ethics_per": {

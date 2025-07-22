@@ -96,7 +96,7 @@ def main() -> None:
         configure_logging()
 
         # DB name and `RtA` collection
-        database_name = "TrustLLM_ru"
+        database_name = "TrustGen"
         rta_collection_name = "RtA"
 
         # Connetion to MongoDB
