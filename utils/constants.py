@@ -146,7 +146,6 @@ AUGMENTATIONS = [
     "Translate to another language and back",
     "Change tone from formal to informal or vice versa",
     "Make text more descriptive",
-    "Convert to passive or active voice",
     "Add emotional tone"
 ]
 
