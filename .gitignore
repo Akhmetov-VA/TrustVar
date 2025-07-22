@@ -19,3 +19,4 @@ db
 *.txt
 *copy*
 trash*
+mongo-db-data/
