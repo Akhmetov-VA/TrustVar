@@ -4,7 +4,6 @@ x-common-env: &common-env
   MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
   MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
   MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
-  MONGO_HOST: ${MONGO_HOST}
   YANDEX_API_KEY: ${YANDEX_API_KEY}
   YANDEX_MODEL_URI: ${YANDEX_MODEL_URI}
   YANDEX_BASE_URL: ${YANDEX_BASE_URL}
@@ -18,6 +17,9 @@ x-common-env: &common-env
 
   # HF_HOME: ${HF_HOME}
   # TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE}
+  
+  # URL для langchain backend внутри Docker network
+  LANGCHAIN_BACKEND_URL: http://langchain_backend:45321/generate
 
 services:  
   langchain_backend:
@@ -51,6 +53,7 @@ services:
         <<: *common-env
     command: python -m streamlit run monitoring/app_main.py --server.port 27366
     depends_on:
+      - mongodb
       - langchain_backend
     ports:
       - "27366:27366"
@@ -67,6 +70,8 @@ services:
         <<: *common-env
     container_name: runner_main
     command: python -m runners.run
+    depends_on:
+      - langchain_backend
     restart: on-failure  
 
   runner-rta-queuer:
@@ -78,6 +83,9 @@ services:
         <<: *common-env
     container_name: runner-rta-queuer
     command: python -m runners.run_rta_queuer
+    depends_on:
+      - mongodb
+      - langchain_backend
     restart: on-failure  
 
   runner-task-processor:
@@ -89,6 +97,9 @@ services:
     environment:
         <<: *common-env
     command: python -m runners.task_processor
+    depends_on:
+      - mongodb
+      - langchain_backend
     restart: on-failure  
 
   runner-regexp:
@@ -100,6 +111,9 @@ services:
     environment:
         <<: *common-env
     command: python -m runners.run_regexp
+    depends_on:
+      - mongodb
+      - langchain_backend
     restart: on-failure  
 
   runner-metrics:
@@ -111,6 +125,9 @@ services:
     environment:
         <<: *common-env
     command: python -m runners.run_metrics
+    depends_on:
+      - mongodb
+      - langchain_backend
     restart: on-failure
 
   ollama:
@@ -121,6 +138,15 @@ services:
       - OLLAMA_MODELS=/models
     ports:
       - "12345:12345"
+    volumes:
+      - /media/admin01/Windows/ollama_models:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
     restart: on-failure
 
   mongodb:

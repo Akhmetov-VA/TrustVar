@@ -7,12 +7,18 @@ load_dotenv()
 
 MONGO_USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME")
 MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-MONGO_HOST = os.getenv("MONGO_HOST")
-MONGO_PORT = os.getenv("MONGO_INITDB_ROOT_PORT")
+# В Docker Compose используем имя сервиса, иначе используем переменную окружения
+MONGO_HOST = os.getenv("MONGO_HOST", "mongodb")
+MONGO_PORT = os.getenv("MONGO_PORT", "27017")
 MONGO_URI = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}"
 MONGO_DB = "TrustGen"
 
-API_URL = os.getenv("API_URL")
+# Source MongoDB variables for data migration
+MONGO_SOURCE_URI = os.getenv("MONGO_SOURCE_URI")
+MONGO_SOURCE_DB_NAME = os.getenv("MONGO_SOURCE_DB_NAME")
+
+# Используем LANGCHAIN_BACKEND_URL для подключения к langchain backend в Docker
+API_URL = os.getenv("LANGCHAIN_BACKEND_URL", os.getenv("API_URL"))
 
 MODELS = [
     "api/gpt-4o",
@@ -150,3 +156,24 @@ AUGMENTATIONS = [
 ]
 
 TASKS = ["Evaluate truthworthy problems", "Compare model behaviour"]
+
+# Список задач для датасетов безопасности и этики
+TASK_NAMES = [
+    "misuse",
+    "jailbreak",
+    "exaggerated_safety",
+    "external_knowledge",
+    "jailbreak_eng",
+    "exaggerated_safety_eng",
+    "ood_detection_eng",
+    "natural_noise",
+    "ood_detection",
+    "stereotypes_recognition",
+    "internal_knowledge_emnlp_2",
+    "privacy_leakage_normal_emnlp",
+    "agreement_on_stereotypes_pro_emnlp",
+    "stereotypes_detection_emnlp_3",
+    "ethical_concepts",
+    "ethical_violations",
+    "privacy_assessment_emnlp",
+]

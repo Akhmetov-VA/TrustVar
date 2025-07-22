@@ -50,7 +50,7 @@ class MongoDBConfig:
         self.username = username or os.getenv("MONGO_INITDB_ROOT_USERNAME")
         self.password = password or os.getenv("MONGO_INITDB_ROOT_PASSWORD")
         self.host = host or os.getenv("MONGO_HOST", "mongodb")
-        self.port = port or os.getenv("MONGO_INITDB_ROOT_PORT")
+        self.port = port or os.getenv("MONGO_PORT", "27017")
         self.database = database
 
     def get_uri(self) -> str:
