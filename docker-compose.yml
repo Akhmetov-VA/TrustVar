@@ -129,7 +129,7 @@ services:
     ports:
       - '${MONGO_INITDB_ROOT_PORT}:27017'
     volumes:
-      - ./mongo-db-data:/data/db
+      - ./mongo-volume-data:/data/db
     environment:
         <<: *common-env
     restart: on-failure  
