@@ -6,7 +6,6 @@ from typing import List
 from pymongo import MongoClient
 
 from utils.constants import (
-    MONGO_DB,
     MONGO_HOST,
     MONGO_PASSWORD,
     MONGO_PORT,

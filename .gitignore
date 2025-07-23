@@ -19,4 +19,5 @@ db
 *.txt
 *copy*
 trash*
-mongo-db-data/
+mongo-volume-data/
+ds_trustllm/

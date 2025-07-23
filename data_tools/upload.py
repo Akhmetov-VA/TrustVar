@@ -7,11 +7,8 @@ from pymongo import MongoClient
 
 from utils.constants import (
     MONGO_DB,
-    MONGO_HOST,
     MONGO_PASSWORD,
-    MONGO_PORT,
     MONGO_USERNAME,
-    TASK_NAMES,
 )
 
 logging.basicConfig(level=logging.INFO)
