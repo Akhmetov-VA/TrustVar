@@ -121,6 +121,11 @@ def compute_dispersion_indices(values: List[float]) -> Dict[str, float]:
 
 def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collection_name: str):
     """Task-centric visualization of metrics for Compare model behaviour tasks."""
+    st.write(f"Starting visualize_task_centric_metrics for {collection_name}")
+    st.write(f"Number of documents: {len(results_data)}")
+    if results_data:
+        st.write(f"First document keys: {list(results_data[0].keys())}")
+    
     results_df = pd.DataFrame(results_data)
     if "_id" in results_df.columns:
         results_df = results_df.drop(columns=["_id"])
@@ -524,6 +529,11 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
 
 def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_name: str):
     """Visualization of metrics by groups task_type and dynamic_augments."""
+    st.write(f"Starting visualize_grouped_metrics for {collection_name}")
+    st.write(f"Number of documents: {len(results_data)}")
+    if results_data:
+        st.write(f"First document keys: {list(results_data[0].keys())}")
+    
     results_df = pd.DataFrame(results_data)
     if "_id" in results_df.columns:
         results_df = results_df.drop(columns=["_id"])
@@ -880,6 +890,10 @@ def short_augment_name(name):
 def render_metrics_tab():
     st.header("Model metrics")
     
+    # Initialize database client
+    from utils.db_client import MongoDBClient, MongoDBConfig
+    db_client = MongoDBClient(MongoDBConfig(database="TrustGen"))
+    
     # Switch between metric types
     metric_type = st.radio(
         "Select the type of metric analysis:",
@@ -896,8 +910,6 @@ def render_metrics_tab():
                 options=results_collections,
                 key="metrics_collection_selection",
             )
-            from utils.db_client import MongoDBClient, MongoDBConfig
-            db_client = MongoDBClient(MongoDBConfig(database="TrustGen"))
             results_collection = db_client.get_collection(selected_results_collection)
             results_data = list(results_collection.find())
             if results_data:
@@ -1003,7 +1015,7 @@ def render_metrics_tab():
     
     elif metric_type == "Group analysis (Model-centric)":
         # Logic for grouped metrics (model-centric view)
-        grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups"]
+        grouped_collections = ["Accuracy_Groups", "TFNR_Groups"]
         available_collections = []
         
         for coll in grouped_collections:
@@ -1034,7 +1046,7 @@ def render_metrics_tab():
     
     else:  # Task-centric analysis
         # Logic for task-centric analysis
-        grouped_collections = ["Accuracy_Groups", "Correlation_Groups", "IncludeExclude_Groups"]
+        grouped_collections = ["Accuracy_Groups", "TFNR_Groups"]
         available_collections = []
         
         for coll in grouped_collections:
@@ -1042,7 +1054,11 @@ def render_metrics_tab():
                 collection = db_client.get_collection(coll)
                 if collection.count_documents({}) > 0:
                     available_collections.append(coll)
-            except:
+            except Exception as e:
+                st.write(f"Error: {coll}")
+                st.error(f"Exception details: {str(e)}")
+                import traceback
+                st.error(f"Traceback: {traceback.format_exc()}")
                 continue
         
         if not available_collections:

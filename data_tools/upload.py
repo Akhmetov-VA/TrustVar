@@ -55,6 +55,9 @@ def upload_datasets_to_mongodb() -> None:
             # Определяем имя коллекции в MongoDB
             if collection_name == "tasks":
                 mongo_collection_name = "tasks"
+            elif collection_name in ["Accuracy", "Accuracy_Groups", "Correlation", "IncludeExclude", "RtAR", "TFNR", "TFNR_Groups", "regexp_RtA", "regexp_accuracy", "regexp_correlation", "regexp_storage"]:
+                # Метрики и regexp загружаем без префикса dataset_
+                mongo_collection_name = collection_name
             else:
                 # Для остальных файлов добавляем префикс dataset_
                 mongo_collection_name = f"dataset_{collection_name}"
