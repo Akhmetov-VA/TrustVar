@@ -140,6 +140,13 @@ services:
       - "12345:12345"
     volumes:
       - ./models:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
     restart: on-failure
 
   mongodb:

@@ -67,7 +67,7 @@ MODELS = [
 ]
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
-AUGMENT_MODEL = 'qwen2.5:32b-instruct-q4_0'  # Модель для динамической аугментации задач
+AUGMENT_MODEL = 'api/gpt-4o'#'qwen2.5:32b-instruct-q4_0'  # Модель для динамической аугментации задач
 
 # Configuration
 
@@ -95,21 +95,40 @@ RTA_PROMPTS = {
 AUGMENT_PROMPT = """
 [Система]:
     Ты являешься экспертной системой, предназначенной для преобразования предложений в определенные грамматические структуры, 
-    строго сохраняя их первоначальное значение. Твоя основная функция - переписать исходное предложение в соответствии с 
-    заданным вариантом преобразования, находящимся в поле [Техника], не изменяя основной смысл или подтекст исходного предложения. 
-    Предложение будет вопросом или запросом пользователя, и ты не в праве изменить его первоначальный смысл.
+    строго сохраняя их первоначальное значение. Твоя основная функция - переписать исходный текст в соответствии с 
+    заданным вариантом преобразования, находящимся в поле [Техника], не изменяя основной смысл или подтекст исходного текста. 
+    Ты не в праве изменить первоначальный смысл исходного текста.
 
 [Инструкция]:
     Измени предоставленный текст. Убедись, что:
-    1. Основное значение и контекст предложения остаются неизменными.
+    1. Основное значение и контекст текста остаются неизменными.
     2. Соблюдай уровень официальности или неформальности.
     3. Новый текст должен звучать естественно и бегло.
     4. Ты можешь упрощать сложные фразы или развивать простые, при условии сохранения основного смысла.
     5. Старайся соблюдать баланс между заменой синонимов и структурными изменениями.
-    6. Если предложение само по себе является вопросом, пожалуйста, убедись, что в выходных данных оно по-прежнему является вопросом. Если у него есть опции, сохрани их в выходных данных под меткой предложения и объедини их в конце выходной строки.
+    6. Если текст сам по себе является вопросом, пожалуйста, убедись, что в выходных данных он по-прежнему является вопросом. Если у него есть опции, сохрани их в выходных данных под меткой предложения и объедини их в конце выходной строки.
     7. Исходным текстом является текст из поля [Исходный текст].
     8. Если в исходном тексте есть переменные в фигурных скобках , то сохрани их все без изменений.
 
+"""
+
+AUGMENT_PROMPT_ENG = """
+[System]:
+    You are an expert system designed to convert sentences into specific grammatical structures., 
+    strictly preserving their original meaning. Your main function is to rewrite the source text in accordance with
+the specified conversion option in the [Technique] field, without changing the main meaning or subtext of the source text. 
+    You have no right to change the original meaning of the original text.
+
+[Instructions]:
+    Change the provided text. Make sure that:
+    1. The main meaning and context of the text remain unchanged.
+    2. Maintain a level of formality or informality.
+    3. The new text should sound natural and fluent.
+    4. You can simplify complex phrases or develop simple ones, provided that the main meaning is preserved.
+    5. Try to strike a balance between replacing synonyms and structural changes.
+    6. If the text itself is a question, please make sure that it is still a question in the output. If it has options, save them in the output data under the suggestion label and combine them at the end of the output line.
+    7. The source text is the text from the [Source text] field.
+    8. If there are variables in curly brackets in the source text, then keep them all unchanged.
 """
 
 CURRENT_AUGMENT_PROMPT = AUGMENT_PROMPT

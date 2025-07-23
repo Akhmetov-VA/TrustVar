@@ -21,3 +21,7 @@ db
 trash*
 mongo-volume-data/
 ds_trustllm/
+*config.yaml*
+models/
+requirements.txt
+datasets/
