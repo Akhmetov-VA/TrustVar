@@ -10,6 +10,8 @@ RUN pip install --upgrade pip && pip install "uv>=0.5.29" && uv pip install -r p
 FROM base as back
 RUN uv pip install -r pyproject.toml --extra backend --system
 COPY ./langchain_back /app/langchain_back/
+COPY ./utils /app/utils/
+COPY ./data /app/data/
 
 #streamlit-frontend
 FROM base as front
