@@ -139,7 +139,7 @@ services:
     ports:
       - "12345:12345"
     volumes:
-      - /media/admin01/Windows/ollama_models:/models:ro
+      - ./models:/models:ro
     deploy:
       resources:
         reservations:
@@ -155,7 +155,7 @@ services:
     ports:
       - '${MONGO_INITDB_ROOT_PORT}:27017'
     volumes:
-      - ./mongo-volume-data:/data/db
+      - mongo-volume-data:/data/db
     environment:
         <<: *common-env
     restart: on-failure  
@@ -175,4 +175,5 @@ services:
 
 volumes:
   hf-cache:
+  mongo-volume-data:
   
