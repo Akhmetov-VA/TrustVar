@@ -29,6 +29,22 @@ datasets_name: List[str] = [f"dataset_{name}" for name in TASK_NAMES]
 datasets_name.append("tasks")
 datasets_name.append("dataset_regestry")
 
+# Добавляем коллекции с промптами, regexp и метриками
+datasets_name.extend([
+    "prompt_storage",
+    "regexp_RtA",
+    "regexp_accuracy", 
+    "regexp_correlation",
+    "regexp_storage",
+    "Accuracy",
+    "Accuracy_Groups",
+    "Correlation",
+    "IncludeExclude",
+    "RtAR",
+    "TFNR",
+    "TFNR_Groups"
+])
+
 
 def get_mongo_client(uri: str = None) -> MongoClient:
     logging.info("Attempting to connect to MongoDB...")
@@ -52,6 +68,14 @@ def dump_datasets_to_files() -> None:
     # Подключаемся к source MongoDB
     client = get_mongo_client(MONGO_SOURCE_URI)
     db = client[MONGO_SOURCE_DB_NAME]
+
+    # Добавляем все коллекции с суффиксом _Groups, если они есть
+    all_collections = db.list_collection_names()
+    groups_collections = [col for col in all_collections if col.endswith('_Groups')]
+    for group_col in groups_collections:
+        if group_col not in datasets_name:
+            datasets_name.append(group_col)
+            logging.info(f"Added groups collection: {group_col}")
 
     os.makedirs("datasets", exist_ok=True)
 
