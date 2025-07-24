@@ -1,6 +1,6 @@
 # TrustVar - Framework for Evaluating Task Quality and Model Robustness
 
-> 📖 **Start with [Documentation Overview](docs/overview.md)** for quick understanding of structure and navigation.
+> 📖 **Start with [Documentation Overview](overview.md)** for quick understanding of structure and navigation.
 
 ## Project Description
 
@@ -18,22 +18,9 @@ Unlike traditional frameworks that test models through tasks, TrustVar tests tas
 - **Multi-language Support**: English and Russian tasks with extensible architecture
 - **Interactive Pipeline**: Unified system for data loading, task generation, variation, model evaluation, and visual analysis
 
-## Table of Contents
-
-- [Project Architecture](#project-architecture)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [Documentation](#documentation)
-- [System Components](#system-components)
-- [API](#api)
-- [Metrics](#metrics)
-- [Deployment](#deployment)
-- [Development](#development)
-- [Support](#support)
-
 ## Project Architecture
 
-![TrustVar Architecture](docs/Screenshot%202025-07-24%20at%2013.35.16.png)
+![TrustVar Architecture](Screenshot%202025-07-24%20at%2013.35.16.png)
 
 ### Core Components
 
@@ -57,10 +44,6 @@ Unlike traditional frameworks that test models through tasks, TrustVar tests tas
 TrustVar/
 ├── docs/                          # Project documentation
 │   ├── README.md                  # Main documentation
-│   ├── components.md              # Component documentation
-│   ├── deployment.md              # Deployment guide
-│   ├── api.md                     # API documentation
-│   ├── metrics.md                 # Metrics documentation
 │   └── Screenshot 2025-07-24 at 13.35.16.png  # Architecture diagram
 ├── utils/                         # Utilities and common components
 │   ├── constants.py               # Constants and settings
@@ -188,87 +171,97 @@ TrustVar/
    python -m runners.task_processor
    ```
 
-## Documentation
+## Core Features
 
-Detailed documentation is available in the `docs/` folder:
+### 1. Task Management
+- Create and configure tasks through web interface
+- Automatic task processing in background
+- Support for various metric types (RtA, accuracy, correlation, include_exclude)
 
-- **[Main Documentation](docs/README.md)** - System overview and architecture
-- **[System Components](docs/components.md)** - Detailed description of all components
-- **[Setup](docs/setup.md)** - Setup and installation guide
-- **[Deployment](docs/deployment.md)** - Deployment guide
-- **[API](docs/api.md)** - API documentation
-- **[Metrics](docs/metrics.md)** - Description of supported metrics
+### 2. Experiment Monitoring
+- Real-time task status tracking
+- Metrics and results visualization
+- Dataset management
 
-## System Components
+### 3. Model Support
+- Integration with various LLM providers (OpenAI, Yandex, Ollama)
+- Local model execution through Ollama
+- Flexible prompt configuration
 
-### 1. MongoDB - Database
-Primary database for storing tasks, results, and metrics.
+### 4. Authentication
+- Protected web interface with user authentication
+- Default credentials: `user` / `resu123`
+- Support for both local and remote access
 
-### 2. Langchain Backend
-Server-side for processing requests to language models.
+### 5. Metrics Collection
+- Automatic quality metrics calculation
+- RtA (Refuse to Answer) analysis support
+- Structured data extraction from responses
 
-### 3. Streamlit Frontend
-Modern web interface for monitoring and management.
+### 6. Task Variation Analysis
+- **Task Sensitivity Index (TSI)**: Measures how strongly formulations affect model success
+- **Coefficient of Variation (CV)**: Quantifies model behavior changes between task versions
+- **Radar Diagrams**: Visual representation of task stability across models
 
-### 4. Task Runners
-Set of specialized task processors:
-- `run.py` - Main task processor
-- `run_metrics.py` - Metrics processor
-- `run_regexp.py` - Data extraction from responses
-- `run_rta_queuer.py` - RtA task processor
-- `task_processor.py` - Task processor
+## Configuration
 
-### 5. Ollama
-Service for local language model execution.
+### Environment Variables
 
-## API
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MONGO_INITDB_ROOT_USERNAME` | MongoDB username | - |
+| `MONGO_INITDB_ROOT_PASSWORD` | MongoDB password | - |
+| `MONGO_INITDB_ROOT_PORT` | MongoDB port | 27017 |
+| `YANDEX_API_KEY` | Yandex API key | - |
+| `OPENAI_KEY` | OpenAI API key | - |
+| `API_URL` | Langchain Backend URL | - |
+| `OLLAMA_BASE_URL` | Ollama service URL | http://localhost:12345 |
 
-The system provides REST API for interaction with language models:
+### Supported Models
 
-- **POST /generate** - Response generation
-- **GET /health** - Health check
-- **GET /models** - Model list
+The system supports a wide range of language models:
 
-Detailed API documentation: [docs/api.md](docs/api.md)
-
-## Metrics
-
-Supported metric types:
-
-- **Accuracy** - Response accuracy
-- **RtA (Refuse to Answer)** - Analysis of answer refusals
-- **Correlation** - Correlation with reference answers
-- **Include/Exclude** - Analysis of element inclusion/exclusion
-
-Detailed metrics description: [docs/metrics.md](docs/metrics.md)
-
-## Deployment
-
-### Docker Compose (recommended)
-```bash
-docker-compose up -d
-```
-
-### Kubernetes
-Detailed Kubernetes deployment guide: [docs/deployment.md](docs/deployment.md)
+- **API Models**: GPT-4, Claude, Gemini, YandexGPT
+- **Local Models**: Llama, Qwen, Mistral, Gemma
+- **Russian Models**: Saiga, Vikhr, RuAdapt
 
 ## Development
 
 ### Code Structure
+
 - **Modular architecture** with clear separation of responsibilities
 - **Docker containerization** for simplified deployment
 - **Poetry** for dependency management
 - **Streamlit** for modern web interface
 
 ### Adding New Metrics
+
 1. Create a new module in `runners/`
 2. Add configuration in `utils/constants.py`
 3. Update web interface in `monitoring/`
 
 ### Adding New Models
+
 1. Add model to `MODELS` list in `utils/constants.py`
 2. Configure corresponding provider in Langchain Backend
 3. Update documentation
+
+## Monitoring and Logging
+
+### Logs
+- All components use structured logging
+- Logs available through Docker Compose: `docker-compose logs <service>`
+
+### Metrics
+- Real-time task status
+- Processing performance
+- Model response quality
+
+## Security
+
+- Authentication through Streamlit Authenticator
+- Docker container isolation
+- Secure API key storage in environment variables
 
 ## Support
 
@@ -279,5 +272,4 @@ For support:
 
 ## License
 
-Project is distributed under [specify license].
-
+Project is distributed under [specify license]. 
