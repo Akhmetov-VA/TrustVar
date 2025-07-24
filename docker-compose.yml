@@ -1,0 +1,178 @@
+version: '3'
+
+x-common-env: &common-env
+  MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+  MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+  MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
+  YANDEX_API_KEY: ${YANDEX_API_KEY}
+  YANDEX_MODEL_URI: ${YANDEX_MODEL_URI}
+  YANDEX_BASE_URL: ${YANDEX_BASE_URL}
+
+  OPENAI_KEY: ${OPENAI_KEY}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+
+  API_URL: ${API_URL}
+  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+  # GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL}
+
+  # HF_HOME: ${HF_HOME}
+  # TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE}
+  
+  # URL для langchain backend внутри Docker network
+  LANGCHAIN_BACKEND_URL: http://langchain_backend:45321/generate
+
+services:  
+  langchain_backend:
+      build: 
+        context: .
+        target: back
+      user: "${CURRENT_UID}:${CURRENT_GID}" 
+      image: trust_gen:back
+      environment:
+        <<: *common-env
+      container_name: langchain_backend
+      ports:
+          - "45321:45321"
+      restart: on-failure  
+      command: python langchain_back/main.py
+      depends_on:
+        - ollama
+      extra_hosts:
+      - "host.docker.internal:host-gateway"    
+      volumes:
+      - hf-cache:/root/.cache/huggingface
+
+  streamlit_frontend:
+    build: 
+      context: .
+      target: front
+    user: "${CURRENT_UID}:${CURRENT_GID}" 
+    image: trust_gen:front
+    container_name: monitoring
+    environment:
+        <<: *common-env
+    command: python -m streamlit run monitoring/app_main.py --server.port 27366
+    depends_on:
+      - mongodb
+      - langchain_backend
+    ports:
+      - "27366:27366"
+    volumes: 
+      - ./monitoring:/app/monitoring/
+    restart: on-failure
+
+  runner-main:
+    build:
+      context: .
+      target: runners
+    image: trust_gen:runners
+    environment:
+        <<: *common-env
+    container_name: runner_main
+    command: python -m runners.run
+    depends_on:
+      - langchain_backend
+    restart: on-failure  
+
+  runner-rta-queuer:
+    build:
+        context: .
+        target: runners
+    image: trust_gen:runners
+    environment:
+        <<: *common-env
+    container_name: runner-rta-queuer
+    command: python -m runners.run_rta_queuer
+    depends_on:
+      - mongodb
+      - langchain_backend
+    restart: on-failure  
+
+  runner-task-processor:
+    build:
+      context: .
+      target: runners
+    image: trust_gen:runners
+    container_name: runner_task_processor
+    environment:
+        <<: *common-env
+    command: python -m runners.task_processor
+    depends_on:
+      - mongodb
+      - langchain_backend
+    restart: on-failure  
+
+  runner-regexp:
+    build:
+      context: .
+      target: runners
+    image: trust_gen:runners
+    container_name: runner_regexp
+    environment:
+        <<: *common-env
+    command: python -m runners.run_regexp
+    depends_on:
+      - mongodb
+      - langchain_backend
+    restart: on-failure  
+
+  runner-metrics:
+    build:
+      context: .
+      target: runners
+    image: trust_gen:runners
+    container_name: runner_metrics
+    environment:
+        <<: *common-env
+    command: python -m runners.run_metrics
+    depends_on:
+      - mongodb
+      - langchain_backend
+    restart: on-failure
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:12345
+      - OLLAMA_MODELS=/models
+    ports:
+      - "12345:12345"
+    volumes:
+      - /media/admin01/Windows/ollama_models:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
+    restart: on-failure
+
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    ports:
+      - '${MONGO_INITDB_ROOT_PORT}:27017'
+    volumes:
+      - ./mongo-volume-data:/data/db
+    environment:
+        <<: *common-env
+    restart: on-failure  
+
+  mongo-express:
+    image: mongo-express
+    container_name: mongodb-express
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+    ports:
+      - '8081:8081'
+    depends_on:
+      - mongodb
+    restart: on-failure  
+
+volumes:
+  hf-cache:
+  

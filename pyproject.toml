@@ -1,0 +1,52 @@
+[project]
+name = "trustllm-ru"
+version = "0.1.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv>=0.21.0,<0.22.0",
+    "numpy>=2.2.6",
+    "pandas>=2.2.3",
+    "pymongo>=4.13.0",
+    "requests>=2.32.3, <3.0.0",
+]
+
+[project.optional-dependencies]
+
+frontend = [
+    "matplotlib>=3.9.2, <4.0.0",
+    "fastparquet>=2024.5.0, <2025.0.0",
+    "openpyxl>=3.1.5, <4.0.0", 
+    "plotly>=6.1.1",
+    "PyYAML>=6.0.2",
+    "streamlit>=1.40.2",
+    "streamlit_authenticator>=0.4.2",
+    "scipy>=1.16.0",
+]
+
+backend = [
+    "yandexcloud>=0.319.0, <0.320.0",
+    "fastparquet>=2024.5.0, <2025.0.0",
+    "fastapi>=0.115.0, <0.116.0",
+    "langchain>=0.3.0, <0.4.0",
+    "langchain-community>=0.3.0, <0.4.0",
+    "langchain-ollama>=0.2.0, <0.3.0",
+    "uvicorn>=0.34.0",
+    "langchain_core>=0.3.61",
+    "langchain_openai>=0.3.18",
+    "transformers>=4.47.0",
+    "huggingface_hub",
+    "torch"
+]
+
+db = [
+    "pymongo>=4.9.1, <5.0.0",
+    "requests>=2.32.3, <3.0.0",
+    "pandas>=2.2.3, <3.0.0",
+    "matplotlib>=3.9.2, <4.0.0"
+]
+
+runners = [
+    "datasets>=3.1.0"
+]
