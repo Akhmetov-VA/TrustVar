@@ -279,5 +279,4 @@ For support:
 
 ## License
 
-Project is distributed under [specify license].
-
+This project is licensed under the MIT License.
