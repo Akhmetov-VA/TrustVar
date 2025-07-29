@@ -1,4 +1,4 @@
-# TrustVar - Framework for Evaluating Task Quality and Model Robustness
+# TrustVar: A Dynamic Framework for Trustworthiness Evaluation and Task Variation Analysis in Large Language Models
 
 > 📖 **Start with [Documentation Overview](docs/overview.md)** for quick understanding of structure and navigation.
 
