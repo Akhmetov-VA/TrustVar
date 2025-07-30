@@ -140,6 +140,13 @@ services:
       - "12345:12345"
     volumes:
       - /media/admin01/Windows/ollama_models:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]
     restart: on-failure
 
   mongodb:
