@@ -22,5 +22,5 @@ COPY ./monitoring /app/monitoring/
 #runners
 FROM base as runners
 RUN uv pip install -r pyproject.toml --extra runners --system
-COPY ./benchmark/runners /app/runners/
+COPY ./runners /app/runners/
 COPY ./utils /app/utils/

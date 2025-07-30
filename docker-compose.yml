@@ -142,29 +142,29 @@ services:
       - ./models:/models:ro
     restart: on-failure
 
-  mongodb:
-    image: mongo
-    container_name: mongodb
-    ports:
-      - '${MONGO_INITDB_ROOT_PORT}:27017'
-    volumes:
-      - mongo-volume-data:/data/db
-    environment:
-        <<: *common-env
-    restart: on-failure  
+  # mongodb:
+  #   image: mongo
+  #   container_name: mongodb
+  #   ports:
+  #     - '${MONGO_INITDB_ROOT_PORT}:27017'
+  #   volumes:
+  #     - mongo-volume-data:/data/db
+  #   environment:
+  #       <<: *common-env
+  #   restart: on-failure  
 
-  mongo-express:
-    image: mongo-express
-    container_name: mongodb-express
-    environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-      - ME_CONFIG_MONGODB_SERVER=mongodb
-    ports:
-      - '8081:8081'
-    depends_on:
-      - mongodb
-    restart: on-failure  
+  # mongo-express:
+  #   image: mongo-express
+  #   container_name: mongodb-express
+  #   environment:
+  #     - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
+  #     - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+  #     - ME_CONFIG_MONGODB_SERVER=mongodb
+  #   ports:
+  #     - '8081:8081'
+  #   depends_on:
+  #     - mongodb
+  #   restart: on-failure  
 
 volumes:
   hf-cache:
