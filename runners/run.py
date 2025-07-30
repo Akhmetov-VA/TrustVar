@@ -11,6 +11,7 @@ from utils.constants import (
     API_URL,
     AUGMENT_MODEL,
     CURRENT_AUGMENT_PROMPT,
+    AUGMENT_PROMPT,
     MONGO_HOST,
     MONGO_PASSWORD,
     MONGO_PORT,
@@ -141,10 +142,16 @@ def generate_answer_by_augmentations(
     
     for augment_technique in dynamic_augments:
         # Creating a prompt for the augmentator model
-        augmenter_prompt = (
-            CURRENT_AUGMENT_PROMPT
-            + f"""[Техника]:\n            {augment_technique}\n            [Исходный текст]:\n            {prompt}\n            [Ответ]:"""
-        )
+        if CURRENT_AUGMENT_PROMPT == AUGMENT_PROMPT:
+            augmenter_prompt = (
+                CURRENT_AUGMENT_PROMPT
+                + f"""[Техника]:\n            {augment_technique}\n            [Исходный текст]:\n            {prompt}\n            [Ответ]:"""
+            )
+        else:
+            augmenter_prompt = (
+                CURRENT_AUGMENT_PROMPT
+                + f"""[Technique]:\n            {augment_technique}\n           [Source text]:\n            {prompt}\n            [Answer]:"""
+            )
         logging.debug(f"Augmenter prompt: {augmenter_prompt}")
         
         # 1) Requesting an augmentation
@@ -228,13 +235,14 @@ def process_augment_task(
     dynamic_augments = task.get("dynamic_augments", [])
     
     try:
+        ordinary_response = process_ordinary_task(task, collection, session) # main response
         responses = generate_answer_by_augmentations(
             dynamic_augments, model, prompt, variables, session
-        )
+        ) # augmented responses
 
         collection.update_one(
             {"_id": task_id},
-            {"$set": {"status": "completed", "response": responses}},
+            {"$set": {"status": "completed", "response": [ordinary_response] + responses}},
         )
 
         logging.info(f"Task: {task_id} augmented and updated in DB.")

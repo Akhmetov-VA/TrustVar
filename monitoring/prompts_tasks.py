@@ -4,7 +4,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import pandas as pd
 import streamlit as st
 from dataset_management import render_dataset_varcols_section
-from utils.constants import MODELS, RTA_MODEL, AUGMENTATIONS, TASKS, AUGMENT_PROMPT, CURRENT_AUGMENT_PROMPT
+from utils.constants import MODELS, RTA_MODEL, AUGMENTATIONS, TASKS, AUGMENT_PROMPT, AUGMENT_PROMPT_ENG
+import utils.constants
 from utils.db_client import MongoDBClient, MongoDBConfig
 
 # Initializing the DB client
@@ -202,8 +203,6 @@ PROMPT_KEY = "user_prompt_temp"
 MODE_KEY = "augmentation_mode"
 
 def render_dynamic_variations() -> Optional[List[str]]:
-    global CURRENT_AUGMENT_PROMPT
-    # Инициализируем состояние
     if PROMPT_KEY not in st.session_state:
         st.session_state[PROMPT_KEY] = AUGMENT_PROMPT
 
@@ -211,7 +210,6 @@ def render_dynamic_variations() -> Optional[List[str]]:
         st.session_state[MODE_KEY] = "Use predefined augmentations"
 
     with st.expander("Dynamic dataset augmentation", expanded=False):
-        # Выбор режима: внутренний или пользовательский
         st.session_state[MODE_KEY] = st.radio(
             "Select input method:",
             ("Use predefined augmentations", "Write your own augmentation prompt"),
@@ -223,6 +221,19 @@ def render_dynamic_variations() -> Optional[List[str]]:
         if st.session_state[MODE_KEY] == "Use predefined augmentations":
             selected = st.multiselect("Choose the augmentation method:", AUGMENTATIONS)
 
+            # st.session_state["augmentation_language"] 
+            lang = st.selectbox(
+                "Choose language:",
+                ("English", "Русский"),
+                index=0,
+                key="language_select"
+            )
+
+            if lang == 'English':
+                st.session_state[PROMPT_KEY] = AUGMENT_PROMPT_ENG
+            else:
+                st.session_state[PROMPT_KEY] = AUGMENT_PROMPT
+            
         elif st.session_state[MODE_KEY] == "Write your own augmentation prompt":
             st.session_state[PROMPT_KEY] = st.text_area(
                 "Write your augmentation prompt here:",
@@ -239,11 +250,8 @@ def render_dynamic_variations() -> Optional[List[str]]:
         )
         st.code(current_prompt, language="markdown")
 
-        if st.session_state[MODE_KEY] == "Write your own augmentation prompt":
-            CURRENT_AUGMENT_PROMPT = st.session_state[PROMPT_KEY]
-        else:
-            CURRENT_AUGMENT_PROMPT = AUGMENT_PROMPT
-
+        utils.constants.CURRENT_AUGMENT_PROMPT = st.session_state[PROMPT_KEY]
+        
         return selected if st.session_state[MODE_KEY] == "Use predefined augmentations" else None
             
 def build_task_data(
