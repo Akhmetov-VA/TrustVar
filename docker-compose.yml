@@ -53,7 +53,7 @@ services:
         <<: *common-env
     command: python -m streamlit run monitoring/app_main.py --server.port 27366
     depends_on:
-      - mongodb
+      #- mongodb
       - langchain_backend
     ports:
       - "27366:27366"
@@ -84,7 +84,7 @@ services:
     container_name: runner-rta-queuer
     command: python -m runners.run_rta_queuer
     depends_on:
-      - mongodb
+      #- mongodb
       - langchain_backend
     restart: on-failure  
 
@@ -98,7 +98,7 @@ services:
         <<: *common-env
     command: python -m runners.task_processor
     depends_on:
-      - mongodb
+      #- mongodb
       - langchain_backend
     restart: on-failure  
 
@@ -112,7 +112,7 @@ services:
         <<: *common-env
     command: python -m runners.run_regexp
     depends_on:
-      - mongodb
+      #- mongodb
       - langchain_backend
     restart: on-failure  
 
@@ -126,7 +126,7 @@ services:
         <<: *common-env
     command: python -m runners.run_metrics
     depends_on:
-      - mongodb
+      #- mongodb
       - langchain_backend
     restart: on-failure
 

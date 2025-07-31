@@ -112,7 +112,7 @@ def calculate_confidence_interval(values: List[float], confidence: float = 0.95)
 def compute_dispersion_indices(values: List[float]) -> Dict[str, float]:
     """Compute all dispersion indices for a set of values."""
     return {
-        "cv": calculate_coefficient_of_variation(values),
+        "TSI": calculate_coefficient_of_variation(values),
         "cv_corrected": calculate_corrected_cv(values),
         "iqr_cv": calculate_iqr_cv(values),
         "jsd": calculate_jsd_divergence(values)
@@ -129,7 +129,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
     results_df = pd.DataFrame(results_data)
     if "_id" in results_df.columns:
         results_df = results_df.drop(columns=["_id"])
-
+    
     required_cols = {"task_name", "model", "value", "task_type", "dynamic_augments"}
     if not required_cols.issubset(results_df.columns):
         st.error("The required fields for grouped metrics are missing in the data.")
@@ -137,36 +137,33 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
 
     # Filter only "Compare model behaviour" tasks
     compare_df = results_df[results_df["task_type"] == "Compare model behaviour"].copy()
-
+    
     if compare_df.empty:
         st.info("There is no data for tasks like 'Compare model behaviour'.")
         return
 
-    # Process dynamic_augments robustly
+    # Process dynamic_augments - each record already contains one augmentation
     expanded_rows = []
     for _, row in compare_df.iterrows():
-        dynamic_augments = row.get("dynamic_augments", None)
-        if not dynamic_augments:
-            continue  # skip if None or empty
+        dynamic_augments = row["dynamic_augments"]
+        # Handle both list and single string cases
         if isinstance(dynamic_augments, list):
             if len(dynamic_augments) == 1:
+                # Single augmentation in list
                 augment = dynamic_augments[0]
-            elif len(dynamic_augments) > 1:
-                # Take the first, but log warning
-                augment = dynamic_augments[0]
-                logging.warning(f"Row with multiple dynamic_augments: {dynamic_augments}, using first: {augment}")
             else:
-                continue  # skip empty list
+                # Multiple augmentations - this shouldn't happen in current data format
+                continue
         else:
+            # Single string augmentation
             augment = str(dynamic_augments)
-        if not augment:
-            continue
+        
         new_row = row.copy()
         new_row["augment"] = augment
         expanded_rows.append(new_row)
-
+    
     expanded_df = pd.DataFrame(expanded_rows)
-
+    
     if expanded_df.empty:
         st.info("There is no data to display after the augmentations are deployed.")
         return
@@ -231,7 +228,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
     
     if task_stability_data:
         # Create radar charts for different metrics
-        metric_options = ["cv", "cv_corrected", "iqr_cv", "jsd"]
+        metric_options = ["TSI", "cv_corrected", "iqr_cv", "jsd"]
         selected_metric = st.selectbox(
             "Select dispersion metric for radar chart:",
             options=metric_options,
@@ -249,14 +246,12 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
                 augment_names = list(augment_metrics.keys())
                 metric_values = [augment_metrics[aug][selected_metric] for aug in augment_names]
                 
-                # Filter out NaN values but keep track of which task has issues
+                # Filter out NaN values
                 valid_indices = [i for i, v in enumerate(metric_values) if not np.isnan(v)]
-                
                 if valid_indices:
                     valid_augments = [augment_names[i] for i in valid_indices]
                     valid_values = [metric_values[i] for i in valid_indices]
                     
-                    # Add trace even if some values are NaN
                     fig_radar.add_trace(go.Scatterpolar(
                         r=valid_values,
                         theta=valid_augments,
@@ -264,23 +259,6 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
                         name=task_name,
                         line=dict(width=2)
                     ))
-                else:
-                    # If all values are NaN, add a trace with a single point to show the task exists
-                    # Use the mean value of all tasks as a placeholder
-                    placeholder_value = np.mean([v for task_data in task_stability_data 
-                                              for aug_metrics in [task_data["augment_metrics"]] 
-                                              for v in aug_metrics.values() 
-                                              if not np.isnan(v.get(selected_metric, np.nan))])
-                    
-                    if not np.isnan(placeholder_value):
-                        fig_radar.add_trace(go.Scatterpolar(
-                            r=[placeholder_value],
-                            theta=[augment_names[0] if augment_names else "No Data"],
-                            fill='toself',
-                            name=f"{task_name} (Limited Data)",
-                            line=dict(width=2, dash='dash'),
-                            opacity=0.5
-                        ))
         
         # Calculate max value for proper scaling
         max_val = 0
@@ -292,7 +270,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
                         max_val = max(max_val, val)
         
         metric_names = {
-            "cv": "Coefficient of Variation",
+            "TSI": "Coefficient of Variation",
             "cv_corrected": "Corrected CV",
             "iqr_cv": "IQR-based CV", 
             "jsd": "Jensen-Shannon Divergence"
@@ -308,20 +286,6 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
             title=f"Task Stability: {metric_names[selected_metric]} (Lower = More Stable)",
             height=600
         )
-        
-        # Add warning if some tasks have limited data
-        tasks_with_limited_data = []
-        for task_info in task_stability_data:
-            task_name = task_info["task_name"]
-            augment_metrics = task_info["augment_metrics"]
-            if augment_metrics:
-                metric_values = [augment_metrics[aug][selected_metric] for aug in augment_metrics.keys()]
-                if all(np.isnan(v) for v in metric_values):
-                    tasks_with_limited_data.append(task_name)
-        
-        if tasks_with_limited_data:
-            st.warning(f"Tasks with limited data (shown with dashed lines): {', '.join(tasks_with_limited_data)}")
-        
         st.plotly_chart(fig_radar, use_container_width=True)
     
     # 2. Task Performance Heatmap
@@ -462,21 +426,45 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
     for task in selected_tasks:
         task_data = filtered_df[filtered_df["task_name"] == task]
         if not task_data.empty:
-            # Calculate overall stability metrics
-            all_values = task_data["value"].tolist()
-            overall_indices = compute_dispersion_indices(all_values)
-            overall_mean = np.mean(all_values)
-            overall_std = np.std(all_values)
+            # Группируем по моделям
+            model_metrics = []
+            for model, model_data in task_data.groupby("model"):
+                model_values = model_data["value"].tolist()
+                indices = compute_dispersion_indices(model_values)
+                model_metrics.append(indices)
             
+            # Усредняем метрики по моделям
+            # Предполагаем, что indices - это словарь с одинаковыми ключами
+            if model_metrics:
+                # Получаем все ключи метрик
+                keys = model_metrics[0].keys()
+                # Усредняем каждую метрику по моделям
+                overall_indices = {k: np.mean([m[k] for m in model_metrics]) for k in keys}
+            else:
+                overall_indices = {}
+
+            # Также можно усреднить mean и std по моделям, если нужно
+            overall_mean = np.mean([np.mean(model_data["value"]) for _, model_data in task_data.groupby("model")])
+            overall_std = np.mean([np.std(model_data["value"]) for _, model_data in task_data.groupby("model")])
+
             # Calculate stability by augmentation
             augment_stability = {}
             for augment in selected_augments:
                 augment_data = task_data[task_data["augment"] == augment]
                 if not augment_data.empty:
-                    augment_values = augment_data["value"].tolist()
-                    augment_indices = compute_dispersion_indices(augment_values)
+                    # Группируем по моделям внутри аугментации
+                    model_metrics = []
+                    for model, model_data in augment_data.groupby("model"):
+                        model_values = model_data["value"].tolist()
+                        indices = compute_dispersion_indices(model_values)
+                        model_metrics.append(indices)
+                    if model_metrics:
+                        keys = model_metrics[0].keys()
+                        augment_indices = {k: np.mean([m[k] for m in model_metrics]) for k in keys}
+                    else:
+                        augment_indices = {}
                     augment_stability[augment] = augment_indices
-            
+
             stability_summary.append({
                 "task_name": task,
                 "overall_indices": overall_indices,
@@ -491,7 +479,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
         for summary in stability_summary:
             row = {
                 "Task": summary["task_name"],
-                "Overall CV (%)": summary["overall_indices"]["cv"],
+                "Task Sensivity Index (%)": summary["overall_indices"]["TSI"],
                 "Corrected CV (%)": summary["overall_indices"]["cv_corrected"],
                 "IQR-CV (%)": summary["overall_indices"]["iqr_cv"],
                 "JSD": summary["overall_indices"]["jsd"],
@@ -506,7 +494,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
         # Stability ranking by different metrics
         st.subheader("Task Stability Ranking")
         
-        metric_ranking_options = ["cv", "cv_corrected", "iqr_cv", "jsd"]
+        metric_ranking_options = ["TSI", "cv_corrected", "iqr_cv", "jsd"]
         selected_ranking_metric = st.selectbox(
             "Select metric for ranking:",
             options=metric_ranking_options,
@@ -515,7 +503,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
         )
         
         metric_display_names = {
-            "cv": "CV",
+            "TSI": "TSI",
             "cv_corrected": "Corrected CV", 
             "iqr_cv": "IQR-CV",
             "jsd": "JSD"
@@ -530,7 +518,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
         for i, summary in enumerate(stability_ranking, 1):
             metric_value = summary["overall_indices"][selected_ranking_metric]
             
-            if selected_ranking_metric in ["cv", "cv_corrected", "iqr_cv"]:
+            if selected_ranking_metric in ["TSI", "cv_corrected", "iqr_cv"]:
                 stability_level = "Very Stable" if metric_value < 10 else \
                                 "Stable" if metric_value < 20 else \
                                 "Moderately Stable" if metric_value < 30 else "Unstable"
@@ -561,102 +549,6 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
             st.write("- Measures distribution heterogeneity")
             st.write("- Lower values indicate more uniform performance across models")
             st.write("- Higher values indicate more diverse model performance")
-    
-    # 6. All Tasks Overview (including those with limited data)
-    st.subheader("6. All Tasks Overview")
-    
-    # Create a comprehensive overview of all tasks
-    all_tasks_overview = []
-    for task in selected_tasks:
-        task_data = filtered_df[filtered_df["task_name"] == task]
-        if not task_data.empty:
-            # Basic statistics
-            all_values = task_data["value"].tolist()
-            task_mean = np.mean(all_values)
-            task_std = np.std(all_values)
-            task_min = np.min(all_values)
-            task_max = np.max(all_values)
-            
-            # Count data points per augmentation
-            augment_counts = {}
-            for augment in selected_augments:
-                augment_data = task_data[task_data["augment"] == augment]
-                augment_counts[augment] = len(augment_data)
-            
-            # Determine if task has sufficient data for dispersion analysis
-            has_sufficient_data = any(count >= 2 for count in augment_counts.values())
-            
-            all_tasks_overview.append({
-                "task_name": task,
-                "mean": task_mean,
-                "std": task_std,
-                "min": task_min,
-                "max": task_max,
-                "total_samples": len(all_values),
-                "augment_counts": augment_counts,
-                "has_sufficient_data": has_sufficient_data
-            })
-    
-    if all_tasks_overview:
-        # Create overview table
-        overview_data = []
-        for overview in all_tasks_overview:
-            row = {
-                "Task": overview["task_name"],
-                "Mean": overview["mean"],
-                "Std": overview["std"],
-                "Min": overview["min"],
-                "Max": overview["max"],
-                "Total Samples": overview["total_samples"],
-                "Sufficient Data": "✅" if overview["has_sufficient_data"] else "⚠️ Limited"
-            }
-            overview_data.append(row)
-        
-        overview_df = pd.DataFrame(overview_data)
-        st.dataframe(overview_df.round(3))
-        
-        # Show data availability per task
-        st.subheader("Data Availability per Task")
-        for overview in all_tasks_overview:
-            st.write(f"**{overview['task_name']}:**")
-            for augment, count in overview["augment_counts"].items():
-                status = "✅" if count >= 2 else "⚠️" if count == 1 else "❌"
-                st.write(f"  {status} {augment}: {count} sample(s)")
-            st.write("")
-        
-        # Performance comparison chart for all tasks
-        st.subheader("Task Performance Comparison")
-        
-        # Prepare data for comparison chart
-        comparison_data = []
-        for overview in all_tasks_overview:
-            task_data = filtered_df[filtered_df["task_name"] == overview["task_name"]]
-            for augment in selected_augments:
-                augment_data = task_data[task_data["augment"] == augment]
-                if not augment_data.empty:
-                    values = augment_data["value"].tolist()
-                    comparison_data.append({
-                        "task": overview["task_name"],
-                        "augment": augment,
-                        "mean": np.mean(values),
-                        "count": len(values)
-                    })
-        
-        if comparison_data:
-            comp_df = pd.DataFrame(comparison_data)
-            
-            # Create comparison chart
-            fig_comp = px.bar(
-                comp_df,
-                x="augment",
-                y="mean",
-                color="task",
-                title="Task Performance by Augmentation",
-                labels={"mean": f"Performance ({collection_name})", "augment": "Augmentation"},
-                barmode="group"
-            )
-            fig_comp.update_layout(height=500)
-            st.plotly_chart(fig_comp, use_container_width=True)
 
 
 def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_name: str):
@@ -1155,8 +1047,7 @@ def render_metrics_tab():
                 collection = db_client.get_collection(coll)
                 if collection.count_documents({}) > 0:
                     available_collections.append(coll)
-            except Exception as e:
-                st.warning(f"Error accessing collection {coll}: {e}")
+            except:
                 continue
         
         if not available_collections:
