@@ -7,18 +7,10 @@ x-common-env: &common-env
   YANDEX_API_KEY: ${YANDEX_API_KEY}
   YANDEX_MODEL_URI: ${YANDEX_MODEL_URI}
   YANDEX_BASE_URL: ${YANDEX_BASE_URL}
-
   OPENAI_KEY: ${OPENAI_KEY}
   OPENAI_BASE_URL: ${OPENAI_BASE_URL}
-
   API_URL: ${API_URL}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
-  # GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL}
-
-  # HF_HOME: ${HF_HOME}
-  # TRANSFORMERS_CACHE: ${TRANSFORMERS_CACHE}
-  
-  # URL для langchain backend внутри Docker network
   LANGCHAIN_BACKEND_URL: http://langchain_backend:45321/generate
 
 services:  
