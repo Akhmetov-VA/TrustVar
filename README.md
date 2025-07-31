@@ -1,5 +1,7 @@
 # TrustVar: A Dynamic Framework for Trustworthiness Evaluation and Task Variation Analysis in Large Language Models
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Akhmetov-VA/TrustVar)
+
 > 📖 **Start with [Documentation Overview](docs/overview.md)** for quick understanding of structure and navigation.
 
 ## Project Description
