@@ -531,11 +531,11 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
         
         # Display interpretation guide
         with st.expander("Interpretation Guide"):
-            st.write("**Coefficient of Variation (CV):**")
-            st.write("- CV < 10%: Very stable task")
-            st.write("- CV 10-20%: Stable task")
-            st.write("- CV 20-30%: Moderately stable task")
-            st.write("- CV > 30%: Unstable task")
+            st.write("**Task Sensvity Index (TSI):**")
+            st.write("- TSI < 10%: Very stable task")
+            st.write("- TSI 10-20%: Stable task")
+            st.write("- TSI 20-30%: Moderately stable task")
+            st.write("- TSI > 30%: Unstable task")
             
             st.write("**Corrected CV:**")
             st.write("- Adjusted for small sample bias using Everitt's correction")
