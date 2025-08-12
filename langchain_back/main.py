@@ -12,7 +12,6 @@ from transformers import pipeline
 
 app = FastAPI()
 
-
 @app.post("/generate")
 async def generate_locally(request: Request):
     data = await request.json()
@@ -64,5 +63,10 @@ async def generate_locally(request: Request):
     
 if __name__ == "__main__":
     import uvicorn
+    from dotenv import load_dotenv
+    
+    load_dotenv()
 
-    uvicorn.run(app, host="0.0.0.0", port=45321)
+    BACKEND_HOST = os.getenv('BACKEND_HOST')
+    BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
+    uvicorn.run(app, host=BACKEND_HOST, port=BACKEND_PORT)

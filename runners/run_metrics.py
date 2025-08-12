@@ -21,7 +21,7 @@ METRICS = ["accuracy", "correlation", "RtA", "include_exclude"]
 
 def get_mongo_client() -> MongoClient:
     client = MongoClient(MONGO_URI)
-    logger.info("Successfully connected to MongoDB.")
+    logger.info(f"Successfully connected to MongoDB. URI: {MONGO_URI}")
     return client
 
 

@@ -49,8 +49,8 @@ class MongoDBConfig:
         """
         self.username = username or os.getenv("MONGO_INITDB_ROOT_USERNAME")
         self.password = password or os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-        self.host = host or os.getenv("MONGO_HOST", "83.143.66.65")
-        self.port = port or os.getenv("MONGO_PORT", "27363")
+        self.host = host or os.getenv("MONGO_HOST")
+        self.port = port or os.getenv("MONGO_INITDB_ROOT_PORT")
         self.database = database
 
     def get_uri(self) -> str:
@@ -72,7 +72,7 @@ class MongoDBClient:
         try:
             self.client = MongoClient(self.config.get_uri())
             self.db = self.client[self.config.database]
-            logger.info("Successfully connected to MongoDB.")
+            logger.info(f"Successfully connected to MongoDB. URI: {self.config.get_uri()}")
         except PyMongoError as e:
             logger.error(f"Error connecting to MongoDB: {e}")
             raise

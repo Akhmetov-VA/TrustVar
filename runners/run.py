@@ -16,6 +16,7 @@ from utils.constants import (
     MONGO_PASSWORD,
     MONGO_PORT,
     MONGO_USERNAME,
+    MONGO_URI
 )
 
 
@@ -44,7 +45,7 @@ def get_mongo_client() -> MongoClient:
     )
     try:
         client = MongoClient(mongo_uri)
-        logging.info("Successfully connected to MongoDB.")
+        logging.info(f"Successfully connected to MongoDB. URI: {mongo_uri}")
         return client
     except Exception as e:
         logging.exception("Error connecting to MongoDB.")

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
+from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME, MONGO_URI
 
 # It is assumed that the environment variables for MONGO_USERNAME, MANGO_PASSWORD, MANGO_HOST, MANGO_SPORT, MONGO_DB are already set.
 MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
@@ -25,7 +25,7 @@ def get_mongo_client() -> MongoClient:
         f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
     )
     client = MongoClient(mongo_uri)
-    logger.info("Successfully connected to MongoDB.")
+    logger.info(f"Successfully connected to MongoDB. URI: {mongo_uri}")
     return client
 
 

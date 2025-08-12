@@ -22,7 +22,7 @@ def get_mongo_client() -> MongoClient:
     logging.info("Attempting to connect to local MongoDB...")
     # Используем localhost для подключения с хоста
     # MongoDB работает на порту 27364 (как видно из docker ps)
-    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@localhost:27364/"
+    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}t:{MONGO_PORT}/"
     logging.info(f"Connecting to: {mongo_uri}")
     client = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000, connectTimeoutMS=10000)
     client.admin.command("ping")
