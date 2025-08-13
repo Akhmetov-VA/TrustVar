@@ -24,5 +24,4 @@ ds_trustllm/
 *config.yaml*
 models/
 requirements.txt
-datasets/
-data_tools/
+ollama_models/

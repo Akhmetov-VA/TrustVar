@@ -2,30 +2,37 @@ import json
 import requests
 import streamlit as st
 import os
-from utils.constants import MODELS
+import utils.constants
 from dotenv import load_dotenv
 import logging
+import pandas as pd
 
 load_dotenv()
 OLLAMA_PULL_URL = os.getenv('OLLAMA_BASE_URL') + "/api/pull"
-
+MODELS = utils.constants.MODELS
 # Configuring logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def render_model_management_tab():
-    global MODELS
     st.set_page_config(page_title="Model Loader", page_icon="🧩")
 
     if "results" not in st.session_state:
         st.session_state.results = {"success": [], "failed": {}}
+    
+    if "MODELS" not in st.session_state:
+        st.session_state.MODELS = MODELS 
 
     st.title("🧩 Model Loader for Ollama")
 
     # ========= Expander: View available models =========
-    with st.expander("View available models", expanded=True):
-        st.caption("Список из Python переменной MODELS:")
-        st.code("MODELS = " + json.dumps(MODELS, ensure_ascii=False, indent=2), language="python")
+    with st.expander("View available models", expanded=False):
+        df = pd.DataFrame({"Model": MODELS})
+        df.index = range(1, len(df) + 1)
+        df.index.name = "№"
+
+        st.caption(f"Models num: {len(MODELS)}")
+        st.dataframe(df, use_container_width=True)
 
     # ========= Вспомогательные функции =========
     def human_bytes(n: int) -> str:
@@ -112,24 +119,23 @@ def render_model_management_tab():
             return False, msg
 
     # ========= Expander: Load new models =========
-    with st.expander("Load new models", expanded=True):
+    with st.expander("Load new models", expanded=False):
         user_input = st.text_area(
-            "Введите имена моделей (по одной на строке)",
+            "Input ollama model names (one per line)",
             height=160,
             placeholder="llama3\nmistral:instruct\nphi3",
         )
         load = st.button("LOAD", type="primary", use_container_width=True)
 
         if load:
-            # Разбираем строки, убираем пустые и дубликаты (с сохранением порядка)
             items = [ln.strip() for ln in user_input.splitlines() if ln.strip()]
             items = list(dict.fromkeys(items))  # deduplicate
 
             if not items:
-                st.warning("Укажите хотя бы одну модель.")
+                st.warning("Please specify at least one model.")
             else:
                 st.session_state.results = {"success": [], "failed": {}}
-                st.write(f"Запускаю загрузку {len(items)} моделей:")
+                st.write(f"Loading {len(items)} model(s):")
 
                 for model in items:
                     block = st.container()
@@ -141,26 +147,29 @@ def render_model_management_tab():
                     ok, err = pull_model(model, progress, status_placeholder)
                     if ok:
                         st.session_state.results["success"].append(model)
-                        MODELS.extend(model)
+                        MODELS.append(model)
+                        st.session_state.MODELS = MODELS
+                        utils.constants.MODELS[:] = MODELS # for changing in other places
+                        st.rerun()
                     else:
                         st.session_state.results["failed"][model] = err or "unknown error"
 
     # ========= Результаты (если есть) =========
     if st.session_state.results["success"] or st.session_state.results["failed"]:
-        st.subheader("Результаты загрузки")
+        st.subheader("Loading results")
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("✅ Успешно загружены")
+            st.markdown("✅ Successfully loaded")
             if st.session_state.results["success"]:
                 for m in st.session_state.results["success"]:
                     st.success(m, icon="✅")
             else:
-                st.info("Пусто")
+                st.info("Empty")
 
         with col2:
-            st.markdown("❌ Не загружены")
+            st.markdown("❌ Loading failed")
             if st.session_state.results["failed"]:
                 for m, err in st.session_state.results["failed"].items():
                     st.error(f"{m} — {err}", icon="❌")
             else:
-                st.info("Пусто")
+                st.info("Empty")

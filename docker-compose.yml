@@ -1,5 +1,3 @@
-version: '3'
-
 x-common-env: &common-env
   MONGO_HOST: mongodb
   MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
@@ -31,13 +29,13 @@ services:
       ports:
           - "${BACKEND_PORT}:${BACKEND_PORT}"
       restart: on-failure  
-      command: python langchain_back/main.py
+      command: python data/upload.py && python langchain_back/main.py
       depends_on:
         - ollama
       extra_hosts:
       - "host.docker.internal:host-gateway"    
-      # volumes:
-      # - hf-cache:/root/.cache/huggingface
+      volumes:
+      - ./data/datasets/:/app/data/datasets
 
   streamlit_frontend:
     build: 
@@ -154,8 +152,8 @@ services:
     image: mongo-express
     container_name: mongodb-express
     environment:
-      - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
       - ME_CONFIG_MONGODB_SERVER=mongodb
     ports:
       - '8081:8081'

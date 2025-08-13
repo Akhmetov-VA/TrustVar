@@ -1,9 +1,14 @@
 import json
 import logging
 import os
-from typing import List
-
+from tqdm import tqdm
+import gdown
 from pymongo import MongoClient
+
+# for relative import
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.constants import (
     MONGO_DB,
@@ -11,11 +16,9 @@ from utils.constants import (
     MONGO_PASSWORD,
     MONGO_PORT,
     MONGO_USERNAME,
-    TASK_NAMES,
 )
 
 logging.basicConfig(level=logging.INFO)
-
 
 def get_mongo_client() -> MongoClient:
     """Подключение к локальной MongoDB"""
@@ -43,7 +46,7 @@ def upload_datasets_to_mongodb() -> None:
     # Получаем список всех JSON файлов в папке datasets
     json_files = [f for f in os.listdir(datasets_dir) if f.endswith('.json')]
     
-    for json_file in json_files:
+    for json_file in tqdm(json_files):
         file_path = os.path.join(datasets_dir, json_file)
         collection_name = json_file.replace('.json', '')
         
@@ -85,7 +88,10 @@ def upload_datasets_to_mongodb() -> None:
 
 if __name__ == "__main__":
     try:
+        folder_url = "https://drive.google.com/drive/folders/1ivUsJd88C8rl4UpqpxIcdI5YLmRD0Mfj"
+        gdown.download_folder(folder_url, output="./datasets", quiet=False)
         upload_datasets_to_mongodb()
+
         logging.info("All datasets successfully uploaded to local MongoDB!")
     except Exception as e:
         logging.error(f"Failed to upload datasets: {e}") 
