@@ -8,7 +8,7 @@ from prompts_tasks import render_create_task_tab
 from tasks import render_tasks_visualization_tab
 from yaml.loader import SafeLoader
 
-st.set_page_config(page_title="TrustGen Dashboard", layout="wide")
+st.set_page_config(page_title="TrustVar Dashboard", layout="wide")
 
 
 @st.cache_data

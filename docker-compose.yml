@@ -1,5 +1,5 @@
 x-common-env: &common-env
-  MONGO_HOST: mongodb
+  MONGO_HOST: ${MONGO_HOST}
   MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
   MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
   MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
@@ -29,7 +29,7 @@ services:
       ports:
           - "${BACKEND_PORT}:${BACKEND_PORT}"
       restart: on-failure  
-      command: python data/upload.py && python langchain_back/main.py
+      command: python langchain_back/main.py
       depends_on:
         - ollama
       extra_hosts:
@@ -152,16 +152,14 @@ services:
     image: mongo-express
     container_name: mongodb-express
     environment:
-      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
-      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-      - ME_CONFIG_MONGODB_SERVER=mongodb
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD} 
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
     ports:
       - '8081:8081'
     depends_on:
       - mongodb
     restart: on-failure  
-
-# volumes:
-#   #hf-cache:
-#   mongo-volume-data:
-  

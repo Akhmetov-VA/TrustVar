@@ -110,15 +110,21 @@ TrustVar/
 
 2. **Create `.env` file with environment variables:**
    ```env
-   MONGO_INITDB_ROOT_USERNAME=admin
+   BACKEND_HOST=0.0.0.0
+   BACKEND_PORT=45321
+   FRONTEND_PORT=27366
+   API_URL=http://langchain_backend:${BACKEND_PORT}/generate
+   MONGO_HOST=mongodb
+   MONGO_INITDB_ROOT_USERNAME=username
    MONGO_INITDB_ROOT_PASSWORD=password
    MONGO_INITDB_ROOT_PORT=27017
-   YANDEX_API_KEY=your_yandex_key
-   OPENAI_KEY=your_openai_key
-   API_URL=http://localhost:45321/generate
-   OLLAMA_BASE_URL=http://localhost:12345
-   CURRENT_UID=1000
-   CURRENT_GID=1000
+   OLLAMA_PORT=12345
+   OLLAMA_BASE_URL=http://host.docker.internal:${OLLAMA_PORT}
+   OPENAI_BASE_URL=base_url_for_providers
+   OPENAI_KEY=openai_key
+   YANDEX_API_KEY=yandex_key
+   YANDEX_BASE_URL=https://llm.api.cloud.yandex.net/v1
+   YANDEX_MODEL_URI=model_uri
    ```
 
 3. **Launch all services:**

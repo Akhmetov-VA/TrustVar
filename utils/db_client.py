@@ -41,7 +41,7 @@ class MongoDBConfig:
         password: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[str] = None,
-        database: str = "TrustGen",
+        database: str = "TrustVar",
     ):
         """
        When creating an instance of MongoDB Config, you can redefine the parameters or
@@ -154,14 +154,8 @@ class MongoDBClient:
         """
         coll_name = f"dataset_{dataset_name}"
         
-        import numpy as np
-
-
-
-
-
         records = df.to_dict(orient="records")
-        converted_records = [convert_numpy_objects(record) for record in records]
+        #converted_records = [convert_numpy_objects(record) for record in records]
         if records:
             self.insert_data(coll_name, records)
 

@@ -9,7 +9,7 @@ from utils.constants import METRICS
 from utils.db_client import MongoDBClient, MongoDBConfig
 
 # Initializing the database client
-config = MongoDBConfig(database="TrustGen")
+config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
 
 

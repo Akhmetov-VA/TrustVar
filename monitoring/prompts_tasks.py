@@ -9,7 +9,7 @@ import utils.constants
 from utils.db_client import MongoDBClient, MongoDBConfig
 
 # Initializing the DB client
-config = MongoDBConfig(database="TrustGen")
+config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
 
 DEFAULT_REGEX = r"(?:^\W*([01]).*)|(?:.*([01])\W*$)"
@@ -152,9 +152,9 @@ def render_regexp_section(metric: str) -> Optional[str]:
             if custom_regexp:
                 if db_client.validate_regex(custom_regexp):
                     regexp_name = st.text_input("Enter a name for this regular:")
-                    if regexp_name and st.button("Add regular season tickets to the database"):
+                    if regexp_name and st.button("Add regexp to the database"):
                         insert_regexp_global(regexp_name, custom_regexp, metric)
-                        st.success("Regular season added!")
+                        st.success("Regexp added!")
                         selected_regexp = custom_regexp
                 else:
                     st.error("Invalid regular expression!")

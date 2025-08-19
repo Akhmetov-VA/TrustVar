@@ -21,7 +21,7 @@ from utils.db_client import MongoDBClient, MongoDBConfig
 # logger = logging.getLogger(__name__)
 
 # Initializing the database client
-config = MongoDBConfig(database="TrustGen")
+config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
 
 
@@ -916,7 +916,7 @@ def render_metrics_tab():
     
     # Initialize database client
     from utils.db_client import MongoDBClient, MongoDBConfig
-    db_client = MongoDBClient(MongoDBConfig(database="TrustGen"))
+    db_client = MongoDBClient(MongoDBConfig(database="TrustVar"))
     
     # Switch between metric types
     metric_type = st.radio(

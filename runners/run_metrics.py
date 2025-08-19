@@ -10,8 +10,8 @@ from pymongo.database import Database
 
 from utils.constants import MONGO_URI
 
-# The name of the database can be set via environment variables, by default "TrustGen"
-MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
+# The name of the database can be set via environment variables, by default "TrustVar"
+MONGO_DB = os.environ.get("MONGO_DB", "TrustVar")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
