@@ -32,7 +32,7 @@ def render_model_management_tab():
         df.index.name = "№"
 
         st.caption(f"Models num: {len(MODELS)}")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
 
     # ========= Вспомогательные функции =========
     def human_bytes(n: int) -> str:
@@ -125,7 +125,7 @@ def render_model_management_tab():
             height=160,
             placeholder="llama3\nmistral:instruct\nphi3",
         )
-        load = st.button("LOAD", type="primary", use_container_width=True)
+        load = st.button("LOAD", type="primary", width='stretch')
 
         if load:
             items = [ln.strip() for ln in user_input.splitlines() if ln.strip()]

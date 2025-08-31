@@ -30,20 +30,13 @@ async def generate_locally(request: Request):
                 temperature=0,
                 max_tokens=2048
             )
-        elif model_name.startswith('yandexgpt'):
-            YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name
+        elif model_name.startswith('yandex_api'):
+            YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name.split('/')[-1]
             YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
             model = YandexGPT(
                 api_key=YANDEX_API_KEY,
                 model_uri=YANDEX_MODEL_URI
             )
-        # elif model_name[0].isupper() and not model_name.startswith('ZimaBlueAI'):
-        #     pipe = pipeline(
-        #         "text-generation",
-        #         model=model_name
-        #     )
-        #     model = HuggingFacePipeline(pipeline=pipe)
-        # The models are local
         else:
             model = OllamaLLM(model=model_name, base_url=os.getenv("OLLAMA_BASE_URL"))
         

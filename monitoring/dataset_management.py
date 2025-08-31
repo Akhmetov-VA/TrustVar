@@ -1,5 +1,6 @@
 # dataset_management.py
-from typing import Any, Dict, List, Optional, Tuple
+import logging
+from typing import List, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -7,6 +8,8 @@ import streamlit as st
 from monitoring.src import load_file_any_format
 from utils.constants import METRICS
 from utils.db_client import MongoDBClient, MongoDBConfig
+
+logger = logging.getLogger(__name__)
 
 # Initializing the database client
 config = MongoDBConfig(database="TrustVar")
@@ -123,12 +126,14 @@ def render_dataset_management_tab():
     render_dataset_upload_section()
 
 
+
 def render_dataset_varcols_section(
     dataset_name: str,
 ) -> Tuple[
     Optional[List[str]], Optional[str], Optional[str], Optional[str], Optional[str]
 ]:
     registry_info = db_client.get_dataset_registry_info(dataset_name)
+    logger.info(str(registry_info))
     if not registry_info:
         st.write("There are no saved var_cols, metrics, or target for this dataset.")
         return None, None, None, None, None

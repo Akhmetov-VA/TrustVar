@@ -21,7 +21,7 @@ services:
       build: 
         context: .
         target: back
-      user: "${CURRENT_UID}:${CURRENT_GID}" 
+      #user: "${CURRENT_UID}:${CURRENT_GID}" 
       image: trust_gen:back
       environment:
         <<: *common-env
