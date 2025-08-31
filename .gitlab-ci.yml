@@ -11,6 +11,9 @@ build:
   script:
     - echo "Building images"
     - docker compose -f docker-compose-gpu.yml build
+  after_script:
+    - echo "Fixing permissions for workspace cleanup..."
+    - chown -R $(id -u):$(id -g) .
 
 deploy:
   stage: deploy
@@ -24,6 +27,8 @@ deploy:
     - export CURRENT_GID=$(id -g)
     - docker compose -f docker-compose-gpu.yml down
     - docker compose -f docker-compose-gpu.yml up -d
+  
+
 
 
 
