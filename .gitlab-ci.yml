@@ -22,7 +22,7 @@ deploy:
     - echo "Running containers ..."
     - export CURRENT_UID=$(id -u)
     - export CURRENT_GID=$(id -g)
-    - docker compose -f docker-compose-gpu.yml down --remove-orphans
+    - docker compose -f docker-compose-gpu.yml down
     - docker compose -f docker-compose-gpu.yml up -d
 
 
