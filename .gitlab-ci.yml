@@ -10,7 +10,7 @@ build:
     - trust_llm_61
   script:
     - echo "Building images"
-    - docker compose -f docker-compose.yml build
+    - docker compose -f docker-compose-gpu.yml build
 
 deploy:
   stage: deploy
@@ -22,8 +22,8 @@ deploy:
     - echo "Running containers ..."
     - export CURRENT_UID=$(id -u)
     - export CURRENT_GID=$(id -g)
-    - docker compose -f docker-compose.yml down --remove-orphans
-    - docker compose -f docker-compose.yml up -d
+    - docker compose -f docker-compose-gpu.yml down --remove-orphans
+    - docker compose -f docker-compose-gpu.yml up -d
 
 
 
