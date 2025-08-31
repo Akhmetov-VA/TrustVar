@@ -13,7 +13,7 @@ build:
     - docker compose -f docker-compose-gpu.yml build
   after_script:
     - echo "Fixing permissions for workspace cleanup..."
-    - chown -R $(id -u):$(id -g) .
+    - sudo chown -R $(id -u):$(id -g) .
 
 deploy:
   stage: deploy
