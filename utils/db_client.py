@@ -41,7 +41,7 @@ class MongoDBConfig:
         password: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[str] = None,
-        database: str = "TrustGen",
+        database: str = "TrustVar",
     ):
         """
        When creating an instance of MongoDB Config, you can redefine the parameters or
@@ -49,8 +49,8 @@ class MongoDBConfig:
         """
         self.username = username or os.getenv("MONGO_INITDB_ROOT_USERNAME")
         self.password = password or os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-        self.host = host or os.getenv("MONGO_HOST", "83.143.66.65")
-        self.port = port or os.getenv("MONGO_PORT", "27363")
+        self.host = host or os.getenv("MONGO_HOST")
+        self.port = port or os.getenv("MONGO_INITDB_ROOT_PORT")
         self.database = database
 
     def get_uri(self) -> str:
@@ -72,7 +72,7 @@ class MongoDBClient:
         try:
             self.client = MongoClient(self.config.get_uri())
             self.db = self.client[self.config.database]
-            logger.info("Successfully connected to MongoDB.")
+            logger.info(f"Successfully connected to MongoDB. URI: {self.config.get_uri()}")
         except PyMongoError as e:
             logger.error(f"Error connecting to MongoDB: {e}")
             raise
@@ -154,14 +154,8 @@ class MongoDBClient:
         """
         coll_name = f"dataset_{dataset_name}"
         
-        import numpy as np
-
-
-
-
-
         records = df.to_dict(orient="records")
-        converted_records = [convert_numpy_objects(record) for record in records]
+        #converted_records = [convert_numpy_objects(record) for record in records]
         if records:
             self.insert_data(coll_name, records)
 

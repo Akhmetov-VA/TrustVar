@@ -3,11 +3,12 @@ import streamlit_authenticator as stauth
 import yaml
 from dataset_management import render_dataset_management_tab
 from metrics import render_metrics_tab
+from model_management import render_model_management_tab
 from prompts_tasks import render_create_task_tab
 from tasks import render_tasks_visualization_tab
 from yaml.loader import SafeLoader
 
-st.set_page_config(page_title="TrustGen Dashboard", layout="wide")
+st.set_page_config(page_title="TrustVar Dashboard", layout="wide")
 
 
 @st.cache_data
@@ -39,6 +40,7 @@ if st.session_state["authentication_status"]:
         [
             "Visualization by tasks",
             "Dataset Management",
+            "Model Management",
             "Create a task",
             "Model metrics",
         ]
@@ -51,9 +53,12 @@ if st.session_state["authentication_status"]:
         render_dataset_management_tab()
 
     with tabs[2]:
-        render_create_task_tab()
+        render_model_management_tab()
 
     with tabs[3]:
+        render_create_task_tab()
+
+    with tabs[4]:
         render_metrics_tab()
 
 elif st.session_state["authentication_status"] is False:

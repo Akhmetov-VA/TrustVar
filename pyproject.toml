@@ -37,7 +37,8 @@ backend = [
     "langchain_openai>=0.3.18",
     "transformers>=4.47.0",
     "huggingface_hub",
-    "torch"
+    "torch",
+    "gdown"
 ]
 
 db = [

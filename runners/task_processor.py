@@ -7,9 +7,9 @@ import pandas as pd
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
+from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_INITDB_ROOT_PORT, MONGO_USERNAME, MONGO_URI
 
-MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
+MONGO_DB = os.environ.get("MONGO_DB", "TrustVar")
 
 # Configuring logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
@@ -21,10 +21,10 @@ def get_mongo_client() -> MongoClient:
     Creates a connection to MongoDB based on environment variables.
     """
     mongo_uri = (
-        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
     )
     client = MongoClient(mongo_uri)
-    logger.info("Successfully connected to MongoDB.")
+    logger.info(f"Successfully connected to MongoDB. URI: {mongo_uri}")
     return client
 
 

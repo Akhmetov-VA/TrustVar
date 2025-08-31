@@ -12,7 +12,6 @@ from transformers import pipeline
 
 app = FastAPI()
 
-
 @app.post("/generate")
 async def generate_locally(request: Request):
     data = await request.json()
@@ -31,20 +30,13 @@ async def generate_locally(request: Request):
                 temperature=0,
                 max_tokens=2048
             )
-        elif model_name.startswith('yandexgpt'):
-            YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name
+        elif model_name.startswith('yandex_api'):
+            YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name.split('/')[-1]
             YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
             model = YandexGPT(
                 api_key=YANDEX_API_KEY,
                 model_uri=YANDEX_MODEL_URI
             )
-        # elif model_name[0].isupper() and not model_name.startswith('ZimaBlueAI'):
-        #     pipe = pipeline(
-        #         "text-generation",
-        #         model=model_name
-        #     )
-        #     model = HuggingFacePipeline(pipeline=pipe)
-        # The models are local
         else:
             model = OllamaLLM(model=model_name, base_url=os.getenv("OLLAMA_BASE_URL"))
         
@@ -64,5 +56,10 @@ async def generate_locally(request: Request):
     
 if __name__ == "__main__":
     import uvicorn
+    from dotenv import load_dotenv
+    
+    load_dotenv()
 
-    uvicorn.run(app, host="0.0.0.0", port=45321)
+    BACKEND_HOST = os.getenv('BACKEND_HOST')
+    BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
+    uvicorn.run(app, host=BACKEND_HOST, port=BACKEND_PORT)

@@ -14,8 +14,9 @@ from utils.constants import (
     AUGMENT_PROMPT,
     MONGO_HOST,
     MONGO_PASSWORD,
-    MONGO_PORT,
+    MONGO_INITDB_ROOT_PORT,
     MONGO_USERNAME,
+    MONGO_URI
 )
 
 
@@ -38,13 +39,13 @@ def get_mongo_client() -> MongoClient:
     Returns:
         MongoClient: An instance of the MongoDB client.
     """
-    logging.info("Trying to connect to MongoDB...")
+    logging.info(f"Trying to connect to MongoDB... mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/")
     mongo_uri = (
-        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
     )
     try:
         client = MongoClient(mongo_uri)
-        logging.info("Successfully connected to MongoDB.")
+        logging.info(f"Successfully connected to MongoDB. URI: {mongo_uri}")
         return client
     except Exception as e:
         logging.exception("Error connecting to MongoDB.")
@@ -350,7 +351,7 @@ def main() -> None:
     configure_logging()
     logging.info("Loading environment variables and initializing the connection...")
     client = get_mongo_client()
-    DB_NAME = "TrustGen"
+    DB_NAME = "TrustVar"
     while True:
         db = client[DB_NAME]
         run_processing_loop(db)

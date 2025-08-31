@@ -1,6 +1,5 @@
-version: '3'
-
 x-common-env: &common-env
+  MONGO_HOST: ${MONGO_HOST}
   MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
   MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
   MONGO_INITDB_ROOT_PORT: ${MONGO_INITDB_ROOT_PORT}
@@ -11,20 +10,24 @@ x-common-env: &common-env
   OPENAI_BASE_URL: ${OPENAI_BASE_URL}
   API_URL: ${API_URL}
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
-  LANGCHAIN_BACKEND_URL: http://langchain_backend:45321/generate
+  OLLAMA_PORT: ${OLLAMA_PORT}
+  LANGCHAIN_BACKEND_URL: http://langchain_backend:${BACKEND_PORT}/generate
+  BACKEND_PORT: ${BACKEND_PORT}
+  FRONTEND_HOST: "localhost"
+  FRONTEND_PORT: ${FRONTEND_PORT}
 
 services:  
   langchain_backend:
       build: 
         context: .
         target: back
-      user: "${CURRENT_UID}:${CURRENT_GID}" 
+      #user: "${CURRENT_UID}:${CURRENT_GID}" 
       image: trust_gen:back
       environment:
         <<: *common-env
       container_name: langchain_backend
       ports:
-          - "45321:45321"
+          - "${BACKEND_PORT}:${BACKEND_PORT}"
       restart: on-failure  
       command: python langchain_back/main.py
       depends_on:
@@ -32,7 +35,7 @@ services:
       extra_hosts:
       - "host.docker.internal:host-gateway"    
       volumes:
-      - hf-cache:/root/.cache/huggingface
+      - ./data/datasets/:/app/data/datasets
 
   streamlit_frontend:
     build: 
@@ -43,12 +46,12 @@ services:
     container_name: monitoring
     environment:
         <<: *common-env
-    command: python -m streamlit run monitoring/app_main.py --server.port 27366
+    command: python -m streamlit run monitoring/app_main.py --server.port ${FRONTEND_PORT}
     depends_on:
       #- mongodb
       - langchain_backend
     ports:
-      - "27366:27366"
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     volumes: 
       - ./monitoring:/app/monitoring/
     restart: on-failure
@@ -126,39 +129,37 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     environment:
-      - OLLAMA_HOST=0.0.0.0:12345
+      - OLLAMA_HOST=0.0.0.0:${OLLAMA_PORT}
       - OLLAMA_MODELS=/models
     ports:
-      - "12345:12345"
+      - "${OLLAMA_PORT}:${OLLAMA_PORT}"
     volumes:
-      - ./models:/models:ro
+      - ./ollama_models:/models
     restart: on-failure
 
-  # mongodb:
-  #   image: mongo
-  #   container_name: mongodb
-  #   ports:
-  #     - '${MONGO_INITDB_ROOT_PORT}:27017'
-  #   volumes:
-  #     - mongo-volume-data:/data/db
-  #   environment:
-  #       <<: *common-env
-  #   restart: on-failure  
+  mongodb:
+    image: mongo
+    container_name: mongodb
+    ports:
+      - '27017:27017'
+    volumes:
+      - ./mongo-volume-data:/data/db
+    environment:
+        <<: *common-env
+    restart: on-failure  
 
-  # mongo-express:
-  #   image: mongo-express
-  #   container_name: mongodb-express
-  #   environment:
-  #     - ME_CONFIG_MONGODB_ADMINUSERNAME=${MONGO_INITDB_ROOT_USERNAME}
-  #     - ME_CONFIG_MONGODB_ADMINPASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
-  #     - ME_CONFIG_MONGODB_SERVER=mongodb
-  #   ports:
-  #     - '8081:8081'
-  #   depends_on:
-  #     - mongodb
-  #   restart: on-failure  
-
-volumes:
-  hf-cache:
-  mongo-volume-data:
-  
+  mongo-express:
+    image: mongo-express
+    container_name: mongodb-express
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD} 
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    ports:
+      - '8081:8081'
+    depends_on:
+      - mongodb
+    restart: on-failure  

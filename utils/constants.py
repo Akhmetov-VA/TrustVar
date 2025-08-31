@@ -1,5 +1,5 @@
 import os
-
+import requests
 from dotenv import load_dotenv
 
 # loading env
@@ -7,64 +7,38 @@ load_dotenv()
 
 MONGO_USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME")
 MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-# В Docker Compose используем имя сервиса, иначе используем переменную окружения
-# MONGO_HOST = os.getenv("MONGO_HOST", "mongodb")
-# MONGO_PORT = os.getenv("MONGO_PORT", "27017")
 
-MONGO_HOST = "83.143.66.65"#os.getenv('MONGO_HOST')#
-MONGO_PORT = "27363"#os.getenv('MONGO_INITDB_ROOT_PORT')#
-MONGO_URI = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}"
-MONGO_DB = "TrustGen"
+MONGO_HOST = os.getenv('MONGO_HOST', "mongodb")# "83.143.66.65"#
+MONGO_INITDB_ROOT_PORT = os.getenv('MONGO_INITDB_ROOT_PORT')#"27363"#
+MONGO_URI = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}"
+MONGO_DB = "TrustVar"
 
 # Source MongoDB variables for data migration
 MONGO_SOURCE_URI = os.getenv("MONGO_SOURCE_URI")
 MONGO_SOURCE_DB_NAME = os.getenv("MONGO_SOURCE_DB_NAME")
 
-# Используем LANGCHAIN_BACKEND_URL для подключения к langchain backend в Docker
 API_URL = os.getenv("LANGCHAIN_BACKEND_URL", os.getenv("API_URL"))
 
-MODELS = [
+# URL OLLAMA API
+url = os.getenv('OLLAMA_BASE_URL') + "/api/tags"
+response = requests.get(url)
+ollama_models = response.json() # json
+
+ollama_models = ollama_models.get('models', []) # list
+
+if ollama_models:
+    ollama_models = sorted([model['name'] for model in ollama_models])
+
+api_models = [
     "api/gpt-4o",
     "api/o3",
     "api/claude-3.7-sonnet",
     "api/gemini-2.5-pro-preview-03-25",
-    "ZimaBlueAI/Qwen2.5-VL-7B-Instruct:latest",
-    "brxce/qwen2.5-vl:latest",
-    "bsahane/Qwen2.5-VL-7B-Instruct:Q4_K_M_benxh",
-    "deepseek-r1:latest",
-    "gemma3:12b",
-    "gemma3:27b",
-    "hf.co/RefalMachine/RuadaptQwen2.5-32B-Pro-Beta-GGUF:Q4_K_M",
-    "ilyagusev/saiga_llama3:latest",
-    "ilyagusev/saiga_nemo_12b:latest",
-    "llama3.1:70b-instruct-q4_0",
-    "llama3.2:1b-instruct-q4_0",
-    "llama3.2:3b-instruct-q4_0",
-    "llama3.3:70b-instruct-q4_0",
-    #'llama3.3:latest',
-    #'llama3:latest',
-    "mistral-nemo:latest",
-    "mistral-small3.1:latest",
-    "owl/t-lite:q4_0-instruct",
-    "phi4:14b",
-    "solar:10.7b",
-    "qwen2.5:32b-instruct-q4_0",
-    #'qwen2.5:72b-instruct-q2_K',
-    "qwen2.5:72b-instruct-q4_0",
-    #'qwen2.5:7b-instruct',
-    "qwen2.5:7b-instruct-q4_0",
-    "qwen3:30b-a3b",
-    "qwen3:8b",
-    "qwq:latest",
-    "rscr/ruadapt_qwen2.5_32b:Q4_K_M",
-    #'rscr/ruadapt_qwen2.5_32b:Q8_0',
-    "rscr/vikhr_llama3.1_8b:latest",
-    "rscr/vikhr_nemo_12b:latest",
-    "yandexgpt-lite",
-    "yi:34b-q4_0",
-    "yi:6b-q4_0",
-    "IlyaGusev/vikhr_nemo_orpo_dostoevsky_12b_slerp",
+    "yandex_api/yandexgpt-lite"
 ]
+
+MODELS = api_models + ollama_models
+
 RTA_MODEL = "qwen2.5:72b-instruct-q4_0"
 
 AUGMENT_MODEL = 'api/gpt-4o'#'qwen2.5:32b-instruct-q4_0'  # Модель для динамической аугментации задач

@@ -21,7 +21,7 @@ from utils.db_client import MongoDBClient, MongoDBConfig
 # logger = logging.getLogger(__name__)
 
 # Initializing the database client
-config = MongoDBConfig(database="TrustGen")
+config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
 
 
@@ -286,7 +286,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
             title=f"Task Stability: {metric_names[selected_metric]} (Lower = More Stable)",
             height=600
         )
-        st.plotly_chart(fig_radar, use_container_width=True)
+        st.plotly_chart(fig_radar, width='stretch')
     
     # 2. Task Performance Heatmap
     st.subheader("2. Task Performance Heatmap")
@@ -329,7 +329,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
             yaxis=dict(title="Task"),
             height=500
         )
-        st.plotly_chart(fig_heatmap, use_container_width=True)
+        st.plotly_chart(fig_heatmap, width='stretch')
     
     # 3. Confidence Intervals for Task Performance
     st.subheader("3. Confidence Intervals for Task Performance")
@@ -370,7 +370,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
             labels={"mean": f"Performance ({collection_name})", "augment": "Augmentation"}
         )
         fig_ci.update_layout(height=500)
-        st.plotly_chart(fig_ci, use_container_width=True)
+        st.plotly_chart(fig_ci, width='stretch')
         
         # Display confidence interval table
         st.subheader("Confidence Interval Details")
@@ -415,7 +415,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
                 height=300 * len(selected_tasks),
                 showlegend=True
             )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist, width='stretch')
         else:
             st.info("No data available for histogram visualization.")
     
@@ -668,7 +668,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
         )
         fig.update_xaxes(tickangle=45)
         fig.update_layout(height=600)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     # 3. Gossamer (Radar Chart) for each model
     st.subheader("Cobweb (Radar Chart) - augmentation performance")
@@ -714,7 +714,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                         title=f"Gossamer for modeling {selected_model_for_radar} - task {task}",
                         height=500
                     )
-                    st.plotly_chart(fig_radar, use_container_width=True)
+                    st.plotly_chart(fig_radar, width='stretch')
                 else:
                     st.info(f"Not enough data for a spider web for the task {task} (You need at least 3 augmentations)")
 
@@ -761,7 +761,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             labels={"cv": "Coefficient of variation (%)", "model": "Model"}
         )
         fig_cv.update_layout(height=500)
-        st.plotly_chart(fig_cv, use_container_width=True)
+        st.plotly_chart(fig_cv, width='stretch')
         
         # Heatmap CV
         cv_pivot = cv_df.pivot_table(
@@ -795,7 +795,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             yaxis=dict(title="Model"),
             height=500,
         )
-        st.plotly_chart(fig_heatmap, use_container_width=True)
+        st.plotly_chart(fig_heatmap, width='stretch')
 
     # 5. Detailed analysis for each augmentation
     with st.expander("Detailed augmentation analysis"):
@@ -814,7 +814,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                     labels={"value": f"Metric ({collection_name})"}
                 )
                 fig_augment.update_layout(height=400)
-                st.plotly_chart(fig_augment, use_container_width=True)
+                st.plotly_chart(fig_augment, width='stretch')
                 
                 # Table of values
                 pivot_augment = augment_data.pivot_table(
@@ -916,7 +916,7 @@ def render_metrics_tab():
     
     # Initialize database client
     from utils.db_client import MongoDBClient, MongoDBConfig
-    db_client = MongoDBClient(MongoDBConfig(database="TrustGen"))
+    db_client = MongoDBClient(MongoDBConfig(database="TrustVar"))
     
     # Switch between metric types
     metric_type = st.radio(
@@ -991,7 +991,7 @@ def render_metrics_tab():
                     )
                     fig.update_traces(textposition="top center")
                     fig.update_layout(height=600)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 else:
                     st.warning("Insufficient data for the scatter chart.")
 
@@ -1033,7 +1033,7 @@ def render_metrics_tab():
                         yaxis=dict(title="", autorange="reversed"),
                         height=600,
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                 else:
                     st.warning("There is not enough data to build a correlation matrix.")
     

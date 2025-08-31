@@ -1,28 +1,34 @@
 import json
 import logging
 import os
-from typing import List
-
+from tqdm import tqdm
 from pymongo import MongoClient
 
-from utils.constants import (
-    MONGO_DB,
-    MONGO_HOST,
-    MONGO_PASSWORD,
-    MONGO_PORT,
-    MONGO_USERNAME,
-    TASK_NAMES,
-)
+# for relative import
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from dotenv import load_dotenv
+
+# loading env
+load_dotenv()
+
+MONGO_USERNAME = os.getenv("MONGO_INITDB_ROOT_USERNAME")
+MONGO_PASSWORD = os.getenv("MONGO_INITDB_ROOT_PASSWORD")
+
+MONGO_HOST = os.getenv('MONGO_HOST', "mongodb")
+MONGO_INITDB_ROOT_PORT = os.getenv('MONGO_INITDB_ROOT_PORT')
+MONGO_DB = "TrustVar"
 
 logging.basicConfig(level=logging.INFO)
-
 
 def get_mongo_client() -> MongoClient:
     """Подключение к локальной MongoDB"""
     logging.info("Attempting to connect to local MongoDB...")
     # Используем localhost для подключения с хоста
     # MongoDB работает на порту 27364 (как видно из docker ps)
-    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@localhost:27364/"
+    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@localhost:{MONGO_INITDB_ROOT_PORT}/"
     logging.info(f"Connecting to: {mongo_uri}")
     client = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000, connectTimeoutMS=10000)
     client.admin.command("ping")
@@ -30,12 +36,11 @@ def get_mongo_client() -> MongoClient:
     return client
 
 
-def upload_datasets_to_mongodb() -> None:
+def upload_datasets_to_mongodb(datasets_dir = "datasets") -> None:
     """Загружает датасеты из JSON файлов в локальную MongoDB"""
     client = get_mongo_client()
     db = client[MONGO_DB]
     
-    datasets_dir = "datasets"
     if not os.path.exists(datasets_dir):
         logging.error(f"Directory {datasets_dir} not found!")
         return
@@ -43,7 +48,7 @@ def upload_datasets_to_mongodb() -> None:
     # Получаем список всех JSON файлов в папке datasets
     json_files = [f for f in os.listdir(datasets_dir) if f.endswith('.json')]
     
-    for json_file in json_files:
+    for json_file in tqdm(json_files):
         file_path = os.path.join(datasets_dir, json_file)
         collection_name = json_file.replace('.json', '')
         
@@ -85,7 +90,9 @@ def upload_datasets_to_mongodb() -> None:
 
 if __name__ == "__main__":
     try:
-        upload_datasets_to_mongodb()
+        dataset_dir = "data/datasets"
+        upload_datasets_to_mongodb(dataset_dir)
+
         logging.info("All datasets successfully uploaded to local MongoDB!")
     except Exception as e:
-        logging.error(f"Failed to upload datasets: {e}") 
+        logging.error(f"Failed to upload datasets: {e}")  

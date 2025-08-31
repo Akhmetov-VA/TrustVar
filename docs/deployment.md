@@ -189,7 +189,7 @@ docker run -d \
 MONGO_INITDB_ROOT_USERNAME=admin
 MONGO_INITDB_ROOT_PASSWORD=password
 MONGO_HOST=localhost
-MONGO_PORT=27017
+MONGO_INITDB_ROOT_PORT=27017
 API_URL=http://localhost:45321/generate
 OLLAMA_BASE_URL=http://localhost:12345
 ```
@@ -260,7 +260,7 @@ metadata:
   name: trustvar-config
 data:
   MONGO_HOST: "mongodb-service"
-  MONGO_PORT: "27017"
+  MONGO_INITDB_ROOT_PORT: "27017"
   API_URL: "http://backend-service:45321/generate"
   OLLAMA_BASE_URL: "http://ollama-service:12345"
 ```
