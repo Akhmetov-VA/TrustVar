@@ -16,6 +16,7 @@ x-common-env: &common-env
   FRONTEND_HOST: "localhost"
   FRONTEND_PORT: ${FRONTEND_PORT}
   STREAMLIT_USER_CONFIG_DIR: /tmp/.streamlit
+  STREAMLIT_BROWSER_GATHER_USAGE_STATS: false
 
 services:  
   langchain_backend:
