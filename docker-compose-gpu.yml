@@ -134,7 +134,7 @@ services:
     ports:
       - "${OLLAMA_PORT}:${OLLAMA_PORT}"
     volumes:
-      - ./ollama_models:/models
+      - ollama_models:/models
     deploy:
       resources:
         reservations:
@@ -150,7 +150,7 @@ services:
     ports:
       - '27017:27017'
     volumes:
-      - ./mongo-volume-data:/data/db
+      - mongo-db-data:/data/db
     environment:
         <<: *common-env
     restart: on-failure  
@@ -170,3 +170,7 @@ services:
     depends_on:
       - mongodb
     restart: on-failure  
+
+volumes:
+  mongo-db-data:
+  ollama_models:
