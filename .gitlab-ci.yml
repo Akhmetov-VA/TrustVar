@@ -11,9 +11,6 @@ build:
   script:
     - echo "Building images"
     - docker compose -f docker-compose-gpu.yml build
-  after_script:
-    - echo "Fixing permissions for workspace cleanup..."
-    - sudo chown -R $(id -u):$(id -g) .
 
 deploy:
   stage: deploy

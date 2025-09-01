@@ -15,6 +15,7 @@ x-common-env: &common-env
   BACKEND_PORT: ${BACKEND_PORT}
   FRONTEND_HOST: "localhost"
   FRONTEND_PORT: ${FRONTEND_PORT}
+  STREAMLIT_USER_CONFIG_DIR: /tmp/.streamlit
 
 services:  
   langchain_backend:
