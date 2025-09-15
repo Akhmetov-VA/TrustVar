@@ -43,7 +43,7 @@ services:
     build: 
       context: .
       target: front
-    user: "${CURRENT_UID}:${CURRENT_GID}" 
+    #user: "${CURRENT_UID}:${CURRENT_GID}" 
     image: trust_gen:front
     container_name: monitoring
     environment:

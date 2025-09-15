@@ -18,7 +18,8 @@ def load_config():
 
 
 config = load_config()
-
+# st.write("DEBUG: Config loaded:")
+# st.json(config)
 # Initializing the authenticator
 authenticator = stauth.Authenticate(
     config["credentials"],
