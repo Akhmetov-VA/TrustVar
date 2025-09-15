@@ -10,13 +10,13 @@ from pymongo.database import Database
 from utils.constants import (
     API_URL,
     AUGMENT_MODEL,
-    CURRENT_AUGMENT_PROMPT,
     AUGMENT_PROMPT,
     MONGO_HOST,
     MONGO_PASSWORD,
     MONGO_INITDB_ROOT_PORT,
     MONGO_USERNAME,
-    MONGO_URI
+    MONGO_URI,
+    VARIATIONS_MAP,
 )
 
 
@@ -39,10 +39,10 @@ def get_mongo_client() -> MongoClient:
     Returns:
         MongoClient: An instance of the MongoDB client.
     """
-    logging.info(f"Trying to connect to MongoDB... mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/")
-    mongo_uri = (
-        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
+    logging.info(
+        f"Trying to connect to MongoDB... mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
     )
+    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
     try:
         client = MongoClient(mongo_uri)
         logging.info(f"Successfully connected to MongoDB. URI: {mongo_uri}")
@@ -63,7 +63,9 @@ def make_request(
     logging.info(
         f"Sending an API request for a model '{model}' with promptness: {prompt[:100]}..."
     )
-    logging.debug(f"make_request input: model={model}, prompt={prompt}, variables={variables}")
+    logging.debug(
+        f"make_request input: model={model}, prompt={prompt}, variables={variables}"
+    )
     try:
         response = session.post(
             API_URL,
@@ -88,10 +90,10 @@ def make_request(
 def extract_text_from_response(response: Dict) -> str:
     """
     Extracts the text from the response API.
-    
+
     Args:
         response (Dict): API response.
-        
+
     Returns:
         str: Extracted text or None if it was not possible to extract.
     """
@@ -100,12 +102,12 @@ def extract_text_from_response(response: Dict) -> str:
         for key in ["response", "text", "content", "result", "output"]:
             if key in response and isinstance(response[key], str):
                 return response[key]
-        
+
         # If the standard keys are not found, we take the first string key.
         for key, value in response.items():
             if isinstance(value, str):
                 return value
-        
+
         logging.error(f"Couldn't extract text from the response: {response}")
         return None
     elif isinstance(response, str):
@@ -122,7 +124,9 @@ def format_prompt_with_variables(prompt: str, variables: Dict[str, Any]) -> str:
     try:
         return prompt.format(**variables)
     except KeyError as e:
-        logging.warning(f"The variable {e} was not found in the prompt, we use the original prompt")
+        logging.warning(
+            f"The variable {e} was not found in the prompt, we use the original prompt"
+        )
         return prompt
 
 
@@ -138,44 +142,47 @@ def generate_answer_by_augmentations(
     for each technique, we first get a reasoned text.,
     and then we insert it as a new prompt into the main model.
     """
-    logging.debug(f"generate_answer_by_augmentations input: dynamic_augments={dynamic_augments}, model={model}, prompt={prompt}, variables={variables}")
+    logging.debug(
+        f"generate_answer_by_augmentations input: dynamic_augments={dynamic_augments}, model={model}, prompt={prompt}, variables={variables}"
+    )
     responses = []
-    
+    augmented_prompts = {}
     for augment_technique in dynamic_augments:
         # Creating a prompt for the augmentator model
-        if CURRENT_AUGMENT_PROMPT == AUGMENT_PROMPT:
-            augmenter_prompt = (
-                CURRENT_AUGMENT_PROMPT
-                + f"""[Техника]:\n            {augment_technique}\n            [Исходный текст]:\n            {prompt}\n            [Ответ]:"""
-            )
-        else:
-            augmenter_prompt = (
-                CURRENT_AUGMENT_PROMPT
-                + f"""[Technique]:\n            {augment_technique}\n           [Source text]:\n            {prompt}\n            [Answer]:"""
-            )
+
+        variations_instructions = VARIATIONS_MAP[augment_technique]
+
+        augmenter_prompt = AUGMENT_PROMPT.format(
+            augment_technique, variations_instructions, prompt
+        )
         logging.debug(f"Augmenter prompt: {augmenter_prompt}")
-        
+
         # 1) Requesting an augmentation
-        augmented_resp = make_request(AUGMENT_MODEL, augmenter_prompt, session, variables)
-        
+        augmented_resp = make_request(
+            AUGMENT_MODEL, augmenter_prompt, session, variables
+        )
+
         # 2) Extracting the augmented text
         augmented_text = extract_text_from_response(augmented_resp)
         if augmented_text is None:
             logging.error(f"Couldn't extract text for augmentation {augment_technique}")
             continue
-        
+
         logging.info(
             f"Augmented text (technique={augment_technique}): {augmented_text[:100]}..."
         )
 
         # 3) Substituting variables into the augmented text
-        augmented_prompt_with_vars = format_prompt_with_variables(augmented_text, variables)
-        
+        augmented_prompt_with_vars = format_prompt_with_variables(
+            augmented_text, variables
+        )
+
         # 4) We are sending the augmented prompt to the main model
         final_resp = make_request(model, augmented_prompt_with_vars, session, variables)
         responses.append(final_resp)
+        augmented_prompts[augment_technique] = augmented_prompt_with_vars
 
-    return responses
+    return responses, augmented_prompts
 
 
 def process_ordinary_task(
@@ -198,10 +205,10 @@ def process_ordinary_task(
     try:
         # Formatting the prompt with variables
         formatted_prompt = format_prompt_with_variables(prompt, variables)
-        
+
         # Sending a request
         response = make_request(model, formatted_prompt, session, variables)
-        
+
         collection.update_one(
             {"_id": task_id},
             {"$set": {"status": "completed", "response": response}},
@@ -209,12 +216,15 @@ def process_ordinary_task(
         logging.info(
             f"The task with id: {task_id} has been successfully completed and updated in the database."
         )
+
+        return response, formatted_prompt
     except Exception as e:
         collection.update_one(
             {"_id": task_id},
             {"$set": {"status": "error", "error": str(e)}},
         )
         logging.error(f"Error processing an issue with an id: {task_id}: {e}")
+        return "", ""
 
 
 def process_augment_task(
@@ -234,16 +244,28 @@ def process_augment_task(
     model = task["model"]
     variables = task.get("variables", {})
     dynamic_augments = task.get("dynamic_augments", [])
-    
+
     try:
-        ordinary_response = process_ordinary_task(task, collection, session) # main response
-        responses = generate_answer_by_augmentations(
+        ordinary_response, formatted_prompt = process_ordinary_task(
+            task, collection, session
+        )  # main response
+
+        responses, augmented_prompts = generate_answer_by_augmentations(
             dynamic_augments, model, prompt, variables, session
-        ) # augmented responses
+        )  # augmented responses
 
         collection.update_one(
             {"_id": task_id},
-            {"$set": {"status": "completed", "response": [ordinary_response] + responses}},
+            {
+                "$set": {
+                    "status": "completed",
+                    "response": [ordinary_response] + responses,
+                    "augmented_prompts": {
+                        **{"original": formatted_prompt},
+                        **augmented_prompts,
+                    },
+                }
+            },
         )
 
         logging.info(f"Task: {task_id} augmented and updated in DB.")
