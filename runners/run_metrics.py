@@ -405,22 +405,54 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
             if not df_with_groups.empty:
                 # 1. We expand it according to the augmentations
                 expanded_rows = []
+                # for _, row in df_with_groups.iterrows():
+                #     dynamic_augments = row["dynamic_augments"]
+                #     pred = row["pred"]
+                #     # For accuracy: pred can be a list, otherwise we just copy
+                #     if isinstance(pred, list) and len(pred) == len(dynamic_augments):
+                #         for i, augment in enumerate(dynamic_augments):
+                #             new_row = row.copy()
+                #             new_row["augment"] = augment
+                #             new_row["pred"] = pred[i]
+                #             expanded_rows.append(new_row)
+                #     else:
+                #         for augment in dynamic_augments:
+                #             new_row = row.copy()
+                #             new_row["augment"] = augment
+                #             expanded_rows.append(new_row)
+                # expanded_df = pd.DataFrame(expanded_rows)
+                # --- заменить блок построения expanded_rows ---
+                expanded_rows = []
                 for _, row in df_with_groups.iterrows():
-                    dynamic_augments = row["dynamic_augments"]
+                    aug_list = row["dynamic_augments"]
                     pred = row["pred"]
-                    # For accuracy: pred can be a list, otherwise we just copy
-                    if isinstance(pred, list) and len(pred) == len(dynamic_augments):
-                        for i, augment in enumerate(dynamic_augments):
-                            new_row = row.copy()
-                            new_row["augment"] = augment
-                            new_row["pred"] = pred[i]
-                            expanded_rows.append(new_row)
-                    else:
-                        for augment in dynamic_augments:
-                            new_row = row.copy()
-                            new_row["augment"] = augment
-                            expanded_rows.append(new_row)
+                    # если есть явное соответствие имя_аугмента -> предсказание
+                    mapping = {}
+                    if isinstance(pred, dict):
+                        mapping = pred  # ключи — имена аугментаций
+                    elif isinstance(pred, list):
+                        # пытаемся сопоставить по порядку
+                        pairs = list(zip(aug_list, pred))
+                        mapping = {a: p for a, p in pairs}
+
+                    for i, a in enumerate(aug_list):
+                        new_row = row.copy()
+                        new_row["augment"] = a
+                        if isinstance(pred, list):
+                            # 1) точное совпадение по имени
+                            if a in mapping:
+                                new_row["pred"] = mapping[a]
+                            # 2) запасной вариант по индексу
+                            elif i < len(pred):
+                                new_row["pred"] = pred[i]
+                            else:
+                                new_row["pred"] = pred[-1]
+                        else:
+                            new_row["pred"] = pred
+                        expanded_rows.append(new_row)
+
                 expanded_df = pd.DataFrame(expanded_rows)
+
                 
                 # 2. Grouping by (task_name, dataset_name, model, task_type, augment, metric)
                 grouped_tfnr_res, grouped_acc_res, grouped_corr_res, grouped_ie_res = [], [], [], []
