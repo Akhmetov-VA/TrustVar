@@ -42,8 +42,13 @@ def render_dataset_upload_section() -> Optional[str]:
                 "Enter the name of the new dataset (in Latin):",
                 value=uploaded_file.name.split(".")[0],
             )
+
         if uploaded_file is not None and dataset_name_input:
             df_uploaded = load_file_any_format(uploaded_file)
+
+            if "_id" in df_uploaded.columns:
+                df_uploaded = df_uploaded.drop(columns=["_id"])
+
             if df_uploaded is not None and not df_uploaded.empty:
                 st.write("Some lines of the uploaded dataset (random 10 lines):")
                 st.dataframe(df_uploaded.sample(min(10, len(df_uploaded))))
@@ -124,7 +129,6 @@ def render_dataset_management_tab():
     st.header("Managing datasets")
     render_dataset_registry_section()
     render_dataset_upload_section()
-
 
 
 def render_dataset_varcols_section(

@@ -4,6 +4,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from bson.json_util import loads
+import logging
+from io import StringIO
+import json
+
+logger = logging.getLogger(__name__)
+
 
 # -------------------------------------
 # Auxiliary functions
@@ -62,13 +69,45 @@ def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
         return None
     try:
         if uploaded_file.name.lower().endswith(".json"):
-            # Loading JSON
-            try:
-                df = pd.read_json(uploaded_file)
-                return sanitize_df(df)
-            except ValueError as e:
-                st.error(f"Error when reading a JSON file: {e}")
+            string_data = uploaded_file.getvalue().decode("utf-8").strip()
+
+            if not string_data:
+                st.error("Файл пустой")
+                logger.error("Файл пустой")
                 return None
+
+            # Попробуем сначала распарсить как обычный JSON (массив или объект)
+            try:
+                data = json.loads(string_data)
+
+                # Если это один объект — оборачиваем в список
+                if isinstance(data, dict):
+                    data = [data]
+
+                # Если это не список — ошибка структуры
+                if not isinstance(data, list):
+                    st.error("JSON должен быть массивом объектов или одним объектом")
+                    logger.error(
+                        "JSON должен быть массивом объектов или одним объектом"
+                    )
+                    return None
+
+                df = pd.DataFrame(data)
+                return df
+
+            except json.JSONDecodeError:
+                # Не получилось распарсить как обычный JSON — пробуем как JSONL
+                pass
+
+            # Пробуем как JSONL: читаем через StringIO + lines=True
+            try:
+                df = pd.read_json(StringIO(string_data), lines=True)
+                return df
+            except ValueError as e:
+                st.error(f"Невозможно распознать формат JSON: {e}")
+                logger.error(f"Невозможно распознать формат JSON: {e}")
+                return None
+
         elif uploaded_file.name.lower().endswith(".xlsx"):
             # Loading Excel
             try:
@@ -102,4 +141,5 @@ def load_file_any_format(uploaded_file) -> Optional[pd.DataFrame]:
                 return None
     except Exception as e:
         st.error(f"Failed to upload file: {e}")
+        logger.error(f"Failed to upload file: {e}")
         return None
