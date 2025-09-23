@@ -12,39 +12,39 @@ from transformers import pipeline
 
 app = FastAPI()
 
+
 @app.post("/generate")
 async def generate_locally(request: Request):
     data = await request.json()
     try:
         model_name = data["model"]
         # Models with API
-        if model_name.startswith('api'):
-            MODEL_NAME = model_name.split('/')[-1]
+        if model_name.startswith("api"):
+            MODEL_NAME = model_name.split("/")[-1]
             OPENAI_KEY = os.getenv("OPENAI_KEY")
-            BASE_URL = os.getenv('OPENAI_BASE_URL')
-            
+            BASE_URL = os.getenv("OPENAI_BASE_URL")
+
             model = ChatOpenAI(
                 model_name=MODEL_NAME,
                 api_key=OPENAI_KEY,
                 base_url=BASE_URL,
                 temperature=0,
-                max_tokens=2048
+                max_tokens=8192,
             )
-        elif model_name.startswith('yandex_api'):
-            YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name.split('/')[-1]
+        elif model_name.startswith("yandex_api"):
+            YANDEX_MODEL_URI = os.getenv("YANDEX_MODEL_URI") + model_name.split("/")[-1]
             YANDEX_API_KEY = os.getenv("YANDEX_API_KEY")
             model = YandexGPT(
-                api_key=YANDEX_API_KEY,
-                model_uri=YANDEX_MODEL_URI
+                api_key=YANDEX_API_KEY, model_uri=YANDEX_MODEL_URI, max_tokens=8192
             )
         else:
             model = OllamaLLM(model=model_name, base_url=os.getenv("OLLAMA_BASE_URL"))
-        
+
         prompt = ChatPromptTemplate.from_template(data["prompt"])
         output_parser = StrOutputParser()
         chain = prompt | model | output_parser
         result = chain.invoke(data["variables"])
-        
+
         if isinstance(result, str):
             return result
         else:
@@ -52,14 +52,15 @@ async def generate_locally(request: Request):
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Missing key: {e}")
     except Exception as e:
-        print('ERROR:', e)
-    
+        print("ERROR:", e)
+
+
 if __name__ == "__main__":
     import uvicorn
     from dotenv import load_dotenv
-    
+
     load_dotenv()
 
-    BACKEND_HOST = os.getenv('BACKEND_HOST')
-    BACKEND_PORT = int(os.getenv('BACKEND_PORT'))
+    BACKEND_HOST = os.getenv("BACKEND_HOST")
+    BACKEND_PORT = int(os.getenv("BACKEND_PORT"))
     uvicorn.run(app, host=BACKEND_HOST, port=BACKEND_PORT)

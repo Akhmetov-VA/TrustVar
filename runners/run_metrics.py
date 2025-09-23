@@ -49,13 +49,13 @@ def compute_tfnr(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
     total = len(df)
     if total == 0:
         return np.nan, []
-    
+
     # Handling cases where pred can be a list
     def is_tfn(pred):
         if isinstance(pred, list):
             return all(p == "TFN" for p in pred)
         return pred == "TFN"
-    
+
     cond = df["pred"].apply(is_tfn)
     value = cond.sum() / total
     errors = extract_errors(df, cond)
@@ -68,23 +68,23 @@ def compute_accuracy(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
         if isinstance(pred, list):
             return not all(p == "TFN" for p in pred)
         return pred != "TFN"
-    
+
     df_valid = df[df["pred"].apply(has_valid_pred)]
     if df_valid.empty:
         return np.nan, []
-    
+
     # We check the accuracy for each record
     def check_accuracy(row):
         pred = row["pred"]
         target = row["target"]
-        
+
         if isinstance(pred, list):
             # If pred is a list, we check if there is at least one correct answer.
             return any(str(p) == str(target) for p in pred)
         else:
             # If pred is a single value
             return str(pred) == str(target)
-    
+
     cond = ~df_valid.apply(check_accuracy, axis=1)
     value = (~cond).mean()
     errors = extract_errors(df_valid, cond)
@@ -97,9 +97,9 @@ def compute_correlation(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
         if isinstance(pred, list):
             return not all(p == "TFN" for p in pred)
         return pred != "TFN"
-    
+
     df_valid = df[df["pred"].apply(has_valid_pred)].copy()
-    
+
     # Processing numeric values
     def extract_numeric_pred(pred):
         if isinstance(pred, list):
@@ -116,14 +116,14 @@ def compute_correlation(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any]]]:
                 return float(pred)
             except (ValueError, TypeError):
                 return np.nan
-    
+
     df_valid["pred_numeric"] = df_valid["pred"].apply(extract_numeric_pred)
     df_valid["target_numeric"] = pd.to_numeric(df_valid["target"], errors="coerce")
     df_valid = df_valid.dropna(subset=["pred_numeric", "target_numeric"])
-    
+
     if len(df_valid) < 2:
         return np.nan, []
-    
+
     value = df_valid["pred_numeric"].corr(df_valid["target_numeric"])
     diffs = (df_valid["pred_numeric"] - df_valid["target_numeric"]).abs()
     threshold = diffs.nlargest(min(len(diffs), 10)).min()
@@ -141,7 +141,7 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
         pred = row.get("pred", "")
         inc = row.get("include_list") or []
         exc = row.get("exclude_list") or []
-        
+
         # Handling cases where pred can be a list
         if isinstance(pred, list):
             # We take the first non-TFN value
@@ -154,7 +154,7 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
                 pred_str = "TFN"
         else:
             pred_str = str(pred)
-        
+
         pos_scores = [1.0 if s.lower() in pred_str.lower() else 0.0 for s in inc]
         score = max(pos_scores) if pos_scores else 0.0
         neg_count = sum(1 for s in exc if s.lower() in pred_str.lower())
@@ -202,9 +202,11 @@ def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
                 {
                     "task_name": doc.get("task_name", coll_name.replace(prefix, "")),
                     "dataset_name": doc.get("dataset_name"),
-                    "model": doc.get("init_model")
-                    if coll_name.startswith("queue_rta_")
-                    else doc.get("model"),
+                    "model": (
+                        doc.get("init_model")
+                        if coll_name.startswith("queue_rta_")
+                        else doc.get("model")
+                    ),
                     "metric": metric,
                     "input": inp,
                     "pred": doc.get("pred"),
@@ -248,22 +250,24 @@ def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame
 
             metric = doc.get("metric")
             target_val = inc_list if metric == "include_exclude" else doc.get("target")
-            
+
             # Adding fields for grouping
             task_type = doc.get("task_type", "")
             dynamic_augments = doc.get("dynamic_augments", [])
-            
+
             # If dynamic_augments is a string, convert it to a list
             if isinstance(dynamic_augments, str):
                 dynamic_augments = [dynamic_augments]
-            
+
             rows.append(
                 {
                     "task_name": doc.get("task_name", coll_name.replace(prefix, "")),
                     "dataset_name": doc.get("dataset_name"),
-                    "model": doc.get("init_model")
-                    if coll_name.startswith("queue_rta_")
-                    else doc.get("model"),
+                    "model": (
+                        doc.get("init_model")
+                        if coll_name.startswith("queue_rta_")
+                        else doc.get("model")
+                    ),
                     "metric": metric,
                     "input": inp,
                     "pred": doc.get("pred"),
@@ -304,11 +308,13 @@ def clear_old_grouped_results(db: Database, collection_name: str, df: pd.DataFra
         # This will delete both the old entries from dynamic_augments both listed and new ones with a single augmentation
         unique_combinations = df[["task_name", "model", "task_type"]].drop_duplicates()
         for _, row in unique_combinations.iterrows():
-            coll.delete_many({
-                "task_name": row["task_name"],
-                "model": row["model"],
-                "task_type": row["task_type"]
-            })
+            coll.delete_many(
+                {
+                    "task_name": row["task_name"],
+                    "model": row["model"],
+                    "task_type": row["task_type"],
+                }
+            )
 
 
 def insert_results(db: Database, collection_name: str, results: List[Dict[str, Any]]):
@@ -319,7 +325,9 @@ def insert_results(db: Database, collection_name: str, results: List[Dict[str, A
     db[collection_name].insert_many(df.to_dict(orient="records"))
 
 
-def insert_grouped_results(db: Database, collection_name: str, results: List[Dict[str, Any]]):
+def insert_grouped_results(
+    db: Database, collection_name: str, results: List[Dict[str, Any]]
+):
     """
     Inserts the grouped results into the database.
     """
@@ -334,7 +342,7 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
     while True:
         df = fetch_extracted_tasks(db, prefix="queue_")
         df_rta = fetch_extracted_tasks(db, prefix="queue_rta_")
-        
+
         # Uploading data with a grouping for calculating metrics by groups
         df_groups = fetch_extracted_tasks_with_groups(db, prefix="queue_")
 
@@ -397,11 +405,15 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
         if not df_groups.empty:
             # Filtering only records with task_type and dynamic_augments
             df_with_groups = df_groups[
-                (df_groups["task_type"].notna()) & 
-                (df_groups["task_type"] != "") & 
-                (df_groups["dynamic_augments"].apply(lambda x: len(x) > 0 if isinstance(x, list) else False))
+                (df_groups["task_type"].notna())
+                & (df_groups["task_type"] != "")
+                & (
+                    df_groups["dynamic_augments"].apply(
+                        lambda x: len(x) > 0 if isinstance(x, list) else False
+                    )
+                )
             ]
-            
+
             if not df_with_groups.empty:
                 # 1. We expand it according to the augmentations
                 expanded_rows = []
@@ -453,57 +465,83 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
 
                 expanded_df = pd.DataFrame(expanded_rows)
 
-                
                 # 2. Grouping by (task_name, dataset_name, model, task_type, augment, metric)
-                grouped_tfnr_res, grouped_acc_res, grouped_corr_res, grouped_ie_res = [], [], [], []
-                for (task, ds, model, task_type, augment, metric), g in expanded_df.groupby([
-                    "task_name", "dataset_name", "model", "task_type", "augment", "metric"
-                ]):
+                grouped_tfnr_res, grouped_acc_res, grouped_corr_res, grouped_ie_res = (
+                    [],
+                    [],
+                    [],
+                    [],
+                )
+                for (
+                    task,
+                    ds,
+                    model,
+                    task_type,
+                    augment,
+                    metric,
+                ), g in expanded_df.groupby(
+                    [
+                        "task_name",
+                        "dataset_name",
+                        "model",
+                        "task_type",
+                        "augment",
+                        "metric",
+                    ]
+                ):
                     # We count metrics by group
                     if metric == "accuracy":
                         val, errs = compute_accuracy(g)
-                        grouped_acc_res.append({
-                            "task_name": task,
-                            "dataset_name": ds,
-                            "model": model,
-                            "task_type": task_type,
-                            "dynamic_augments": [augment],
-                            "value": val,
-                            "errors": errs,
-                        })
+                        grouped_acc_res.append(
+                            {
+                                "task_name": task,
+                                "dataset_name": ds,
+                                "model": model,
+                                "task_type": task_type,
+                                "dynamic_augments": [augment],
+                                "value": val,
+                                "errors": errs,
+                            }
+                        )
                     elif metric == "correlation":
                         val, errs = compute_correlation(g)
-                        grouped_corr_res.append({
-                            "task_name": task,
-                            "dataset_name": ds,
-                            "model": model,
-                            "task_type": task_type,
-                            "dynamic_augments": [augment],
-                            "value": val,
-                            "errors": errs,
-                        })
+                        grouped_corr_res.append(
+                            {
+                                "task_name": task,
+                                "dataset_name": ds,
+                                "model": model,
+                                "task_type": task_type,
+                                "dynamic_augments": [augment],
+                                "value": val,
+                                "errors": errs,
+                            }
+                        )
                     elif metric == "include_exclude":
                         val, errs = compute_include_exclude(g)
-                        grouped_ie_res.append({
+                        grouped_ie_res.append(
+                            {
+                                "task_name": task,
+                                "dataset_name": ds,
+                                "model": model,
+                                "task_type": task_type,
+                                "dynamic_augments": [augment],
+                                "value": val,
+                                "errors": errs,
+                            }
+                        )
+                    # TFNR count for everyone
+                    val_tfnr, errs_tfnr = compute_tfnr(g)
+                    grouped_tfnr_res.append(
+                        {
                             "task_name": task,
                             "dataset_name": ds,
                             "model": model,
                             "task_type": task_type,
                             "dynamic_augments": [augment],
-                            "value": val,
-                            "errors": errs,
-                        })
-                    # TFNR count for everyone
-                    val_tfnr, errs_tfnr = compute_tfnr(g)
-                    grouped_tfnr_res.append({
-                        "task_name": task,
-                        "dataset_name": ds,
-                        "model": model,
-                        "task_type": task_type,
-                        "dynamic_augments": [augment],
-                        "value": val_tfnr,
-                        "errors": errs_tfnr,
-                    })
+                            "value": val_tfnr,
+                            "errors": errs_tfnr,
+                        }
+                    )
                 # Saving the grouped metrics in separate collections
                 insert_grouped_results(db, "TFNR_Groups", grouped_tfnr_res)
                 insert_grouped_results(db, "Accuracy_Groups", grouped_acc_res)
@@ -528,7 +566,9 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
                 )
             insert_results(db, "RtAR", rta_res)
 
-        logger.info("The metrics have been updated, and we are expecting the next cycle..")
+        logger.info(
+            "The metrics have been updated, and we are expecting the next cycle.."
+        )
         time.sleep(interval)
 
 
