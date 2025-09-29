@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -10,7 +9,6 @@ import numpy as np
 from plotly.subplots import make_subplots
 from scipy import stats
 from scipy.spatial.distance import jensenshannon
-from scipy.stats import iqr
 
 # import logging
 from utils.db_client import MongoDBClient, MongoDBConfig
@@ -25,7 +23,7 @@ config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
 
 
-def calculate_coefficient_of_variation(values: List[float]) -> float:
+def calculate_tsi(values: List[float]) -> float:
     """Calculates the coefficient of variation (CV = std/mean * 100%)."""
     if not values or len(values) < 2:
         return np.nan
@@ -114,7 +112,7 @@ def calculate_confidence_interval(
 def compute_dispersion_indices(values: List[float]) -> Dict[str, float]:
     """Compute all dispersion indices for a set of values."""
     return {
-        "TSI": calculate_coefficient_of_variation(values),
+        "TSI": calculate_tsi(values),
         "cv_corrected": calculate_corrected_cv(values),
         "iqr_cv": calculate_iqr_cv(values),
         "jsd": calculate_jsd_divergence(values),
@@ -563,7 +561,9 @@ def visualize_task_centric_metrics(
                     else (
                         "Stable"
                         if metric_value < 20
-                        else "Moderately Stable" if metric_value < 30 else "Unstable"
+                        else "Moderately Stable"
+                        if metric_value < 30
+                        else "Unstable"
                     )
                 )
             else:  # JSD
@@ -573,7 +573,9 @@ def visualize_task_centric_metrics(
                     else (
                         "Stable"
                         if metric_value < 0.2
-                        else "Moderately Stable" if metric_value < 0.3 else "Unstable"
+                        else "Moderately Stable"
+                        if metric_value < 0.3
+                        else "Unstable"
                     )
                 )
 
@@ -785,7 +787,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     cv_data = []
     for (model, task), group in filtered_df.groupby(["model", "task_name"]):
         values = group["value"].tolist()
-        cv = calculate_coefficient_of_variation(values)
+        cv = calculate_tsi(values)
         cv_data.append(
             {
                 "model": model,
@@ -973,7 +975,7 @@ def short_augment_name(name):
 
 
 def render_metrics_tab():
-    st.header("Model metrics")
+    st.header("📈 Model metrics")
 
     # Initialize database client
     from utils.db_client import MongoDBClient, MongoDBConfig

@@ -112,9 +112,9 @@ def render_prompt_creation_section(var_cols: List[str]) -> Optional[str]:
 
 
 def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
-    """UI for selecting or creating a product."""
+    """UI for selecting or creating a prompt."""
     selected_prompt = None
-    with st.expander("Selecting or creating a product", expanded=False):
+    with st.expander("Selecting or creating a prompt", expanded=False):
         show_all_prompts()
         use_existing_prompt = st.radio(
             "Promt:", ("Select from the database", "Enter your own")
@@ -134,7 +134,7 @@ def render_prompt_selection_section(var_cols: List[str]) -> Optional[str]:
                     for c in var_cols:
                         if f"{{{c}}}" not in selected_prompt:
                             st.warning(
-                                f"The placeholder for the column was not found in the product. {c}"
+                                f"The placeholder for the column was not found in the prompt. {c}"
                             )
             else:
                 st.write("There are no prompt available. Enter your own.")
@@ -190,12 +190,12 @@ def render_regexp_section(metric: str) -> Optional[str]:
     is_selected = st.session_state[rx_value_key] is not None
 
     with st.expander(
-        "Selecting or creating a regular schedule for metrics", expanded=is_selected
+        "Selecting or creating a regular expression for metrics", expanded=is_selected
     ):
         show_existing_regexp(metric)
 
         use_existing_regexp = st.radio(
-            "Regular schedule:", ("Existing", "Own"), key=rx_mode_key
+            "Regular expression:", ("Existing", "Own"), key=rx_mode_key
         )
 
         if use_existing_regexp == "Existing":
@@ -307,7 +307,6 @@ def render_dynamic_variations() -> Optional[List[str]]:
         st.session_state[MODE_KEY] = "Use predefined augmentations"
 
     with st.expander("Dynamic dataset augmentation", expanded=False):
-
         utils.constants.AUGMENT_MODEL = st.selectbox(
             "Augment model:", MODELS, key="select_augment_model_selectbox", index=0
         )
@@ -478,7 +477,7 @@ def render_preview_and_save_task(
 
 
 def render_create_task_tab():
-    st.header("Create new task")
+    st.header("✨ Create new task")
     all_datasets = db_client.get_all_datasets()
     if "regestry" in all_datasets:
         all_datasets.remove("regestry")

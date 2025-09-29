@@ -15,7 +15,6 @@ from utils.constants import (
     MONGO_PASSWORD,
     MONGO_INITDB_ROOT_PORT,
     MONGO_USERNAME,
-    MONGO_URI,
     VARIATIONS_MAP,
 )
 
@@ -61,9 +60,9 @@ def make_request(
     if variables is None:
         variables = {}
     logging.info(
-        f"Sending an API request for a model '{model}' with promptness: {prompt[:100]}..."
+        f"Sending an API request for a model '{model}' with promptness: {prompt}"
     )
-    logging.debug(
+    logging.info(
         f"make_request input: model={model}, prompt={prompt}, variables={variables}"
     )
     try:
@@ -121,20 +120,21 @@ def format_prompt_with_variables(prompt: str, variables: Dict[str, Any]) -> str:
     """
     Formats prompt with variables. If the variable is not found, returns the original prompt..
     """
-    try:
-        return prompt.format(**variables)
-    except KeyError as e:
-        logging.warning(
-            f"The variable {e} was not found in the prompt, we use the original prompt"
-        )
-        return prompt
+    logging.info(f"Format {prompt} ||| {variables}")
+    # try:
+    return prompt.format(**variables)  # TODO: return try except
+    # except KeyError as e:
+    #     logging.warning(
+    #         f"The variable {e} was not found in the prompt, we use the original prompt"
+    #     )
+    #     return prompt
 
 
 def generate_answer_by_augmentations(
     dynamic_augments: List[str],
     model: str,
     prompt: str,
-    variables: Dict[str, Any],
+    variables: List[Dict[str, Any]],
     session: requests.Session,
 ) -> List[Dict]:
     """
@@ -142,12 +142,15 @@ def generate_answer_by_augmentations(
     for each technique, we first get a reasoned text.,
     and then we insert it as a new prompt into the main model.
     """
-    logging.debug(
+    logging.info(
         f"generate_answer_by_augmentations input: dynamic_augments={dynamic_augments}, model={model}, prompt={prompt}, variables={variables}"
     )
     responses = []
-    augmented_prompts = {}
-    for augment_technique in dynamic_augments:
+    augmented_prompts = []
+    logging.info(
+        f"gen by augment with vars: {variables} and augments: {dynamic_augments}"  # TODO: len(vars) != len(dynamic)
+    )
+    for i, augment_technique in enumerate(dynamic_augments):
         # Creating a prompt for the augmentator model
 
         variations_instructions = VARIATIONS_MAP[augment_technique]
@@ -155,12 +158,13 @@ def generate_answer_by_augmentations(
         augmenter_prompt = AUGMENT_PROMPT.format(
             augment_technique, variations_instructions, prompt
         )
-        logging.debug(f"Augmenter prompt: {augmenter_prompt}")
+        logging.info(f"Augmenter prompt: {augmenter_prompt}")
 
         # 1) Requesting an augmentation
         augmented_resp = make_request(
-            AUGMENT_MODEL, augmenter_prompt, session, variables
+            AUGMENT_MODEL, augmenter_prompt, session, variables[0]
         )
+        logging.info(f"augmented resp: {augmented_resp}")
 
         # 2) Extracting the augmented text
         augmented_text = extract_text_from_response(augmented_resp)
@@ -169,18 +173,24 @@ def generate_answer_by_augmentations(
             continue
 
         logging.info(
-            f"Augmented text (technique={augment_technique}): {augmented_text[:100]}..."
+            f"Augmented text (technique={augment_technique}): {augmented_text}"
         )
 
         # 3) Substituting variables into the augmented text
         augmented_prompt_with_vars = format_prompt_with_variables(
-            augmented_text, variables
+            augmented_text, variables[0]
         )
 
+        logging.info(f"augmented_prompt_with_vars : {augmented_prompt_with_vars}")
+
         # 4) We are sending the augmented prompt to the main model
-        final_resp = make_request(model, augmented_prompt_with_vars, session, variables)
+        final_resp = make_request(
+            model, augmented_prompt_with_vars, session, variables[0]
+        )
+
+        logging.info(f"final_resp : {final_resp}")
         responses.append(final_resp)
-        augmented_prompts[augment_technique] = augmented_prompt_with_vars
+        augmented_prompts.append({augment_technique: augmented_prompt_with_vars})
 
     return responses, augmented_prompts
 
@@ -197,34 +207,55 @@ def process_ordinary_task(
         session (request.Session): The requests session is for connection reuse.
     """
     task_id = task["_id"]
-    logging.info(f"Starting task processing with id: {task_id}")
+    logging.info(
+        f"Starting task processing with id: {task_id} in collection {collection}"
+    )
     prompt = task["prompt"]
     model = task["model"]
-    variables = task.get("variables", {})
+    variables = task.get("variables", [])
 
-    try:
-        # Formatting the prompt with variables
+    logging.info(f"Starting task processing {task}")
+    # try:
+    # Formatting the prompt with variables
+    if isinstance(variables, list):
+        formatted_prompt = format_prompt_with_variables(prompt, variables[0])
+    else:
         formatted_prompt = format_prompt_with_variables(prompt, variables)
 
-        # Sending a request
+    # Sending a request
+    # response = make_request(model, formatted_prompt, session, variables)
+
+    if isinstance(variables, list):
+        response = make_request(model, formatted_prompt, session, variables[0])
+    else:
         response = make_request(model, formatted_prompt, session, variables)
 
-        collection.update_one(
-            {"_id": task_id},
-            {"$set": {"status": "completed", "response": response}},
-        )
-        logging.info(
-            f"The task with id: {task_id} has been successfully completed and updated in the database."
-        )
+    responses = task.get("response", []) or []
+    dynamic_augments = task.get("dynamic_augments", [])
+    responses.append(response)
+    collection.update_one(
+        {"_id": task_id},
+        {
+            "$set": {
+                "status": "completed"
+                if len(responses) == len(dynamic_augments) + 1
+                else task["status"],
+                "response": responses,
+            }
+        },
+    )
+    logging.info(
+        f"The task with id: {task_id} has been successfully completed and updated in the database."
+    )
 
-        return response, formatted_prompt
-    except Exception as e:
-        collection.update_one(
-            {"_id": task_id},
-            {"$set": {"status": "error", "error": str(e)}},
-        )
-        logging.error(f"Error processing an issue with an id: {task_id}: {e}")
-        return "", ""
+    return responses, formatted_prompt
+    # except Exception as e:
+    #     collection.update_one(
+    #         {"_id": task_id},
+    #         {"$set": {"status": "error", "error": str(e)}},
+    #     )
+    #     logging.error(f"Error processing an issue with an id: {task_id}: {e}")
+    #     return "", ""
 
 
 def process_augment_task(
@@ -239,42 +270,44 @@ def process_augment_task(
         session (request.Session): The requests session is for connection reuse.
     """
     task_id = task["_id"]
-    logging.info(f"Starting task processing with id: {task_id}")
+    logging.info(
+        f"Starting task processing with id: {task_id} in collection {collection}"
+    )
     prompt = task["prompt"]
     model = task["model"]
-    variables = task.get("variables", {})
+    variables = task.get("variables", [])
     dynamic_augments = task.get("dynamic_augments", [])
 
-    try:
-        ordinary_response, formatted_prompt = process_ordinary_task(
-            task, collection, session
-        )  # main response
+    logging.info(f"Starting augment task processing {task}")
+    # try:
+    ordinary_response, formatted_prompt = process_ordinary_task(
+        task, collection, session
+    )  # main response
 
-        responses, augmented_prompts = generate_answer_by_augmentations(
-            dynamic_augments, model, prompt, variables, session
-        )  # augmented responses
+    responses, augmented_prompts = generate_answer_by_augmentations(
+        dynamic_augments, model, prompt, variables, session
+    )  # augmented responses
 
-        collection.update_one(
-            {"_id": task_id},
-            {
-                "$set": {
-                    "status": "completed",
-                    "response": [ordinary_response] + responses,
-                    "augmented_prompts": {
-                        **{"original": formatted_prompt},
-                        **augmented_prompts,
-                    },
-                }
-            },
-        )
+    augmented_prompts_list = [{"original": formatted_prompt}] + augmented_prompts
 
-        logging.info(f"Task: {task_id} augmented and updated in DB.")
-    except Exception as e:
-        collection.update_one(
-            {"_id": task_id},
-            {"$set": {"status": "error", "error": str(e)}},
-        )
-        logging.error(f"Error processing an issue with an id: {task_id}: {e}")
+    collection.update_one(
+        {"_id": task_id},
+        {
+            "$set": {
+                "status": "completed",
+                "response": ordinary_response + responses,
+                "augmented_prompts": augmented_prompts_list,
+            }
+        },
+    )
+
+    logging.info(f"Task: {task_id} augmented and updated in DB.")
+    # except Exception as e:
+    #     collection.update_one(
+    #         {"_id": task_id},
+    #         {"$set": {"status": "error", "error": str(e)}},
+    #     )
+    #     logging.error(f"Error processing an issue with an id: {task_id}: {e}")
 
 
 def process_collection(
@@ -305,6 +338,7 @@ def process_collection(
         logging.info(
             f"Processing tasks for the model '{model}' in the collection '{collection_name}'."
         )
+        # i = 0
         while True:
             ordinary_task = collection.find_one_and_update(
                 {"status": "pending", "model": model},
@@ -314,7 +348,7 @@ def process_collection(
 
             if ordinary_task:
                 logging.info(
-                    f"An issue with the id was found: {ordinary_task['_id']} for processing."
+                    f"An issue with the id was found: {ordinary_task['_id']} for processing in collection {collection}."
                 )
                 process_ordinary_task(ordinary_task, collection, session)
                 continue
@@ -327,11 +361,14 @@ def process_collection(
 
             if augment_task:
                 logging.info(
-                    f"An issue with the id was found: {augment_task['_id']} for processing."
+                    f"An issue with the id was found: {augment_task['_id']} for processing in collection {collection}."
                 )
                 process_augment_task(augment_task, collection, session)
                 continue
 
+            # i += 1  # TODO: delete i
+            # if i > 20:
+            #     break
             else:
                 logging.info(
                     f"There are no pending tasks for the model '{model}' in the collection '{collection_name}'."

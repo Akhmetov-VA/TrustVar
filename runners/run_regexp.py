@@ -2,14 +2,17 @@ import logging
 import os
 import re
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Union
 
-import pandas as pd
-from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_INITDB_ROOT_PORT, MONGO_USERNAME, MONGO_URI
+from utils.constants import (
+    MONGO_HOST,
+    MONGO_PASSWORD,
+    MONGO_INITDB_ROOT_PORT,
+    MONGO_USERNAME,
+)
 
 # It is assumed that the environment variables for MONGO_USERNAME, MANGO_PASSWORD, MANGO_HOST, MANGO_SPORT, MONGO_DB are already set.
 MONGO_DB = os.environ.get("MONGO_DB", "TrustVar")
@@ -22,9 +25,7 @@ def get_mongo_client() -> MongoClient:
     """
     Creating a connection to MongoDB.
     """
-    mongo_uri = (
-        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
-    )
+    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
     client = MongoClient(mongo_uri)
     logger.info(f"Successfully connected to MongoDB. URI: {mongo_uri}")
     return client
@@ -52,7 +53,7 @@ def fetch_completed_tasks(db: Database):
                 {
                     "status": "completed",
                     "response": {"$ne": None},
-                    "metric": {"$ne": "RtA"},
+                    #  "metric": {"$ne": "RtA"},
                 }
             )
         )
@@ -60,16 +61,18 @@ def fetch_completed_tasks(db: Database):
             yield coll_name, t
 
 
-def apply_regexp_to_response(response: Union[str, List[str]], regexp: str) -> Union[str, List[str]]:
+def apply_regexp_to_response(
+    response: Union[str, List[str]], regexp: str
+) -> Union[str, List[str]]:
     """
-    Applying the regular schedule to the response.
+    Applying the regular expression to the response.
     If the response is a list of strings, we apply a regular pattern to each element.
     If there is a match, we take the found value.
     If not, 'TFN'.
     Returns a string or a list of strings, depending on the type of response.
     """
     pattern = re.compile(regexp, re.DOTALL)
-    
+
     if isinstance(response, list):
         # Processing the list of responses
         results = []
@@ -128,19 +131,21 @@ def apply_exact_match(response: str, target: Union[str, List[str]]) -> str:
         return str(found)
 
 
-def update_task_with_pred(db: Database, coll_name: str, task_id: Any, pred: Union[str, List[str]]):
+def update_task_with_pred(
+    db: Database, coll_name: str, task_id: Any, pred: Union[str, List[str]]
+):
     """
     We update the pred field in the issue and the status on extracted.
     """
     coll = db[coll_name]
     coll.update_one({"_id": task_id}, {"$set": {"pred": pred, "status": "extracted"}})
-    
+
     # Logging information about the pred, depending on its type
     if isinstance(pred, list):
         pred_info = f"pred=[{', '.join(map(str, pred))}]"
     else:
         pred_info = f"pred={pred}"
-    
+
     logger.info(
         f"Updated document {task_id} in {coll_name}: {pred_info}, status=extracted"
     )
@@ -164,34 +169,42 @@ def run_extraction_loop(db: Database, interval: int = 10):
         for coll_name, task in fetch_completed_tasks(db):
             found_any = True
             task_id = task["_id"]
-            response = task["response"]
+            responses = task["response"]
             metric = task.get("metric", None)
             target = task.get("target", [])
 
-            if metric == "exact_match":
-                # exact_match logic
-                pred = apply_exact_match(response, target)
+            preds = []
+            for response in responses:
+                if metric == "exact_match":
+                    # exact_match logic
+                    pred = apply_exact_match(response, target)
 
-            elif metric == "include_exclude":
-                # By the condition "we just take the response and transfer it to pred"
-                # The logic of the include/exclude check is performed by the following runner.
-                pred = response
+                elif metric == "include_exclude":
+                    # By the condition "we just take the response and transfer it to pred"
+                    # The logic of the include/exclude check is performed by the following runner.
+                    pred = response
 
-            elif metric == "accuracy":
-                regexp = task.get("regexp", None)
-                if not regexp:
-                    logger.error(f"For the accuracy metric, regexp is not provided in the task {task_id} ({coll_name}) — the task was skipped")
-                    continue
-                pred = apply_regexp_to_response(response, regexp)
+                elif metric == "accuracy":
+                    regexp = task.get("regexp", None)
+                    if not regexp:
+                        logger.error(
+                            f"For the accuracy metric, regexp is not provided in the task {task_id} ({coll_name}) — the task was skipped"
+                        )
+                        continue
+                    pred = apply_regexp_to_response(response, regexp)
 
-            else:
-                regexp = task.get("regexp", None)
-                if not regexp:
-                    logger.error(f"For metrica {metric} regexp is not provided in the task {task_id} ({coll_name}) — the task was skipped")
-                    continue
-                pred = apply_regexp_to_response(response, regexp)
+                else:
+                    regexp = task.get("regexp", None)
+                    if not regexp:
+                        logger.error(
+                            f"For metrica {metric} regexp is not provided in the task {task_id} ({coll_name}) — the task was skipped"
+                        )
+                        continue
+                    pred = apply_regexp_to_response(response, regexp)
 
-            update_task_with_pred(db, coll_name, task_id, pred)
+                preds.append(pred)
+
+            update_task_with_pred(db, coll_name, task_id, preds)
 
         if not found_any:
             logger.info("There are no tasks to extract pred. Expectation...")
@@ -200,9 +213,9 @@ def run_extraction_loop(db: Database, interval: int = 10):
 
 def main():
     """
-   Entry point:
-    1) Connect to the database
-    2) Start the processing cycle
+    Entry point:
+     1) Connect to the database
+     2) Start the processing cycle
     """
     db = get_db()
     run_extraction_loop(db, interval=60)

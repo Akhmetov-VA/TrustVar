@@ -174,19 +174,26 @@ def compute_include_exclude(df: pd.DataFrame) -> Tuple[float, List[Dict[str, Any
 def fetch_extracted_tasks(db: Database, prefix: str) -> pd.DataFrame:
     cols = [c for c in db.list_collection_names() if c.startswith(prefix)]
     if prefix == "queue_":
-        cols = [c for c in cols if not c.startswith("queue_rta_")]
+        cols = [c for c in cols]  # [c for c in cols if not c.startswith("queue_rta_")]
     rows: List[Dict[str, Any]] = []
     for coll_name in cols:
         coll = db[coll_name]
         query = {"status": "extracted"}
-        if prefix == "queue_":
-            query["metric"] = {"$ne": "RtA"}
+        # if prefix == "queue_": TODO: ?
+        #     query["metric"] = {"$ne": "RtA"}
 
         logging.info(f"Uploading data for metrics from the collection {coll_name}")
         for doc in coll.find(query):
             prompt = doc.get("prompt", "")
-            vars_ = doc.get("variables", {}) or {}
-            inp = prompt.format(**vars_)
+            vars_ = doc.get("variables", [])
+            logger.info(
+                f"feeching metrics with vars: {vars_} and preds : {doc.get('pred')}"
+            )
+            # inp = []
+            # if vars_:
+            #     for item in vars_:  #
+            #         inp.append(prompt.format(**item))
+            inp = prompt  # .format(**vars_)
             inc_list = doc.get("include_list", []) or []
             exc_list = doc.get("exclude_list", []) or []
 
@@ -226,7 +233,9 @@ def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame
     """
     cols = [c for c in db.list_collection_names() if c.startswith(prefix)]
     if prefix == "queue_":
-        cols = [c for c in cols if not c.startswith("queue_rta_")]
+        cols = [
+            c for c in cols
+        ]  # TODO: was [c for c in cols if not c.startswith("queue_rta_")]
     rows: List[Dict[str, Any]] = []
     for coll_name in cols:
         coll = db[coll_name]
@@ -237,8 +246,11 @@ def fetch_extracted_tasks_with_groups(db: Database, prefix: str) -> pd.DataFrame
         logging.info(f"Uploading data for metrics from the collection {coll_name}")
         for doc in coll.find(query):
             prompt = doc.get("prompt", "")
-            vars_ = doc.get("variables", {}) or {}
-            inp = prompt.format(**vars_)
+            vars_ = doc.get("variables", []) or []
+            logger.info(
+                f"feeching metrics group with vars: {vars_} and preds : {doc.get('pred')}"
+            )
+            inp = prompt  # .format(**vars_)
             inc_list = doc.get("include_list", []) or []
             exc_list = doc.get("exclude_list", []) or []
 
@@ -415,25 +427,6 @@ def compute_and_store_metrics(db: Database, interval: int = 30):
             ]
 
             if not df_with_groups.empty:
-                # 1. We expand it according to the augmentations
-                expanded_rows = []
-                # for _, row in df_with_groups.iterrows():
-                #     dynamic_augments = row["dynamic_augments"]
-                #     pred = row["pred"]
-                #     # For accuracy: pred can be a list, otherwise we just copy
-                #     if isinstance(pred, list) and len(pred) == len(dynamic_augments):
-                #         for i, augment in enumerate(dynamic_augments):
-                #             new_row = row.copy()
-                #             new_row["augment"] = augment
-                #             new_row["pred"] = pred[i]
-                #             expanded_rows.append(new_row)
-                #     else:
-                #         for augment in dynamic_augments:
-                #             new_row = row.copy()
-                #             new_row["augment"] = augment
-                #             expanded_rows.append(new_row)
-                # expanded_df = pd.DataFrame(expanded_rows)
-                # --- заменить блок построения expanded_rows ---
                 expanded_rows = []
                 for _, row in df_with_groups.iterrows():
                     aug_list = row["dynamic_augments"]
