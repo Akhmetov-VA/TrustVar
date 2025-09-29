@@ -207,7 +207,7 @@ st.markdown(
     """
 <div class="main-header">
     <h1 class="main-title">TrustVar</h1>
-    <p class="main-subtitle">Framework for Evaluating Task Quality and Model Robustness</p>
+    <p class="main-subtitle">A Dynamic Framework for Trustworthiness Evaluation and Task Variation Analysis in LLMs</p>
 </div>
 """,
     unsafe_allow_html=True,
