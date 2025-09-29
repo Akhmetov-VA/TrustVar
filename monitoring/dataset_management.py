@@ -126,7 +126,7 @@ def render_dataset_upload_section() -> Optional[str]:
 
 
 def render_dataset_management_tab():
-    st.header("Managing datasets")
+    st.header("🗄️ Managing datasets")
     render_dataset_registry_section()
     render_dataset_upload_section()
 

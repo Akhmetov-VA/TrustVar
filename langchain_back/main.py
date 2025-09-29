@@ -1,14 +1,10 @@
 import os
-from typing import Optional
 from fastapi import FastAPI, HTTPException, Request
-from langchain.prompts import PromptTemplate
-from langchain_community.llms import GigaChat, YandexGPT
+from langchain_community.llms import YandexGPT
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import OllamaLLM
-from langchain_community.llms import HuggingFacePipeline
 from langchain_openai import ChatOpenAI
-from transformers import pipeline
 
 app = FastAPI()
 

@@ -26,12 +26,7 @@ Unlike traditional frameworks that test models through tasks, TrustVar tests tas
 - [Project Structure](#project-structure)
 - [Quick Start](#quick-start)
 - [Documentation](#documentation)
-- [System Components](#system-components)
-- [API](#api)
 - [Metrics](#metrics)
-- [Deployment](#deployment)
-- [Development](#development)
-- [Support](#support)
 
 ## Project Architecture
 
@@ -45,13 +40,6 @@ Unlike traditional frameworks that test models through tasks, TrustVar tests tas
 4. **Task Runners** — Set of specialized task processors
 5. **Ollama** — Service for local language model execution
 
-### Data Flow
-
-1. **Task Creation** → MongoDB (collection `tasks`)
-2. **Task Processing** → Task Processor → MongoDB (collections `queue_*`)
-3. **Inference Execution** → Runner → Langchain Backend → LLM
-4. **Metrics Collection** → Metrics Runner → MongoDB
-5. **Visualization** → Streamlit Frontend → MongoDB
 
 ## Project Structure
 
@@ -163,38 +151,13 @@ TrustVar/
    4. Restart the services if necessary: `docker-compose restart`
 
 5. **Open the web interface:**
-   - Monitoring: http://localhost:27366 (or http://83.143.66.61:27366 for remote access)
+   - Monitoring: http://localhost:27366
    - MongoDB Express: http://localhost:8081
 
    **Authentication credentials:**
    - Username: `user`
    - Password: `resu123`
 
-### Local Development
-
-1. **Install dependencies:**
-   ```bash
-   poetry install
-   ```
-
-2. **Activate virtual environment:**
-   ```bash
-   poetry shell
-   ```
-
-3. **Launch individual components:**
-   ```bash
-   # Backend
-   python langchain_back/main.py
-   
-   # Frontend
-   streamlit run monitoring/app_main.py --server.port 27366
-   
-   # Runners
-   python -m runners.run
-   python -m runners.run_metrics
-   python -m runners.task_processor
-   ```
 
 ## Documentation
 
@@ -207,37 +170,6 @@ Detailed documentation is available in the `docs/` folder:
 - **[API](docs/api.md)** - API documentation
 - **[Metrics](docs/metrics.md)** - Description of supported metrics
 
-## System Components
-
-### 1. MongoDB - Database
-Primary database for storing tasks, results, and metrics.
-
-### 2. Langchain Backend
-Server-side for processing requests to language models.
-
-### 3. Streamlit Frontend
-Modern web interface for monitoring and management.
-
-### 4. Task Runners
-Set of specialized task processors:
-- `run.py` - Main task processor
-- `run_metrics.py` - Metrics processor
-- `run_regexp.py` - Data extraction from responses
-- `run_rta_queuer.py` - RtA task processor
-- `task_processor.py` - Task processor
-
-### 5. Ollama
-Service for local language model execution.
-
-## API
-
-The system provides REST API for interaction with language models:
-
-- **POST /generate** - Response generation
-- **GET /health** - Health check
-- **GET /models** - Model list
-
-Detailed API documentation: [docs/api.md](docs/api.md)
 
 ## Metrics
 
@@ -249,41 +181,6 @@ Supported metric types:
 - **Include/Exclude** - Analysis of element inclusion/exclusion
 
 Detailed metrics description: [docs/metrics.md](docs/metrics.md)
-
-## Deployment
-
-### Docker Compose (recommended)
-```bash
-docker-compose up -d
-```
-
-### Kubernetes
-Detailed Kubernetes deployment guide: [docs/deployment.md](docs/deployment.md)
-
-## Development
-
-### Code Structure
-- **Modular architecture** with clear separation of responsibilities
-- **Docker containerization** for simplified deployment
-- **Poetry** for dependency management
-- **Streamlit** for modern web interface
-
-### Adding New Metrics
-1. Create a new module in `runners/`
-2. Add configuration in `utils/constants.py`
-3. Update web interface in `monitoring/`
-
-### Adding New Models
-1. Add model to `MODELS` list in `utils/constants.py`
-2. Configure corresponding provider in Langchain Backend
-3. Update documentation
-
-## Support
-
-For support:
-1. Check documentation in the `docs/` folder
-2. Study component logs
-3. Create an issue in the project repository
 
 ## License
 
