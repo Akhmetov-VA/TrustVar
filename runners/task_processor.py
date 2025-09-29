@@ -7,7 +7,12 @@ import pandas as pd
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_INITDB_ROOT_PORT, MONGO_USERNAME, MONGO_URI
+from utils.constants import (
+    MONGO_HOST,
+    MONGO_PASSWORD,
+    MONGO_INITDB_ROOT_PORT,
+    MONGO_USERNAME,
+)
 
 MONGO_DB = os.environ.get("MONGO_DB", "TrustVar")
 
@@ -20,9 +25,7 @@ def get_mongo_client() -> MongoClient:
     """
     Creates a connection to MongoDB based on environment variables.
     """
-    mongo_uri = (
-        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
-    )
+    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
     client = MongoClient(mongo_uri)
     logger.info(f"Successfully connected to MongoDB. URI: {mongo_uri}")
     return client
@@ -42,7 +45,9 @@ def fetch_tasks(db: Database) -> List[Dict[str, Any]]:
     return tasks
 
 
-def get_dataset_head(db: Database, dataset_name: str, limit: int = None) -> pd.DataFrame:
+def get_dataset_head(
+    db: Database, dataset_name: str, limit: int = None
+) -> pd.DataFrame:
     """
     Returns a dataset in DataFrame format from the dataset_<dataset_name> collection.
     You can limit the number of rows (limit).
@@ -63,9 +68,9 @@ def get_dataset_head(db: Database, dataset_name: str, limit: int = None) -> pd.D
 
 def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     """
-   For a task from the tasks collection:
-      - Create entries in the queue (collection queue_<task_name>) for each row of the dataset and for each model.
-      - If the record already exists (determined by the pair (line_index, model)), it is skipped.
+    For a task from the tasks collection:
+       - Create entries in the queue (collection queue_<task_name>) for each row of the dataset and for each model.
+       - If the record already exists (determined by the pair (line_index, model)), it is skipped.
     """
     task_type = task.get("task_type", "unknown")
     if task_type == "unknown":
@@ -82,11 +87,13 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     exclude_col = task.get("exclude_column", None)
     rta_prompt = task.get("rta_prompt")
     rta_model = task.get("rta_model")
-    dynamic_augments = task.get('dynamic_augments', [])
+    dynamic_augments = task.get("dynamic_augments", [])
 
     df = get_dataset_head(db, dataset_name)
     if df.empty:
-        logger.warning(f"The dataset for '{dataset_name}' is empty. There is nothing to process.")
+        logger.warning(
+            f"The dataset for '{dataset_name}' is empty. There is nothing to process."
+        )
         return
 
     queue_coll_name = f"queue_{task_name}"
@@ -101,7 +108,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
     new_inserts = []
     rows = df.to_dict("records")
     for i, row in enumerate(rows):
-        variables = {col: row.get(col, None) for col in var_cols}
+        variables = [{col: row.get(col, None) for col in var_cols}]
         for model in models:
             key = (i, model)
             if key in existing_keys:
@@ -116,7 +123,7 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                 "model": model,
                 "metric": metric,
                 "regexp": regexp,
-                #"status": "pending",
+                # "status": "pending",
                 "response": None,
             }
             if dynamic_augments:
@@ -144,6 +151,9 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                     doc["target"] = None
             new_inserts.append(doc)
 
+        # if i > 5:
+        #     break  # TODO: delete i
+
     if new_inserts:
         try:
             result = queue_coll.insert_many(new_inserts, ordered=False)
@@ -151,16 +161,18 @@ def insert_queue_entries_for_task(db: Database, task: Dict[str, Any]) -> None:
                 f"Inserted {len(result.inserted_ids)}  new documents in '{queue_coll_name}'."
             )
         except Exception as e:
-            logger.error(f"Error when inserting documents into '{queue_coll_name}': {e}")
+            logger.error(
+                f"Error when inserting documents into '{queue_coll_name}': {e}"
+            )
     else:
         logger.info(f"There are no new documents to insert into '{queue_coll_name}'.")
 
 
 def main():
     """
-    Main cycle:
-- Connect to the database.
-      - Every N seconds, we go through the tasks from the tasks collection and call the queue record creation function for each one.
+        Main cycle:
+    - Connect to the database.
+          - Every N seconds, we go through the tasks from the tasks collection and call the queue record creation function for each one.
     """
     db = get_db()
     interval = 10  # interval in seconds
