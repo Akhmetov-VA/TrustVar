@@ -1,4 +1,4 @@
-# TrustVar - Framework for Evaluating Task Quality and Model Robustness
+# TrustVar: A Dynamic Framework for Trustworthiness Evaluation and Task Variation Analysis in Large Language Models
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Akhmetov-VA/TrustVar)
  
@@ -34,11 +34,15 @@ Unlike traditional frameworks that test models through tasks, TrustVar tests tas
 
 ### Core Components
 
-1. **MongoDB** — Primary database for storing tasks, results, and metrics
-2. **Langchain Backend** — Server-side for request processing and interaction with language models
-3. **Streamlit Frontend** — Modern web interface for monitoring and management
-4. **Task Runners** — Set of specialized task processors
-5. **Ollama** — Service for local language model execution
+- **Data Ingestion** - accepts preformatted datasets in CSV, JSON, Excel, and Parquet formats, supporting both user uploads and built-in collections like SLAVA, RuBia, etc;
+- **Task Generator** - applies five controlled transformations: lexico-syntactic paraphrasing, length variation, stylistic shifts, synonym substitution, and word reordering to create semantically equivalent variants;
+- **Perturbation Settings** - sets up each transformation with user-configurable parameters (10 by default);
+- **Task Pool** - erves as a persistent repository organizing tasks by six trustworthiness dimensions (truthfulness, safety, fairness, robustness, privacy, ethics) and maintaining evaluation queues;
+- **LLM Tester** - executes inference on both local models via Ollama and remote APIs, recording outputs with complete metadata for reproducibility;
+- **Analyzer** - measures response stability using coefficient of variation, feeding instability flags back for task refinement;
+- **Task Meta-Evaluator** - computes the Task Sensitivity Index (TSI) across all model-task pairs, flagging high-TSI items for revision;
+- **Evaluator & Visualizer** - computes RtAR, TFNR, Accuracy, and Pearson correlation metrics;
+- **Dashboard and Leaderboard** - combine Metrics with Analyser data and display the results for user convenience
 
 
 ## Project Structure
