@@ -1,5 +1,6 @@
 import json
 from typing import Any, Dict, List
+import warnings
 
 import pandas as pd
 import plotly.express as px
@@ -21,6 +22,9 @@ from utils.db_client import MongoDBClient, MongoDBConfig
 # Initializing the database client
 config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
+
+# Hot fix
+warnings.filterwarnings("ignore", message="The keyword arguments have been deprecated")
 
 
 def calculate_tsi(values: List[float]) -> float:
