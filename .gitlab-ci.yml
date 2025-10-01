@@ -1,0 +1,31 @@
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  tags:
+    - trust_llm_61
+  script:
+    - echo "Building images"
+    - docker compose -f docker-compose-gpu.yml build
+
+deploy:
+  stage: deploy
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  tags:
+    - trust_llm_61
+  script:
+    - echo "Running containers ..."
+    - export CURRENT_UID=$(id -u)
+    - export CURRENT_GID=$(id -g)
+    - docker compose -f docker-compose-gpu.yml down
+    - docker compose -f docker-compose-gpu.yml up -d
+  
+
+
+
+

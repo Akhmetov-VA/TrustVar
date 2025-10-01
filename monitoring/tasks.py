@@ -1,7 +1,7 @@
 import logging
 import uuid
 from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # DATABASE client initialization (configuration is taken from environment variables)
-config = MongoDBConfig(database="TrustGen")
+config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
 
 DEFAULT_REGEX = r"(?:^\W*([01]).*)|(?:.*([01])\W*$)"
@@ -58,7 +58,7 @@ def display_task_summary(df_tasks: pd.DataFrame):
     col6.metric("Unique models", unique_models)
 
     col7, _ = st.columns([1, 1])
-    col7.metric("RTA promptov is used", rta_count)
+    col7.metric("RTA prompts is used", rta_count)
 
 
 def filter_tasks_by_group(df_tasks: pd.DataFrame) -> pd.DataFrame:
@@ -95,10 +95,10 @@ def render_update_task():
         task_to_update = df_tasks[df_tasks["task_name"] == selected_task_name].iloc[0]
 
         # Updating the list of models only
-        current_models = task_to_update.get("models", [])
+        # current_models = task_to_update.get("models", [])
         selected_models = st.multiselect(
-            "Select the models for the task:", options=MODELS, default=current_models
-        )
+            "Select the models for the task:", options=MODELS
+        )  # , default=current_models
 
         if st.button("Update models"):
             update_data = {"models": selected_models}
@@ -162,8 +162,7 @@ def load_data_for_dashboard(collections: List[str]) -> pd.DataFrame:
             "Collection": collection_name,
             "Total tasks": total_tasks,
             "Waiting": status_counts["pending"],
-            "Done": status_counts["completed"]
-            + status_counts["transfered_to_rta"],
+            "Done": status_counts["completed"] + status_counts["transfered_to_rta"],
             "Measured": status_counts["extracted"],
             "With errors": error_count,
             "Status": overall_status,
@@ -259,6 +258,7 @@ def show_errors(collections: List[str]):
         else:
             st.info("There are no error-prone tasks to restart.")
 
+
 def render_progressbar():
     st.header("Queue monitoring")
     if st.checkbox("Download Queue Monitoring", value=False, key="load_monitoring"):
@@ -346,7 +346,7 @@ def render_progressbar():
 
 
 def render_tasks_visualization_tab():
-    st.header("Visualization by task")
+    st.header("📊 Visualization by task")
     df_tasks = db_client.get_all_tasks()
     df_tasks = filter_tasks_by_group(df_tasks)
     if df_tasks.empty:
@@ -363,7 +363,7 @@ def render_tasks_visualization_tab():
                     "models",
                     "regexp",
                     "prompt",
-                    "rta_prompt",
+                    # "rta_prompt",
                 ]
             ]
         )

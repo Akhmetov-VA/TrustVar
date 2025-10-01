@@ -1,5 +1,6 @@
 # dataset_management.py
-from typing import Any, Dict, List, Optional, Tuple
+import logging
+from typing import List, Optional, Tuple
 
 import pandas as pd
 import streamlit as st
@@ -8,8 +9,10 @@ from monitoring.src import load_file_any_format
 from utils.constants import METRICS
 from utils.db_client import MongoDBClient, MongoDBConfig
 
+logger = logging.getLogger(__name__)
+
 # Initializing the database client
-config = MongoDBConfig(database="TrustGen")
+config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
 
 
@@ -39,8 +42,13 @@ def render_dataset_upload_section() -> Optional[str]:
                 "Enter the name of the new dataset (in Latin):",
                 value=uploaded_file.name.split(".")[0],
             )
+
         if uploaded_file is not None and dataset_name_input:
             df_uploaded = load_file_any_format(uploaded_file)
+
+            if "_id" in df_uploaded.columns:
+                df_uploaded = df_uploaded.drop(columns=["_id"])
+
             if df_uploaded is not None and not df_uploaded.empty:
                 st.write("Some lines of the uploaded dataset (random 10 lines):")
                 st.dataframe(df_uploaded.sample(min(10, len(df_uploaded))))
@@ -118,7 +126,7 @@ def render_dataset_upload_section() -> Optional[str]:
 
 
 def render_dataset_management_tab():
-    st.header("Managing datasets")
+    st.header("🗄️ Managing datasets")
     render_dataset_registry_section()
     render_dataset_upload_section()
 
@@ -129,6 +137,7 @@ def render_dataset_varcols_section(
     Optional[List[str]], Optional[str], Optional[str], Optional[str], Optional[str]
 ]:
     registry_info = db_client.get_dataset_registry_info(dataset_name)
+    logger.info(str(registry_info))
     if not registry_info:
         st.write("There are no saved var_cols, metrics, or target for this dataset.")
         return None, None, None, None, None

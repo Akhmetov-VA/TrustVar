@@ -1,17 +1,20 @@
 import logging
 import os
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-import pandas as pd
-from dotenv import load_dotenv
 from pymongo import MongoClient
 from pymongo.database import Database
 
-from utils.constants import MONGO_HOST, MONGO_PASSWORD, MONGO_PORT, MONGO_USERNAME
+from utils.constants import (
+    MONGO_HOST,
+    MONGO_PASSWORD,
+    MONGO_INITDB_ROOT_PORT,
+    MONGO_USERNAME,
+)
 
 # It is assumed that the environment variables for MONGO_USERNAME, MANGO_PASSWORD, MANGO_HOST, MANGO_SPORT, MONGO_DB are already set.
-MONGO_DB = os.environ.get("MONGO_DB", "TrustGen")
+MONGO_DB = os.environ.get("MONGO_DB", "TrustVar")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -21,11 +24,9 @@ def get_mongo_client() -> MongoClient:
     """
     Creating a connection to MongoDB.
     """
-    mongo_uri = (
-        f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
-    )
+    mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_INITDB_ROOT_PORT}/"
     client = MongoClient(mongo_uri)
-    logger.info("Successfully connected to MongoDB.")
+    logger.info(f"Successfully connected to MongoDB. URI: {mongo_uri}")
     return client
 
 
@@ -93,9 +94,9 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
         )
         return
 
-    variables = task.get("variables", {})
-    response = task.get("response", "")
-    if response is None:
+    variables = task.get("variables", [])
+    response = task.get("response", [])
+    if not response:
         logger.warning("An RtA task without a response? Skip it")
         db[coll_name].update_one(
             {"_id": task["_id"]},
@@ -105,7 +106,7 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
 
     # We form filled_input: we substitute variables in the original prompt
     try:
-        filled_input = original_prompt.format(**variables)
+        filled_input = original_prompt.format(**variables[0])
     except Exception as e:
         logger.error(f"Formatting error prompt: {e}")
         db[coll_name].update_one(
@@ -114,7 +115,20 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
         )
         return
 
-    new_variables = {"input": filled_input, "answer": response}
+    new_variables = [{"input": filled_input, "answer": response[0]}]
+    dynamic_augments = task.get("dynamic_augments", [])
+
+    logger.info(f"Create rta queue {task}")
+
+    new_variables = [{"input": filled_input, "answer": response[0]}]
+
+    if dynamic_augments:
+        for i in range(len(dynamic_augments) - 1):
+            filled_input_item = task["response"][i + 1]
+            response_item = task["augmented_prompts"][i + 1][dynamic_augments[i]]
+
+            new_variables_item = {"input": filled_input_item, "answer": response_item}
+            new_variables.append(new_variables_item)
 
     # We check for a duplicate in the rta queue (by rta_model and filled in fields)
     existing = rta_coll.find_one(
@@ -141,7 +155,9 @@ def create_rta_queue_entry(db: Database, coll_name: str, task: Dict[str, Any]) -
         "prompt": rta_prompt,
         "model": rta_model,
         "variables": new_variables,
-        "status": "pending",  # a new record is awaiting processing
+        "status": "pending"
+        if dynamic_augments
+        else "augmenting",  # a new record is awaiting processing
         "metric": "accuracy",  # according to the condition
         "target": task.get("target"),
         "source_id": task["_id"],  # link to the original entry in the regular queue

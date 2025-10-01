@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -10,7 +9,6 @@ import numpy as np
 from plotly.subplots import make_subplots
 from scipy import stats
 from scipy.spatial.distance import jensenshannon
-from scipy.stats import iqr
 
 # import logging
 from utils.db_client import MongoDBClient, MongoDBConfig
@@ -21,11 +19,11 @@ from utils.db_client import MongoDBClient, MongoDBConfig
 # logger = logging.getLogger(__name__)
 
 # Initializing the database client
-config = MongoDBConfig(database="TrustGen")
+config = MongoDBConfig(database="TrustVar")
 db_client = MongoDBClient(config)
 
 
-def calculate_coefficient_of_variation(values: List[float]) -> float:
+def calculate_tsi(values: List[float]) -> float:
     """Calculates the coefficient of variation (CV = std/mean * 100%)."""
     if not values or len(values) < 2:
         return np.nan
@@ -39,33 +37,33 @@ def calculate_corrected_cv(values: List[float]) -> float:
     """Calculates the corrected coefficient of variation for small sample sizes."""
     if not values or len(values) < 2:
         return np.nan
-    
+
     arr = np.array(values)
     n = arr.size
     mean_val = arr.mean()
     std_val = arr.std(ddof=0)  # population standard deviation
-    
+
     if mean_val == 0:
         return np.nan
-    
+
     cv = std_val / mean_val
     # Everitt's correction for small sample bias
-    return (1 + 1/(4*n)) * cv * 100
+    return (1 + 1 / (4 * n)) * cv * 100
 
 
 def calculate_iqr_cv(values: List[float]) -> float:
     """Calculates IQR-based coefficient of variation: (Q3-Q1) / midhinge."""
     if not values or len(values) < 2:
         return np.nan
-    
+
     arr = np.array(values)
     q1 = np.percentile(arr, 25)
     q3 = np.percentile(arr, 75)
     midhinge = (q1 + q3) / 2
-    
+
     if midhinge == 0:
         return np.nan
-    
+
     return ((q3 - q1) / midhinge) * 100
 
 
@@ -73,30 +71,32 @@ def calculate_jsd_divergence(values: List[float]) -> float:
     """Calculates Jensen-Shannon Divergence for measuring distribution heterogeneity."""
     if not values or len(values) < 2:
         return np.nan
-    
+
     arr = np.array(values)
     # Normalize to create probability distribution
     arr_sum = arr.sum()
     if arr_sum == 0:
         return np.nan
-    
+
     P = arr / arr_sum
     # Calculate mean distribution
     P_mean = P.mean()
-    
+
     # Calculate JSD
     jsd = jensenshannon(P, [P_mean] * len(P)) ** 2
     return jsd * 100  # Scale for better visualization
 
 
-def calculate_confidence_interval(values: List[float], confidence: float = 0.95) -> tuple:
+def calculate_confidence_interval(
+    values: List[float], confidence: float = 0.95
+) -> tuple:
     """Calculate confidence interval for a list of values."""
     if not values or len(values) < 2:
         return np.nan, np.nan
-    
+
     mean_val = np.mean(values)
     std_err = np.std(values) / np.sqrt(len(values))
-    
+
     # Using t-distribution for small samples, normal for large samples
     if len(values) < 30:
         t_value = stats.t.ppf((1 + confidence) / 2, len(values) - 1)
@@ -105,31 +105,33 @@ def calculate_confidence_interval(values: List[float], confidence: float = 0.95)
         # For large samples, use normal distribution
         z_value = stats.norm.ppf((1 + confidence) / 2)
         margin = z_value * std_err
-    
+
     return mean_val - margin, mean_val + margin
 
 
 def compute_dispersion_indices(values: List[float]) -> Dict[str, float]:
     """Compute all dispersion indices for a set of values."""
     return {
-        "cv": calculate_coefficient_of_variation(values),
+        "TSI": calculate_tsi(values),
         "cv_corrected": calculate_corrected_cv(values),
         "iqr_cv": calculate_iqr_cv(values),
-        "jsd": calculate_jsd_divergence(values)
+        "jsd": calculate_jsd_divergence(values),
     }
 
 
-def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collection_name: str):
+def visualize_task_centric_metrics(
+    results_data: List[Dict[str, Any]], collection_name: str
+):
     """Task-centric visualization of metrics for Compare model behaviour tasks."""
     st.write(f"Starting visualize_task_centric_metrics for {collection_name}")
     st.write(f"Number of documents: {len(results_data)}")
     if results_data:
         st.write(f"First document keys: {list(results_data[0].keys())}")
-    
+
     results_df = pd.DataFrame(results_data)
     if "_id" in results_df.columns:
         results_df = results_df.drop(columns=["_id"])
-    
+
     required_cols = {"task_name", "model", "value", "task_type", "dynamic_augments"}
     if not required_cols.issubset(results_df.columns):
         st.error("The required fields for grouped metrics are missing in the data.")
@@ -137,7 +139,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
 
     # Filter only "Compare model behaviour" tasks
     compare_df = results_df[results_df["task_type"] == "Compare model behaviour"].copy()
-    
+
     if compare_df.empty:
         st.info("There is no data for tasks like 'Compare model behaviour'.")
         return
@@ -157,13 +159,13 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
         else:
             # Single string augmentation
             augment = str(dynamic_augments)
-        
+
         new_row = row.copy()
         new_row["augment"] = augment
         expanded_rows.append(new_row)
-    
+
     expanded_df = pd.DataFrame(expanded_rows)
-    
+
     if expanded_df.empty:
         st.info("There is no data to display after the augmentations are deployed.")
         return
@@ -172,7 +174,7 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
     tasks = expanded_df["task_name"].unique()
     models = expanded_df["model"].unique()
     augments = expanded_df["augment"].unique()
-    
+
     selected_tasks = st.multiselect(
         "Select the task(s):",
         options=tasks,
@@ -191,22 +193,22 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
         default=list(augments),
         key=f"task_centric_augments_{collection_name}",
     )
-    
+
     filtered_df = expanded_df[
         (expanded_df["task_name"].isin(selected_tasks))
         & (expanded_df["model"].isin(selected_models))
         & (expanded_df["augment"].isin(selected_augments))
     ]
-    
+
     if filtered_df.empty:
         st.info("There is no data to display with the selected filters.")
         return
 
     st.subheader("Task-Centric Analysis: Augmentation Impact on Task Stability")
-    
+
     # 1. Task Stability Radar Chart with Multiple Metrics
-    st.subheader("1. Task Stability Radar Chart (Multiple Metrics)")
-    
+    st.subheader("1. Coefficient of Variation (CV) Radar Chart")
+
     # Calculate stability metrics for each task
     task_stability_data = []
     for task in selected_tasks:
@@ -220,46 +222,51 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
                     values = augment_data["value"].tolist()
                     dispersion_indices = compute_dispersion_indices(values)
                     augment_metrics[augment] = dispersion_indices
-            
-            task_stability_data.append({
-                "task_name": task,
-                "augment_metrics": augment_metrics
-            })
-    
+
+            task_stability_data.append(
+                {"task_name": task, "augment_metrics": augment_metrics}
+            )
+
     if task_stability_data:
         # Create radar charts for different metrics
-        metric_options = ["cv", "cv_corrected", "iqr_cv", "jsd"]
+        metric_options = ["cv_corrected", "iqr_cv", "jsd", "TSI"]
         selected_metric = st.selectbox(
             "Select dispersion metric for radar chart:",
             options=metric_options,
             index=0,
-            key=f"radar_metric_{collection_name}"
+            key=f"radar_metric_{collection_name}",
         )
-        
+
         fig_radar = go.Figure()
-        
+
         for task_info in task_stability_data:
             task_name = task_info["task_name"]
             augment_metrics = task_info["augment_metrics"]
-            
+
             if augment_metrics:
                 augment_names = list(augment_metrics.keys())
-                metric_values = [augment_metrics[aug][selected_metric] for aug in augment_names]
-                
+                metric_values = [
+                    augment_metrics[aug][selected_metric] for aug in augment_names
+                ]
+
                 # Filter out NaN values
-                valid_indices = [i for i, v in enumerate(metric_values) if not np.isnan(v)]
+                valid_indices = [
+                    i for i, v in enumerate(metric_values) if not np.isnan(v)
+                ]
                 if valid_indices:
                     valid_augments = [augment_names[i] for i in valid_indices]
                     valid_values = [metric_values[i] for i in valid_indices]
-                    
-                    fig_radar.add_trace(go.Scatterpolar(
-                        r=valid_values,
-                        theta=valid_augments,
-                        fill='toself',
-                        name=task_name,
-                        line=dict(width=2)
-                    ))
-        
+
+                    fig_radar.add_trace(
+                        go.Scatterpolar(
+                            r=valid_values,
+                            theta=valid_augments,
+                            fill="toself",
+                            name=task_name,
+                            line=dict(width=2),
+                        )
+                    )
+
         # Calculate max value for proper scaling
         max_val = 0
         for task_info in task_stability_data:
@@ -268,72 +275,73 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
                     val = augment_metrics.get(selected_metric, 0)
                     if not np.isnan(val):
                         max_val = max(max_val, val)
-        
+
         metric_names = {
-            "cv": "Coefficient of Variation",
+            "TSI": "Coefficient of Variation",
             "cv_corrected": "Corrected CV",
-            "iqr_cv": "IQR-based CV", 
-            "jsd": "Jensen-Shannon Divergence"
+            "iqr_cv": "IQR-based CV",
+            "jsd": "Jensen-Shannon Divergence",
         }
-        
+
         fig_radar.update_layout(
             polar=dict(
                 radialaxis=dict(
-                    visible=True,
-                    range=[0, max_val * 1.1 if max_val > 0 else 100]
-                )),
+                    visible=True, range=[0, max_val * 1.1 if max_val > 0 else 100]
+                )
+            ),
             showlegend=True,
             title=f"Task Stability: {metric_names[selected_metric]} (Lower = More Stable)",
-            height=600
+            height=600,
         )
-        st.plotly_chart(fig_radar, use_container_width=True)
-    
-    # 2. Task Performance Heatmap
-    st.subheader("2. Task Performance Heatmap")
-    
+        st.plotly_chart(fig_radar, config={"width": "stretch"})
+
+    # 2. CV Heatmap
+    st.subheader("2. CV Heatmap")
+
     # Calculate mean performance for each task-augmentation combination
     performance_data = []
     for task in selected_tasks:
         for augment in selected_augments:
             task_augment_data = filtered_df[
-                (filtered_df["task_name"] == task) & 
-                (filtered_df["augment"] == augment)
+                (filtered_df["task_name"] == task) & (filtered_df["augment"] == augment)
             ]
             if not task_augment_data.empty:
                 mean_performance = task_augment_data["value"].mean()
-                performance_data.append({
-                    "task_name": task,
-                    "augment": augment,
-                    "mean_performance": mean_performance
-                })
-    
+                performance_data.append(
+                    {
+                        "task_name": task,
+                        "augment": augment,
+                        "mean_performance": mean_performance,
+                    }
+                )
+
     if performance_data:
         perf_df = pd.DataFrame(performance_data)
         perf_pivot = perf_df.pivot_table(
-            index="task_name", 
-            columns="augment", 
-            values="mean_performance"
+            index="task_name", columns="augment", values="mean_performance"
         )
-        
-        fig_heatmap = go.Figure(data=go.Heatmap(
-            z=perf_pivot.values,
-            x=perf_pivot.columns,
-            y=perf_pivot.index,
-            colorscale="RdYlGn",
-            colorbar=dict(title=f"Performance ({collection_name})"),
-            hovertemplate="Task: %{y}<br>Augmentation: %{x}<br>Performance: %{z:.3f}<extra></extra>",
-        ))
+
+        fig_heatmap = go.Figure(
+            data=go.Heatmap(
+                z=perf_pivot.values,
+                x=perf_pivot.columns,
+                y=perf_pivot.index,
+                colorscale="RdYlGn",
+                colorbar=dict(title=f"Performance ({collection_name})"),
+                hovertemplate="Task: %{y}<br>Augmentation: %{x}<br>Performance: %{z:.3f}<extra></extra>",
+            )
+        )
         fig_heatmap.update_layout(
             title="Task Performance Across Augmentations",
             xaxis=dict(title="Augmentation"),
             yaxis=dict(title="Task"),
-            height=500
+            height=500,
         )
-        st.plotly_chart(fig_heatmap, use_container_width=True)
-    
+        st.plotly_chart(fig_heatmap, config={"width": "stretch"})
+
     # 3. Confidence Intervals for Task Performance
     st.subheader("3. Confidence Intervals for Task Performance")
-    
+
     confidence_data = []
     for task in selected_tasks:
         task_data = filtered_df[filtered_df["task_name"] == task]
@@ -345,20 +353,22 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
                     mean_val = np.mean(values)
                     std_val = np.std(values)
                     ci_lower, ci_upper = calculate_confidence_interval(values)
-                    
-                    confidence_data.append({
-                        "task_name": task,
-                        "augment": augment,
-                        "mean": mean_val,
-                        "std": std_val,
-                        "ci_lower": ci_lower,
-                        "ci_upper": ci_upper,
-                        "sample_size": len(values)
-                    })
-    
+
+                    confidence_data.append(
+                        {
+                            "task_name": task,
+                            "augment": augment,
+                            "mean": mean_val,
+                            "std": std_val,
+                            "ci_lower": ci_lower,
+                            "ci_upper": ci_upper,
+                            "sample_size": len(values),
+                        }
+                    )
+
     if confidence_data:
         conf_df = pd.DataFrame(confidence_data)
-        
+
         # Create confidence interval plot
         fig_ci = px.scatter(
             conf_df,
@@ -367,28 +377,33 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
             color="task_name",
             error_y="std",
             title="Task Performance with Confidence Intervals",
-            labels={"mean": f"Performance ({collection_name})", "augment": "Augmentation"}
+            labels={
+                "mean": f"Performance ({collection_name})",
+                "augment": "Augmentation",
+            },
         )
         fig_ci.update_layout(height=500)
-        st.plotly_chart(fig_ci, use_container_width=True)
-        
+        st.plotly_chart(fig_ci, config={"width": "stretch"})
+
         # Display confidence interval table
         st.subheader("Confidence Interval Details")
-        ci_display_df = conf_df[["task_name", "augment", "mean", "ci_lower", "ci_upper", "sample_size"]].round(3)
+        ci_display_df = conf_df[
+            ["task_name", "augment", "mean", "ci_lower", "ci_upper", "sample_size"]
+        ].round(3)
         st.dataframe(ci_display_df)
-    
+
     # 4. Histograms with Error Bars
     st.subheader("4. Performance Distribution with Error Bars")
-    
+
     # Create subplots for each task
     if len(selected_tasks) > 0:
         fig_hist = make_subplots(
-            rows=len(selected_tasks), 
+            rows=len(selected_tasks),
             cols=1,
             subplot_titles=selected_tasks,
-            vertical_spacing=0.1
+            vertical_spacing=0.1,
         )
-        
+
         traces_added = False
         for i, task in enumerate(selected_tasks, 1):
             task_data = filtered_df[filtered_df["task_name"] == task]
@@ -400,127 +415,190 @@ def visualize_task_centric_metrics(results_data: List[Dict[str, Any]], collectio
                         if values:  # Only add trace if we have values
                             fig_hist.add_trace(
                                 go.Histogram(
-                                    x=values,
-                                    name=f"{augment}",
-                                    opacity=0.7,
-                                    nbinsx=10
+                                    x=values, name=f"{augment}", opacity=0.7, nbinsx=10
                                 ),
-                                row=i, col=1
+                                row=i,
+                                col=1,
                             )
                             traces_added = True
-        
+
         if traces_added:
             fig_hist.update_layout(
                 title="Performance Distribution by Task and Augmentation",
                 height=300 * len(selected_tasks),
-                showlegend=True
+                showlegend=True,
             )
-            st.plotly_chart(fig_hist, use_container_width=True)
+            st.plotly_chart(fig_hist, config={"width": "stretch"})
         else:
             st.info("No data available for histogram visualization.")
-    
+
     # 5. Comprehensive Task Stability Summary
     st.subheader("5. Comprehensive Task Stability Summary")
-    
+
     stability_summary = []
     for task in selected_tasks:
         task_data = filtered_df[filtered_df["task_name"] == task]
         if not task_data.empty:
-            # Calculate overall stability metrics
-            all_values = task_data["value"].tolist()
-            overall_indices = compute_dispersion_indices(all_values)
-            overall_mean = np.mean(all_values)
-            overall_std = np.std(all_values)
-            
+            # Группируем по моделям
+            model_metrics = []
+            for model, model_data in task_data.groupby("model"):
+                model_values = model_data["value"].tolist()
+                indices = compute_dispersion_indices(model_values)
+                model_metrics.append(indices)
+
+            # Усредняем метрики по моделям
+            # Предполагаем, что indices - это словарь с одинаковыми ключами
+            if model_metrics:
+                # Получаем все ключи метрик
+                keys = model_metrics[0].keys()
+                # Усредняем каждую метрику по моделям
+                overall_indices = {
+                    k: np.mean([m[k] for m in model_metrics]) for k in keys
+                }
+            else:
+                overall_indices = {}
+
+            # Также можно усреднить mean и std по моделям, если нужно
+            overall_mean = np.mean(
+                [
+                    np.mean(model_data["value"])
+                    for _, model_data in task_data.groupby("model")
+                ]
+            )
+            overall_std = np.mean(
+                [
+                    np.std(model_data["value"])
+                    for _, model_data in task_data.groupby("model")
+                ]
+            )
+
             # Calculate stability by augmentation
             augment_stability = {}
             for augment in selected_augments:
                 augment_data = task_data[task_data["augment"] == augment]
                 if not augment_data.empty:
-                    augment_values = augment_data["value"].tolist()
-                    augment_indices = compute_dispersion_indices(augment_values)
+                    # Группируем по моделям внутри аугментации
+                    model_metrics = []
+                    for model, model_data in augment_data.groupby("model"):
+                        model_values = model_data["value"].tolist()
+                        indices = compute_dispersion_indices(model_values)
+                        model_metrics.append(indices)
+                    if model_metrics:
+                        keys = model_metrics[0].keys()
+                        augment_indices = {
+                            k: np.mean([m[k] for m in model_metrics]) for k in keys
+                        }
+                    else:
+                        augment_indices = {}
                     augment_stability[augment] = augment_indices
-            
-            stability_summary.append({
-                "task_name": task,
-                "overall_indices": overall_indices,
-                "overall_mean": overall_mean,
-                "overall_std": overall_std,
-                "augment_stability": augment_stability
-            })
-    
+
+            stability_summary.append(
+                {
+                    "task_name": task,
+                    "overall_indices": overall_indices,
+                    "overall_mean": overall_mean,
+                    "overall_std": overall_std,
+                    "augment_stability": augment_stability,
+                }
+            )
+
     if stability_summary:
         # Create comprehensive stability summary table
         summary_data = []
         for summary in stability_summary:
             row = {
                 "Task": summary["task_name"],
-                "Overall CV (%)": summary["overall_indices"]["cv"],
+                "Task Sensivity Index (%)": summary["overall_indices"]["TSI"],
                 "Corrected CV (%)": summary["overall_indices"]["cv_corrected"],
                 "IQR-CV (%)": summary["overall_indices"]["iqr_cv"],
                 "JSD": summary["overall_indices"]["jsd"],
                 "Overall Mean": summary["overall_mean"],
-                "Overall Std": summary["overall_std"]
+                "Overall Std": summary["overall_std"],
             }
             summary_data.append(row)
-        
+
         summary_df = pd.DataFrame(summary_data)
         st.dataframe(summary_df.round(3))
-        
+
         # Stability ranking by different metrics
         st.subheader("Task Stability Ranking")
-        
-        metric_ranking_options = ["cv", "cv_corrected", "iqr_cv", "jsd"]
+
+        metric_ranking_options = ["TSI", "cv_corrected", "iqr_cv", "jsd"]
         selected_ranking_metric = st.selectbox(
             "Select metric for ranking:",
             options=metric_ranking_options,
             index=0,
-            key=f"ranking_metric_{collection_name}"
+            key=f"ranking_metric_{collection_name}",
         )
-        
+
         metric_display_names = {
-            "cv": "CV",
-            "cv_corrected": "Corrected CV", 
+            "TSI": "TSI",
+            "cv_corrected": "Corrected CV",
             "iqr_cv": "IQR-CV",
-            "jsd": "JSD"
+            "jsd": "JSD",
         }
-        
+
         # Sort by selected metric (lower is better for CV metrics, higher for JSD)
         if selected_ranking_metric == "jsd":
-            stability_ranking = sorted(stability_summary, key=lambda x: x["overall_indices"][selected_ranking_metric], reverse=True)
+            stability_ranking = sorted(
+                stability_summary,
+                key=lambda x: x["overall_indices"][selected_ranking_metric],
+                reverse=True,
+            )
         else:
-            stability_ranking = sorted(stability_summary, key=lambda x: x["overall_indices"][selected_ranking_metric])
-        
+            stability_ranking = sorted(
+                stability_summary,
+                key=lambda x: x["overall_indices"][selected_ranking_metric],
+            )
+
         for i, summary in enumerate(stability_ranking, 1):
             metric_value = summary["overall_indices"][selected_ranking_metric]
-            
-            if selected_ranking_metric in ["cv", "cv_corrected", "iqr_cv"]:
-                stability_level = "Very Stable" if metric_value < 10 else \
-                                "Stable" if metric_value < 20 else \
-                                "Moderately Stable" if metric_value < 30 else "Unstable"
+
+            if selected_ranking_metric in ["TSI", "cv_corrected", "iqr_cv"]:
+                stability_level = (
+                    "Very Stable"
+                    if metric_value < 10
+                    else (
+                        "Stable"
+                        if metric_value < 20
+                        else "Moderately Stable"
+                        if metric_value < 30
+                        else "Unstable"
+                    )
+                )
             else:  # JSD
-                stability_level = "Very Stable" if metric_value < 0.1 else \
-                                "Stable" if metric_value < 0.2 else \
-                                "Moderately Stable" if metric_value < 0.3 else "Unstable"
-            
-            st.write(f"{i}. **{summary['task_name']}**: {metric_display_names[selected_ranking_metric]} = {metric_value:.1f} ({stability_level})")
-        
+                stability_level = (
+                    "Very Stable"
+                    if metric_value < 0.1
+                    else (
+                        "Stable"
+                        if metric_value < 0.2
+                        else "Moderately Stable"
+                        if metric_value < 0.3
+                        else "Unstable"
+                    )
+                )
+
+            st.write(
+                f"{i}. **{summary['task_name']}**: {metric_display_names[selected_ranking_metric]} = {metric_value:.1f} ({stability_level})"
+            )
+
         # Display interpretation guide
         with st.expander("Interpretation Guide"):
-            st.write("**Coefficient of Variation (CV):**")
-            st.write("- CV < 10%: Very stable task")
-            st.write("- CV 10-20%: Stable task")
-            st.write("- CV 20-30%: Moderately stable task")
-            st.write("- CV > 30%: Unstable task")
-            
+            st.write("**Task Sensvity Index (TSI):**")
+            st.write("- TSI < 10%: Very stable task")
+            st.write("- TSI 10-20%: Stable task")
+            st.write("- TSI 20-30%: Moderately stable task")
+            st.write("- TSI > 30%: Unstable task")
+
             st.write("**Corrected CV:**")
             st.write("- Adjusted for small sample bias using Everitt's correction")
             st.write("- More accurate for small datasets")
-            
+
             st.write("**IQR-CV:**")
             st.write("- Based on interquartile range, robust to outliers")
             st.write("- Good for non-normal distributions")
-            
+
             st.write("**Jensen-Shannon Divergence (JSD):**")
             st.write("- Measures distribution heterogeneity")
             st.write("- Lower values indicate more uniform performance across models")
@@ -533,11 +611,11 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     st.write(f"Number of documents: {len(results_data)}")
     if results_data:
         st.write(f"First document keys: {list(results_data[0].keys())}")
-    
+
     results_df = pd.DataFrame(results_data)
     if "_id" in results_df.columns:
         results_df = results_df.drop(columns=["_id"])
-    
+
     required_cols = {"task_name", "model", "value", "task_type", "dynamic_augments"}
     if not required_cols.issubset(results_df.columns):
         st.error("The required fields for grouped metrics are missing in the data.")
@@ -545,7 +623,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
 
     # We only filter tasks like "Compare model behaviour"
     compare_df = results_df[results_df["task_type"] == "Compare model behaviour"].copy()
-    
+
     if compare_df.empty:
         st.info("There is no data for tasks like 'Compare model behaviour'.")
         return
@@ -565,13 +643,13 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
         else:
             # Single string augmentation
             augment = str(dynamic_augments)
-        
+
         new_row = row.copy()
         new_row["augment"] = augment
         expanded_rows.append(new_row)
-    
+
     expanded_df = pd.DataFrame(expanded_rows)
-    
+
     if expanded_df.empty:
         st.info("There is no data to display after the augmentations are deployed.")
         return
@@ -580,7 +658,7 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     tasks = expanded_df["task_name"].unique()
     models = expanded_df["model"].unique()
     augments = expanded_df["augment"].unique()
-    
+
     selected_tasks = st.multiselect(
         "Select the task(s):",
         options=tasks,
@@ -599,19 +677,22 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
         default=list(augments),
         key=f"grouped_metrics_augments_{collection_name}",
     )
-    
+
     filtered_df = expanded_df[
         (expanded_df["task_name"].isin(selected_tasks))
         & (expanded_df["model"].isin(selected_models))
         & (expanded_df["augment"].isin(selected_augments))
     ]
-    
+
     if filtered_df.empty:
         st.info("There is no data to display with the selected filters..")
         return
 
     # After creating results_df (or filtered_df), add augment processing
-    if "augment" not in filtered_df.columns and "dynamic_augments" in filtered_df.columns:
+    if (
+        "augment" not in filtered_df.columns
+        and "dynamic_augments" in filtered_df.columns
+    ):
         filtered_df["augment"] = filtered_df["dynamic_augments"].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) == 1 else str(x)
         )
@@ -619,19 +700,20 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
     # 1. The table of metrics for augmentations
     st.subheader("Augmentation metrics")
     pivot_augments = filtered_df.pivot_table(
-        index=["model", "task_name"], 
-        columns="augment", 
-        values="value", 
-        aggfunc="mean"
+        index=["model", "task_name"], columns="augment", values="value", aggfunc="mean"
     )
     st.dataframe(pivot_augments.round(3))
 
     # 2. Augmentation comparison chart
     st.subheader("Comparing the impact of augmentation on metrics")
-    
+
     # Grouping by model and tasks for plotting
-    fig_data = filtered_df.groupby(["model", "task_name", "augment"])["value"].mean().reset_index()
-    
+    fig_data = (
+        filtered_df.groupby(["model", "task_name", "augment"])["value"]
+        .mean()
+        .reset_index()
+    )
+
     if not fig_data.empty:
         fig = px.bar(
             fig_data,
@@ -640,24 +722,24 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             color="model",
             facet_col="task_name",
             title="The impact of augmentation on model performance",
-            labels={"value": f"Metric ({collection_name})", "augment": "Augmentation"}
+            labels={"value": f"Metric ({collection_name})", "augment": "Augmentation"},
         )
         fig.update_xaxes(tickangle=45)
         fig.update_layout(height=600)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, config={"width": "stretch"})
 
     # 3. Gossamer (Radar Chart) for each model
     st.subheader("Cobweb (Radar Chart) - augmentation performance")
-    
+
     # Choosing one model for a spider web
     selected_model_for_radar = st.selectbox(
         "Choose a model for a spider web:",
         options=selected_models,
-        key=f"radar_model_{collection_name}"
+        key=f"radar_model_{collection_name}",
     )
-    
+
     radar_data = filtered_df[filtered_df["model"] == selected_model_for_radar]
-    
+
     if not radar_data.empty:
         # Creating a web for each task
         for task in selected_tasks:
@@ -668,8 +750,10 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                 if len(task_pivot) >= 3:  # You need at least 3 points for a spider web
                     # Sorting augmentations for consistent display
                     task_pivot = task_pivot.sort_values("augment")
-                    augment_names = [short_augment_name(a) for a in task_pivot["augment"].tolist()]
-                    
+                    augment_names = [
+                        short_augment_name(a) for a in task_pivot["augment"].tolist()
+                    ]
+
                     fig_radar = go.Figure()
                     fig_radar.add_trace(
                         go.Scatterpolar(
@@ -688,45 +772,49 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                         ),
                         showlegend=True,
                         title=f"Gossamer for modeling {selected_model_for_radar} - task {task}",
-                        height=500
+                        height=500,
                     )
-                    st.plotly_chart(fig_radar, use_container_width=True)
+                    st.plotly_chart(fig_radar, config={"width": "stretch"})
                 else:
-                    st.info(f"Not enough data for a spider web for the task {task} (You need at least 3 augmentations)")
+                    st.info(
+                        f"Not enough data for a spider web for the task {task} (You need at least 3 augmentations)"
+                    )
 
     # 4. Coefficient of variation for stability assessment
     st.subheader("Coefficient of variation (resistance to augmentation)")
-    
+
     # We calculate the CV for each model and task
     cv_data = []
     for (model, task), group in filtered_df.groupby(["model", "task_name"]):
         values = group["value"].tolist()
-        cv = calculate_coefficient_of_variation(values)
-        cv_data.append({
-            "model": model,
-            "task_name": task,
-            "cv": cv,
-            "mean_value": np.mean(values),
-            "std_value": np.std(values),
-            "min_value": np.min(values),
-            "max_value": np.max(values),
-            "num_augments": len(values)
-        })
-    
+        cv = calculate_tsi(values)
+        cv_data.append(
+            {
+                "model": model,
+                "task_name": task,
+                "cv": cv,
+                "mean_value": np.mean(values),
+                "std_value": np.std(values),
+                "min_value": np.min(values),
+                "max_value": np.max(values),
+                "num_augments": len(values),
+            }
+        )
+
     cv_df = pd.DataFrame(cv_data)
-    
+
     if not cv_df.empty:
         # We sort by CM (less CM = more stable model)
         cv_df = cv_df.sort_values("cv")
-        
+
         st.write("**Interpretation CV:**")
         st.write("- CV < 10%: a very stable model")
-        st.write("- CV 10-20%: a sustainable model") 
+        st.write("- CV 10-20%: a sustainable model")
         st.write("- CV 20-30%: a moderately stable model")
         st.write("- CV > 30%: an unstable model")
-        
+
         st.dataframe(cv_df.round(3))
-        
+
         # Chart CV
         fig_cv = px.bar(
             cv_df,
@@ -734,25 +822,22 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             y="cv",
             color="task_name",
             title="Coefficient of variation for models and tasks (less = more stable)",
-            labels={"cv": "Coefficient of variation (%)", "model": "Model"}
+            labels={"cv": "Coefficient of variation (%)", "model": "Model"},
         )
         fig_cv.update_layout(height=500)
-        st.plotly_chart(fig_cv, use_container_width=True)
-        
+        st.plotly_chart(fig_cv, config={"width": "stretch"})
+
         # Heatmap CV
         cv_pivot = cv_df.pivot_table(
-            index="model", 
-            columns="task_name", 
-            values="cv", 
-            aggfunc="mean"
+            index="model", columns="task_name", values="cv", aggfunc="mean"
         )
-        
+
         # We check that the array is not empty before calling max()
         if cv_pivot.size > 0 and not cv_pivot.isna().all().all():
             max_cv = cv_pivot.values.max()
         else:
             max_cv = 100  # Default value
-        
+
         fig_heatmap = go.Figure(
             data=go.Heatmap(
                 z=cv_pivot.values,
@@ -771,14 +856,14 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
             yaxis=dict(title="Model"),
             height=500,
         )
-        st.plotly_chart(fig_heatmap, use_container_width=True)
+        st.plotly_chart(fig_heatmap, config={"width": "stretch"})
 
     # 5. Detailed analysis for each augmentation
     with st.expander("Detailed augmentation analysis"):
         for augment in selected_augments:
             st.write(f"**Augmentation: {augment}**")
             augment_data = filtered_df[filtered_df["augment"] == augment]
-            
+
             if not augment_data.empty:
                 # Comparison of models for this augmentation
                 fig_augment = px.bar(
@@ -787,17 +872,14 @@ def visualize_grouped_metrics(results_data: List[Dict[str, Any]], collection_nam
                     y="value",
                     color="task_name",
                     title=f"Model performance during augmentation: {augment}",
-                    labels={"value": f"Metric ({collection_name})"}
+                    labels={"value": f"Metric ({collection_name})"},
                 )
                 fig_augment.update_layout(height=400)
-                st.plotly_chart(fig_augment, use_container_width=True)
-                
+                st.plotly_chart(fig_augment, config={"width": "stretch"})
+
                 # Table of values
                 pivot_augment = augment_data.pivot_table(
-                    index="model", 
-                    columns="task_name", 
-                    values="value", 
-                    aggfunc="mean"
+                    index="model", columns="task_name", values="value", aggfunc="mean"
                 )
                 st.dataframe(pivot_augment.round(3))
 
@@ -808,7 +890,9 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
         results_df = results_df.drop(columns=["_id"])
     required_cols = {"task_name", "model", "value"}
     if not required_cols.issubset(results_df.columns):
-        st.error("The required fields are missing in the data (task_name, model, value).")
+        st.error(
+            "The required fields are missing in the data (task_name, model, value)."
+        )
         return
 
     # logger.info(results_df.columns)
@@ -841,7 +925,10 @@ def visualize_metrics(results_data: List[Dict[str, Any]], collection_name: str):
         return
 
     # After creating results_df (or filtered_df), add processing augment
-    if "augment" not in filtered_df.columns and "dynamic_augments" in filtered_df.columns:
+    if (
+        "augment" not in filtered_df.columns
+        and "dynamic_augments" in filtered_df.columns
+    ):
         filtered_df["augment"] = filtered_df["dynamic_augments"].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) == 1 else str(x)
         )
@@ -882,28 +969,39 @@ def short_augment_name(name):
         "Reorder words/phrases": "Reorder",
         "Shorten sentence length": "Shorten",
         "Increase sentence length": "Length+",
-        "Paraphrasing": "Paraph"
+        "Paraphrasing": "Paraph",
     }
     return mapping.get(name, str(name)[:8])
 
 
 def render_metrics_tab():
-    st.header("Model metrics")
-    
+    st.header("📈 Model metrics")
+
     # Initialize database client
     from utils.db_client import MongoDBClient, MongoDBConfig
-    db_client = MongoDBClient(MongoDBConfig(database="TrustGen"))
-    
+
+    db_client = MongoDBClient(MongoDBConfig(database="TrustVar"))
+
     # Switch between metric types
     metric_type = st.radio(
         "Select the type of metric analysis:",
-        ["Common metrics", "Group analysis (Model-centric)", "Task-centric analysis (Compare model behaviour)"],
-        key="metrics_type_selection"
+        [
+            "Common metrics",
+            "Group analysis (Model-centric)",
+            "Task-centric analysis (Compare model behaviour)",
+        ],
+        key="metrics_type_selection",
     )
-    
+
     if metric_type == "Common metrics":
         # Original logic for common metrics
-        results_collections = ["RtAR", "TFNR", "Accuracy", "Correlation", "IncludeExclude"]
+        results_collections = [
+            "RtAR",
+            "TFNR",
+            "Accuracy",
+            "Correlation",
+            "IncludeExclude",
+        ]
         if results_collections:
             selected_results_collection = st.selectbox(
                 "Select a collection with metrics",
@@ -915,7 +1013,9 @@ def render_metrics_tab():
             if results_data:
                 visualize_metrics(results_data, selected_results_collection)
             else:
-                st.info(f"Data in the collection '{selected_results_collection}' missing.")
+                st.info(
+                    f"Data in the collection '{selected_results_collection}' missing."
+                )
         else:
             st.info("There are no available collections with metrics.")
 
@@ -967,7 +1067,7 @@ def render_metrics_tab():
                     )
                     fig.update_traces(textposition="top center")
                     fig.update_layout(height=600)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, config={"width": "stretch"})
                 else:
                     st.warning("Insufficient data for the scatter chart.")
 
@@ -980,7 +1080,9 @@ def render_metrics_tab():
             if len(corr_sel) >= 2:
                 df_corr = pd.concat(
                     [
-                        df[df["task_name"].isin(corr_sel)][["task_name", "model", "value"]]
+                        df[df["task_name"].isin(corr_sel)][
+                            ["task_name", "model", "value"]
+                        ]
                         for df in data_per_collection.values()
                     ]
                 )
@@ -1009,15 +1111,17 @@ def render_metrics_tab():
                         yaxis=dict(title="", autorange="reversed"),
                         height=600,
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, config={"width": "stretch"})
                 else:
-                    st.warning("There is not enough data to build a correlation matrix.")
-    
+                    st.warning(
+                        "There is not enough data to build a correlation matrix."
+                    )
+
     elif metric_type == "Group analysis (Model-centric)":
         # Logic for grouped metrics (model-centric view)
         grouped_collections = ["Accuracy_Groups", "TFNR_Groups"]
         available_collections = []
-        
+
         for coll in grouped_collections:
             try:
                 collection = db_client.get_collection(coll)
@@ -1025,30 +1129,30 @@ def render_metrics_tab():
                     available_collections.append(coll)
             except:
                 continue
-        
+
         if not available_collections:
             st.info("There are no collections available with grouped metrics.")
             return
-        
+
         selected_collection = st.selectbox(
             "Select a collection with grouped metrics:",
             options=available_collections,
             key="grouped_metrics_collection_selection",
         )
-        
+
         results_collection = db_client.get_collection(selected_collection)
         results_data = list(results_collection.find())
-        
+
         if results_data:
             visualize_grouped_metrics(results_data, selected_collection)
         else:
             st.info(f"Data in the collection '{selected_collection}' missing.")
-    
+
     else:  # Task-centric analysis
         # Logic for task-centric analysis
         grouped_collections = ["Accuracy_Groups", "TFNR_Groups"]
         available_collections = []
-        
+
         for coll in grouped_collections:
             try:
                 collection = db_client.get_collection(coll)
@@ -1058,22 +1162,25 @@ def render_metrics_tab():
                 st.write(f"Error: {coll}")
                 st.error(f"Exception details: {str(e)}")
                 import traceback
+
                 st.error(f"Traceback: {traceback.format_exc()}")
                 continue
-        
+
         if not available_collections:
-            st.info("There are no collections available with grouped metrics for task-centric analysis.")
+            st.info(
+                "There are no collections available with grouped metrics for task-centric analysis."
+            )
             return
-        
+
         selected_collection = st.selectbox(
             "Select a collection with grouped metrics for task analysis:",
             options=available_collections,
             key="task_centric_collection_selection",
         )
-        
+
         results_collection = db_client.get_collection(selected_collection)
         results_data = list(results_collection.find())
-        
+
         if results_data:
             visualize_task_centric_metrics(results_data, selected_collection)
         else:

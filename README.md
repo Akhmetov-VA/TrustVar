@@ -1,7 +1,7 @@
 # TrustVar: A Dynamic Framework for Trustworthiness Evaluation and Task Variation Analysis in Large Language Models
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Akhmetov-VA/TrustVar)
-
+ 
 > 📖 **Start with [Documentation Overview](docs/overview.md)** for quick understanding of structure and navigation.
 
 ## Project Description
@@ -26,32 +26,24 @@ Unlike traditional frameworks that test models through tasks, TrustVar tests tas
 - [Project Structure](#project-structure)
 - [Quick Start](#quick-start)
 - [Documentation](#documentation)
-- [System Components](#system-components)
-- [API](#api)
 - [Metrics](#metrics)
-- [Deployment](#deployment)
-- [Development](#development)
-- [Support](#support)
 
 ## Project Architecture
 
-![TrustVar Architecture](docs/Screenshot%202025-07-24%20at%2013.35.16.png)
+![TrustVar Architecture](docs/TrustVar_Pipeline.jpg)
 
 ### Core Components
 
-1. **MongoDB** — Primary database for storing tasks, results, and metrics
-2. **Langchain Backend** — Server-side for request processing and interaction with language models
-3. **Streamlit Frontend** — Modern web interface for monitoring and management
-4. **Task Runners** — Set of specialized task processors
-5. **Ollama** — Service for local language model execution
+- **Data Ingestion** - accepts preformatted datasets in CSV, JSON, Excel, and Parquet formats, supporting both user uploads and built-in collections like SLAVA, RuBia, etc;
+- **Task Generator** - applies five controlled transformations: lexico-syntactic paraphrasing, length variation, stylistic shifts, synonym substitution, and word reordering to create semantically equivalent variants;
+- **Perturbation Settings** - sets up each transformation with user-configurable parameters (10 by default);
+- **Task Pool** - erves as a persistent repository organizing tasks by six trustworthiness dimensions (truthfulness, safety, fairness, robustness, privacy, ethics) and maintaining evaluation queues;
+- **LLM Tester** - executes inference on both local models via Ollama and remote APIs, recording outputs with complete metadata for reproducibility;
+- **Analyzer** - measures response stability using coefficient of variation, feeding instability flags back for task refinement;
+- **Task Meta-Evaluator** - computes the Task Sensitivity Index (TSI) across all model-task pairs, flagging high-TSI items for revision;
+- **Evaluator & Visualizer** - computes RtAR, TFNR, Accuracy, and Pearson correlation metrics;
+- **Dashboard and Leaderboard** - combine Metrics with Analyser data and display the results for user convenience
 
-### Data Flow
-
-1. **Task Creation** → MongoDB (collection `tasks`)
-2. **Task Processing** → Task Processor → MongoDB (collections `queue_*`)
-3. **Inference Execution** → Runner → Langchain Backend → LLM
-4. **Metrics Collection** → Metrics Runner → MongoDB
-5. **Visualization** → Streamlit Frontend → MongoDB
 
 ## Project Structure
 
@@ -110,15 +102,21 @@ TrustVar/
 
 2. **Create `.env` file with environment variables:**
    ```env
-   MONGO_INITDB_ROOT_USERNAME=admin
+   BACKEND_HOST=0.0.0.0
+   BACKEND_PORT=45321
+   FRONTEND_PORT=27366
+   API_URL=http://langchain_backend:${BACKEND_PORT}/generate
+   MONGO_HOST=mongodb
+   MONGO_INITDB_ROOT_USERNAME=username
    MONGO_INITDB_ROOT_PASSWORD=password
    MONGO_INITDB_ROOT_PORT=27017
-   YANDEX_API_KEY=your_yandex_key
-   OPENAI_KEY=your_openai_key
-   API_URL=http://localhost:45321/generate
-   OLLAMA_BASE_URL=http://localhost:12345
-   CURRENT_UID=1000
-   CURRENT_GID=1000
+   OLLAMA_PORT=12345
+   OLLAMA_BASE_URL=http://host.docker.internal:${OLLAMA_PORT}
+   OPENAI_BASE_URL=base_url_for_providers
+   OPENAI_KEY=openai_key
+   YANDEX_API_KEY=yandex_key
+   YANDEX_BASE_URL=https://llm.api.cloud.yandex.net/v1
+   YANDEX_MODEL_URI=model_uri
    ```
 
 3. **Launch all services:**
@@ -157,38 +155,13 @@ TrustVar/
    4. Restart the services if necessary: `docker-compose restart`
 
 5. **Open the web interface:**
-   - Monitoring: http://localhost:27366 (or http://83.143.66.61:27366 for remote access)
+   - Monitoring: http://localhost:27366
    - MongoDB Express: http://localhost:8081
 
    **Authentication credentials:**
    - Username: `user`
    - Password: `resu123`
 
-### Local Development
-
-1. **Install dependencies:**
-   ```bash
-   poetry install
-   ```
-
-2. **Activate virtual environment:**
-   ```bash
-   poetry shell
-   ```
-
-3. **Launch individual components:**
-   ```bash
-   # Backend
-   python langchain_back/main.py
-   
-   # Frontend
-   streamlit run monitoring/app_main.py --server.port 27366
-   
-   # Runners
-   python -m runners.run
-   python -m runners.run_metrics
-   python -m runners.task_processor
-   ```
 
 ## Documentation
 
@@ -201,37 +174,6 @@ Detailed documentation is available in the `docs/` folder:
 - **[API](docs/api.md)** - API documentation
 - **[Metrics](docs/metrics.md)** - Description of supported metrics
 
-## System Components
-
-### 1. MongoDB - Database
-Primary database for storing tasks, results, and metrics.
-
-### 2. Langchain Backend
-Server-side for processing requests to language models.
-
-### 3. Streamlit Frontend
-Modern web interface for monitoring and management.
-
-### 4. Task Runners
-Set of specialized task processors:
-- `run.py` - Main task processor
-- `run_metrics.py` - Metrics processor
-- `run_regexp.py` - Data extraction from responses
-- `run_rta_queuer.py` - RtA task processor
-- `task_processor.py` - Task processor
-
-### 5. Ollama
-Service for local language model execution.
-
-## API
-
-The system provides REST API for interaction with language models:
-
-- **POST /generate** - Response generation
-- **GET /health** - Health check
-- **GET /models** - Model list
-
-Detailed API documentation: [docs/api.md](docs/api.md)
 
 ## Metrics
 
@@ -243,41 +185,6 @@ Supported metric types:
 - **Include/Exclude** - Analysis of element inclusion/exclusion
 
 Detailed metrics description: [docs/metrics.md](docs/metrics.md)
-
-## Deployment
-
-### Docker Compose (recommended)
-```bash
-docker-compose up -d
-```
-
-### Kubernetes
-Detailed Kubernetes deployment guide: [docs/deployment.md](docs/deployment.md)
-
-## Development
-
-### Code Structure
-- **Modular architecture** with clear separation of responsibilities
-- **Docker containerization** for simplified deployment
-- **Poetry** for dependency management
-- **Streamlit** for modern web interface
-
-### Adding New Metrics
-1. Create a new module in `runners/`
-2. Add configuration in `utils/constants.py`
-3. Update web interface in `monitoring/`
-
-### Adding New Models
-1. Add model to `MODELS` list in `utils/constants.py`
-2. Configure corresponding provider in Langchain Backend
-3. Update documentation
-
-## Support
-
-For support:
-1. Check documentation in the `docs/` folder
-2. Study component logs
-3. Create an issue in the project repository
 
 ## License
 

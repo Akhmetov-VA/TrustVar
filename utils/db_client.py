@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 import numpy as np
 
 import pandas as pd
@@ -32,6 +32,7 @@ def convert_numpy_objects(data):
     else:
         return data
 
+
 class MongoDBConfig:
     """A class for managing MongoDB configurations."""
 
@@ -41,16 +42,16 @@ class MongoDBConfig:
         password: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[str] = None,
-        database: str = "TrustGen",
+        database: str = "TrustVar",
     ):
         """
-       When creating an instance of MongoDB Config, you can redefine the parameters or
-       they will be taken from the environment variables.
+        When creating an instance of MongoDB Config, you can redefine the parameters or
+        they will be taken from the environment variables.
         """
         self.username = username or os.getenv("MONGO_INITDB_ROOT_USERNAME")
         self.password = password or os.getenv("MONGO_INITDB_ROOT_PASSWORD")
-        self.host = host or os.getenv("MONGO_HOST", "83.143.66.65")
-        self.port = port or os.getenv("MONGO_PORT", "27363")
+        self.host = host or os.getenv("MONGO_HOST")
+        self.port = port or os.getenv("MONGO_INITDB_ROOT_PORT")
         self.database = database
 
     def get_uri(self) -> str:
@@ -72,7 +73,9 @@ class MongoDBClient:
         try:
             self.client = MongoClient(self.config.get_uri())
             self.db = self.client[self.config.database]
-            logger.info("Successfully connected to MongoDB.")
+            logger.info(
+                f"Successfully connected to MongoDB. URI: {self.config.get_uri()}"
+            )
         except PyMongoError as e:
             logger.error(f"Error connecting to MongoDB: {e}")
             raise
@@ -153,15 +156,9 @@ class MongoDBClient:
         Upload a dataset to the dataset_{dataset_name} collection.
         """
         coll_name = f"dataset_{dataset_name}"
-        
-        import numpy as np
-
-
-
-
 
         records = df.to_dict(orient="records")
-        converted_records = [convert_numpy_objects(record) for record in records]
+        # converted_records = [convert_numpy_objects(record) for record in records]
         if records:
             self.insert_data(coll_name, records)
 
@@ -188,7 +185,9 @@ class MongoDBClient:
                 raise
         coll.update_one({"_id": task_id}, {"$set": update_data})
 
-    def update_tasks_status(self, collection_name: str, current_status: str, new_status: str) -> int:
+    def update_tasks_status(
+        self, collection_name: str, current_status: str, new_status: str
+    ) -> int:
         """
         Updating the status of issues in collection_name: current_status -> new_status.
         Returns the number of updated documents.
@@ -208,14 +207,18 @@ class MongoDBClient:
 
     # ---------------- Methods for calculating and obtaining documents ----------------
 
-    def get_tasks_by_status(self, collection_name: str, status: str) -> List[Dict[str, Any]]:
+    def get_tasks_by_status(
+        self, collection_name: str, status: str
+    ) -> List[Dict[str, Any]]:
         """
         Getting all tasks from collection_name that have status == status.
         """
         try:
             collection = self.get_collection(collection_name)
             tasks = list(collection.find({"status": status}))
-            logger.info(f"Found {len(tasks)} issues with the status '{status}' in '{collection_name}'.")
+            logger.info(
+                f"Found {len(tasks)} issues with the status '{status}' in '{collection_name}'."
+            )
             return tasks
         except PyMongoError as e:
             logger.error(f"Error receiving tasks by status: {e}")
@@ -228,7 +231,9 @@ class MongoDBClient:
         try:
             collection = self.get_collection(collection_name)
             count = collection.count_documents({"status": status})
-            logger.info(f"Number of issues with the status '{status}' in '{collection_name}': {count}.")
+            logger.info(
+                f"Number of issues with the status '{status}' in '{collection_name}': {count}."
+            )
             return count
         except PyMongoError as e:
             logger.error(f"Error in calculating tasks by status: {e}")
@@ -316,7 +321,7 @@ class MongoDBClient:
 
     def get_prompts_for_dataset(self, dataset_name: str) -> List[str]:
         """
-        Return a list of product names for the specified dataset.
+        Return a list of prompt names for the specified dataset.
         """
         prompts = self.get_prompt_docs_for_dataset(dataset_name)
         return [p["name"] for p in prompts if "name" in p]
