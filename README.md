@@ -30,7 +30,7 @@ Unlike traditional frameworks that test models through tasks, TrustVar tests tas
 
 ## Project Architecture
 
-![TrustVar Architecture](docs/Screenshot%202025-07-24%20at%2013.35.16.png)
+![TrustVar Architecture](docs/TrustVar_Pipeline.jpg)
 
 ### Core Components
 
