@@ -1,5 +1,5 @@
 [project]
-name = "trustllm-ru"
+name = "trustvar"
 version = "0.1.0"
 description = ""
 readme = "README.md"
@@ -37,8 +37,7 @@ backend = [
     "langchain_openai>=0.3.18",
     "transformers>=4.47.0",
     "huggingface_hub",
-    "torch",
-    "gdown"
+    "torch"
 ]
 
 db = [
