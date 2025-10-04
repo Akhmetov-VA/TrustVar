@@ -3,8 +3,8 @@ from langchain_core.prompts import PromptTemplate
 from langchain_ollama import OllamaLLM
 
 # model = YandexGPT(
-#     api_key="AQVN0eE4B0jFQC77EEdlN4RC08GZ6X3l8a6CEPRx",
-#     model_uri="gpt://b1gn728ogeojtj7rh3ke/yandexgpt-lite",
+#     api_key="тут нужен ключ",
+#     model_uri="gpt://туту нужен ключ/yandexgpt-lite",
 # )
 
 # template = "The capital of the country {country} this?"
